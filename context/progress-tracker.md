@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Add Clerk authentication to the Next.js web app and protect application pages.
+- Set up Prisma ORM with Neon PostgreSQL for the NestJS API.
 
 ## Completed
 
@@ -40,13 +40,21 @@ change.
 - Increased left-column padding on the sign-in and sign-up pages for better desktop spacing.
 - Added a Clerk-powered sidebar user profile block above the base currency display with visible name/email and profile/logout access.
 - Removed the static sidebar base-currency block and expanded the Clerk profile menu trigger across the full profile row.
+- Installed Prisma, Prisma Client, the Neon Prisma adapter, and dotenv in the NestJS API app.
+- Added API-local Prisma schema/configuration for Neon PostgreSQL.
+- Added initial Prisma models and generated migration for `users`, `accounts`, and `transactions`.
+- Added a global NestJS `PrismaModule` and `PrismaService`.
+- Added Prisma package scripts for client generation, development migrations, deployment migrations, and Studio.
+- Documented that Prisma schema and migrations currently live under `apps/api/prisma` for the standalone API app.
+- Verified the API Prisma setup with Prisma schema validation, client generation, Nest build, Jest tests, and lint.
 
 ## In Progress
 
-- Ready for Clerk environment variables and the next web implementation task.
+- Ready to apply the generated Prisma migration to the configured Neon database.
 
 ## Next Up
 
+- Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
 - Add additional shadcn/ui components as feature screens require them.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 
@@ -64,6 +72,8 @@ change.
 - Generated shadcn/ui components live under `apps/web/components/ui/`.
 - Shared UI remains inside `apps/web/components/` for the initial single-frontend MVP.
 - Web routes use a protected-first Clerk proxy: all routes require authentication except `/sign-in` and `/sign-up`.
+- Prisma schema and migrations live under `apps/api/prisma` while the API remains a standalone NestJS package.
+- The Prisma command config prefers `DIRECT_URL` for Neon migrations when available and falls back to `DATABASE_URL`.
 
 ## Session Notes
 
@@ -78,3 +88,4 @@ change.
 - User requested shadcn/ui installation in the existing `apps/web` Next.js app.
 - User requested the dashboard home page from `specs/web/001-sidebar-and-dashboard-page.md`.
 - User requested Clerk setup from `specs/web/002-adding-clerk.md`; environment variables will be added later by the user.
+- User requested Prisma setup from `specs/api/001-adding-prisma-with-neon.md`.

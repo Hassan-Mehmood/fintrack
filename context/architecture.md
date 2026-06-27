@@ -62,6 +62,7 @@ project-root/
 ├── apps/
 │   ├── web/
 │   └── api/
+│       └── prisma/
 │
 ├── packages/
 │   ├── financial-engine/
@@ -240,16 +241,33 @@ export enum TransactionType {
 
 ---
 
+### `apps/api/prisma`
+
+The current standalone NestJS backend keeps Prisma inside `apps/api`.
+
+This folder owns:
+
+* Prisma schema
+* Prisma migrations
+* Migration lock metadata
+
+The API root also owns `prisma.config.ts`, and `apps/api/src/prisma/`
+owns the NestJS Prisma module and service.
+
+It must not contain frontend or HTTP-related logic.
+
 ### `packages/database`
 
-This package owns:
+This package is reserved for a future database package if the repository is
+converted to a full root workspace. Until then, `apps/api/prisma` is the
+source of truth for Prisma schema and migrations.
+
+If introduced later, this package may own:
 
 * Prisma schema
 * Prisma migrations
 * Prisma client configuration
 * Database seed scripts
-
-It must not contain frontend or HTTP-related logic.
 
 ---
 

@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountType {
+  BANK
+  CASH_WALLET
+  DIGITAL_WALLET
+  BROKER
+  CRYPTO_WALLET
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  REFUND
+  FEE
+  INVESTMENT_BUY
+  INVESTMENT_SELL
+  ADJUSTMENT
+}
+
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  clerkId      String        @unique @map("clerk_id")
+  email        String        @unique
+  name         String?
+  baseCurrency String        @default("USD") @map("base_currency") @db.VarChar(3)
+  accounts     Account[]
+  transactions Transaction[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Account {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           AccountType
+  currency       String        @db.VarChar(3)
+  openingBalance Decimal       @default(0) @map("opening_balance") @db.Decimal(24, 8)
+  openedAt       DateTime      @default(now()) @map("opened_at")
+  archivedAt     DateTime?     @map("archived_at")
+  transactions   Transaction[] @relation("TransactionAccount")
+  transfersIn    Transaction[] @relation("TransactionDestinationAccount")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, type])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                   String          @id @default(uuid()) @db.Uuid
+  userId               String          @map("user_id") @db.Uuid
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId            String          @map("account_id") @db.Uuid
+  account              Account         @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  destinationAccountId String?         @map("destination_account_id") @db.Uuid
+  destinationAccount   Account?        @relation("TransactionDestinationAccount", fields: [destinationAccountId], references: [id], onDelete: Restrict)
+  reversalOfId         String?         @unique @map("reversal_of_id") @db.Uuid
+  reversalOf           Transaction?    @relation("TransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal             Transaction?    @relation("TransactionReversal")
+  type                 TransactionType
+  amount               Decimal         @db.Decimal(24, 8)
+  currency             String          @db.VarChar(3)
+  occurredAt           DateTime        @map("occurred_at")
+  description          String
+  merchant             String?
+  notes                String?
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, occurredAt])
+  @@index([accountId])
+  @@index([destinationAccountId])
+  @@map("transactions")
+}

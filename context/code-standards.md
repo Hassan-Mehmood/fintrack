@@ -169,11 +169,13 @@ Example error response:
 * `apps/web/components/ui/` — Generated shadcn/ui components.
 * `apps/web/lib/` — Frontend utilities, formatting functions, and client configuration.
 * `apps/api/` — NestJS application, controllers, services, guards, DTOs, and business modules.
+* `apps/api/prisma/` — Current Prisma schema and migrations for the standalone API app.
+* `apps/api/src/prisma/` — NestJS Prisma module and Prisma service.
 * `apps/api/src/modules/` — Domain modules such as accounts, transactions, investments, budgets, goals, and analytics.
 * `apps/api/src/common/` — Shared backend guards, interceptors, exceptions, decorators, and utilities.
 * `packages/financial-engine/` — Pure financial calculations and financial-health rules.
 * `packages/shared-types/` — Stable enums, value types, and shared API contracts.
-* `packages/database/` — Prisma schema, migrations, seed scripts, and Prisma client configuration.
+* `packages/database/` — Reserved for a future shared database package if the repository is converted to a root workspace.
 * `context/` — Project overview, architecture, UI context, code standards, AI workflow rules, and progress tracking.
 
 ## Naming Conventions
