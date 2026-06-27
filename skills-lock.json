@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "skills": {
+    "claimable-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/claimable-postgres/SKILL.md",
+      "computedHash": "65b0b2208ec0bdcf3b6f8254dec083017102d052e2bce55a37bca7a7b9e0b3cc"
+    },
+    "neon": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon/SKILL.md",
+      "computedHash": "3e0830ae6f39544bcabf932ba555dc71db19d3a997cbed972290924868f13626"
+    },
+    "neon-ai-gateway": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-ai-gateway/SKILL.md",
+      "computedHash": "66c2a08418d01effa3b790a51c7ed7f5e1fcf9c695244db7a62689384ec5e501"
+    },
+    "neon-functions": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-functions/SKILL.md",
+      "computedHash": "7916184cf0f73f5990a657929a41a84d35b0ad4f7c943effea074b0fcbaea1e0"
+    },
+    "neon-object-storage": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-object-storage/SKILL.md",
+      "computedHash": "4edd759ebc1b0a0774d307ebf3b174e12205d960092135238e2f277e8ff2b903"
+    },
+    "neon-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-postgres/SKILL.md",
+      "computedHash": "7da7d922a0a8043a6ba896b81727182b88ff9ff62757643bdd942063774d105b"
+    },
+    "neon-postgres-branches": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-postgres-branches/SKILL.md",
+      "computedHash": "c0ff429a18e64daa491469ce09a1b8e4b9de445b458c2d726b1b11d611044b04"
+    },
+    "neon-postgres-egress-optimizer": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-postgres-egress-optimizer/SKILL.md",
+      "computedHash": "3ef9c916662a08cefb703b7f8823463cb9d3839c4b21acc53b6a45755175d897"
+    },
+    "prisma-cli": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-cli/SKILL.md",
+      "computedHash": "1cfdc0011df8699a2ece587f229a1e892df2a9a3eec40b5407492cb4c6570e95"
+    },
+    "prisma-client-api": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-client-api/SKILL.md",
+      "computedHash": "0434410e48fb796bbdc3ad0050654bfc9cf72c89b30dbad098ee5c9f655b7f85"
+    },
+    "prisma-database-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-database-setup/SKILL.md",
+      "computedHash": "46d2dc2f9c968722376bbb6a1a1389c82bd7cceb5973ac1486c54890514b8959"
+    },
+    "prisma-driver-adapter-implementation": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-driver-adapter-implementation/SKILL.md",
+      "computedHash": "2e00b0d05f0da23796f6d44684e19219b74cf993f8a2df6e5b044812f375bbc6"
+    },
+    "prisma-postgres": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres/SKILL.md",
+      "computedHash": "d090d1206fb6a2dd9f7b9f658d851ccd653132512c53c6e0a164110d9ee80005"
+    },
+    "prisma-postgres-setup": {
+      "source": "prisma/skills",
+      "sourceType": "github",
+      "skillPath": "prisma-postgres-setup/SKILL.md",
+      "computedHash": "5dbcf5a488d7cb7136340b86dcf781d6d92cf793f92c105ef644ac31ccac4d3b"
+    }
+  }
+}

@@ -22,3 +22,5 @@ meaningful implementation change.
 If implementation changes the architecture, scope, or
 standards documented in the context files, update the
 relevant file before continuing.
+
+Agent skills are available in the `.agents` directory
