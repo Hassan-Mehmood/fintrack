@@ -152,15 +152,16 @@ Suggested structure:
 
 ```text
 apps/api/src/
-├── auth/
-├── users/
-├── accounts/
-├── transactions/
-├── categories/
-├── budgets/
-├── investments/
-├── goals/
-├── analytics/
+├── modules/
+│   ├── auth/
+│   ├── users/
+│   ├── accounts/
+│   ├── transactions/
+│   ├── categories/
+│   ├── budgets/
+│   ├── investments/
+│   ├── goals/
+│   └── analytics/
 └── common/
 ```
 
@@ -229,8 +230,11 @@ export enum TransactionType {
   INCOME = "INCOME",
   EXPENSE = "EXPENSE",
   TRANSFER = "TRANSFER",
+  REFUND = "REFUND",
+  FEE = "FEE",
   INVESTMENT_BUY = "INVESTMENT_BUY",
   INVESTMENT_SELL = "INVESTMENT_SELL",
+  ADJUSTMENT = "ADJUSTMENT",
 }
 ```
 
@@ -255,7 +259,7 @@ It must not contain frontend or HTTP-related logic.
 | -------------- | ----------------------------------------------------------------- |
 | `auth`         | Verifies signed-in users                                          |
 | `users`        | Stores profile, base currency, and preferences                    |
-| `accounts`     | Manages bank, cash, crypto, and investment accounts               |
+| `accounts`     | Manages bank, cash wallet, digital wallet, broker, and crypto wallet accounts |
 | `transactions` | Manages income, expenses, transfers, and adjustments              |
 | `categories`   | Manages expense and income categories                             |
 | `budgets`      | Manages monthly spending limits                                   |
@@ -302,7 +306,7 @@ JavaScript floating-point numbers should not be used for authoritative financial
 
 File storage is not required for the initial MVP.
 
-If receipt or statement uploads are added later, files should be stored in an object-storage service such as Amazon S3 or Cloudflare R2.
+Receipt and statement uploads are future scope. If they are added later, files should be stored in an object-storage service such as Amazon S3 or Cloudflare R2.
 
 The database should store only file metadata, such as:
 
@@ -336,11 +340,16 @@ An account balance should be calculated from:
 Opening balance
 + Income
 - Expenses
++ Refunds
+- Fees
 + Incoming transfers
 - Outgoing transfers
 - Investment purchases
 + Investment sales
++/- Balance adjustments
 ```
+
+Reversals should not be modeled as a normal transaction type. A reversal should create a linked corrective transaction that offsets the original transaction while preserving the original record for audit history.
 
 ### Expense Example
 
@@ -372,6 +381,17 @@ Investment cost basis: +50,000 PKR
 ```
 
 The investment purchase must not be counted as an expense.
+
+### Fee Example
+
+A user pays a PKR 250 brokerage fee from a bank account.
+
+```text
+Bank account: -250 PKR
+Fee expense total: +250 PKR
+```
+
+Fees reduce the selected account balance and count as expenses unless a more specific business rule says otherwise.
 
 ---
 

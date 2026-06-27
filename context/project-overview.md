@@ -2,12 +2,12 @@
 
 ## Overview
 
-This application is a personal finance and investment management platform for individuals who keep money across multiple bank accounts, cash wallets, stock brokers, mutual funds, ETFs, and cryptocurrency platforms. It brings all of these accounts into one centralized dashboard where users can manually track income, expenses, transfers, investments, portfolio performance, and savings goals while receiving real-time balance updates and clear financial insights. It solves the problem of fragmented financial information by giving users a single place to understand their net worth, spending habits, available cash, investment returns, goal progress, and overall financial health.
+This application is a personal finance and investment management platform for individuals who keep money across multiple bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets. It brings all of these accounts into one centralized dashboard where users can manually track income, expenses, transfers, investments, portfolio performance, and savings goals while receiving immediate balance updates and clear financial insights. It solves the problem of fragmented financial information by giving users a single place to understand their net worth, spending habits, available cash, investment returns, goal progress, and overall financial health.
 
 
 ## Goals
 
-1. **Centralize financial accounts:** Enable users to add and manage at least five account types, including bank accounts, cash wallets, stock accounts, mutual funds, and cryptocurrency wallets, from one dashboard.
+1. **Centralize financial accounts:** Enable users to add and manage five asset account types, including bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets, from one dashboard.
 
 2. **Maintain accurate balances:** Automatically update account balances and total net worth immediately after users record an income, expense, transfer, or investment transaction.
 
@@ -30,19 +30,19 @@ This application is a personal finance and investment management platform for in
    The user creates an account, selects a base currency, and completes a short onboarding process.
 
 2. **Add Financial Accounts**
-   The user adds bank accounts, cash wallets, stock broker accounts, mutual funds, ETFs, or cryptocurrency wallets and enters the opening balance for each account.
+   The user adds bank accounts, cash wallets, digital wallets, broker accounts, or cryptocurrency wallets and enters the opening balance for each account.
 
 3. **View Initial Dashboard**
-   The application calculates and displays the user’s total assets, liquid cash, investments, liabilities, and estimated net worth.
+   The application calculates and displays the user’s total assets, liquid cash, investments, and estimated net worth.
 
 4. **Record a Transaction**
-   The user selects a transaction type such as income, expense, transfer, investment purchase, investment sale, or refund.
+   The user selects a transaction type such as income, expense, transfer, refund, fee, investment purchase, investment sale, or adjustment.
 
 5. **Select the Affected Account**
    The user chooses the account from which money was received, spent, transferred, or invested.
 
 6. **Enter Transaction Details**
-   The user enters the amount, date, category, merchant or description, and any optional notes or receipt.
+   The user enters the amount, date, category, merchant or description, and any optional notes.
 
 7. **Update Financial Records**
    The application saves the transaction, updates the affected account balances, and recalculates the dashboard analytics.
@@ -76,18 +76,19 @@ This application is a personal finance and investment management platform for in
 
 ### Financial Accounts
 
-* Users can add bank accounts, cash wallets, digital wallets, broker accounts, mutual fund accounts, and cryptocurrency accounts.
+* Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
 * Users can enter an opening balance for each account.
 * Users can view the current balance of each account.
 * Users can edit, archive, and restore financial accounts.
 
 ### Transactions
 
-* Users can record income, expenses, transfers, refunds, fees, investment purchases, and investment sales.
+* Users can record income, expenses, transfers, refunds, fees, investment purchases, investment sales, and balance adjustments.
 * Users can select the account affected by each transaction.
 * Users can add an amount, date, category, description, merchant, and notes.
 * Account balances update automatically when a transaction is created.
 * Users can view, filter, search, edit, and reverse recorded transactions.
+* Reversals are recorded as linked corrective transactions so confirmed financial history remains traceable.
 * Transfers between accounts do not count as income or expenses.
 
 ### Expense Tracking and Budgets
@@ -100,7 +101,7 @@ This application is a personal finance and investment management platform for in
 
 ### Centralized Dashboard
 
-* Users can view total assets, liabilities, liquid cash, investments, and net worth.
+* Users can view total assets, liquid cash, investments, and net worth.
 * Users can view balances across all financial accounts.
 * Users can view income and expense summaries for a selected period.
 * Users can view spending distribution by category.
@@ -137,7 +138,7 @@ This application is a personal finance and investment management platform for in
 * A responsive web application for desktop, tablet, and mobile browsers.
 * User authentication and personal finance profiles.
 * Manual creation and management of financial accounts.
-* Manual entry of income, expenses, transfers, and investment transactions.
+* Manual entry of income, expenses, transfers, refunds, fees, investment transactions, and balance adjustments.
 * Automatic account-balance calculations based on recorded transactions.
 * Expense categories and monthly budgets.
 * A centralized financial dashboard.
@@ -160,9 +161,11 @@ This application is a personal finance and investment management platform for in
 * Professional investment, tax, accounting, or legal advice.
 * Tax-return preparation or submission.
 * Credit scoring and loan approval.
+* Liability or debt account tracking, including loans and credit-card balances.
 * Shared family, household, or business accounts.
 * Native Android or iOS applications.
 * AI-generated financial recommendations.
+* Receipt file uploads.
 * Receipt scanning and OCR.
 * Automatic bank-statement or broker-statement imports.
 * Support for advanced investment events such as stock splits, rights issues, and bonus shares.
@@ -171,7 +174,7 @@ This application is a personal finance and investment management platform for in
 
 1. A new user can register, select a base currency, and create their first financial account.
 
-2. A signed-in user can create at least one bank account, cash account, broker account, and cryptocurrency account.
+2. A signed-in user can create each supported account type: bank account, cash wallet, digital wallet, broker account, and cryptocurrency wallet.
 
 3. A user can record an income transaction, and the selected account balance increases by the correct amount.
 
@@ -181,7 +184,7 @@ This application is a personal finance and investment management platform for in
 
 6. Every displayed account balance can be calculated from the account’s opening balance and recorded transactions.
 
-7. The dashboard correctly displays total assets, liabilities, liquid cash, investment value, and net worth.
+7. The dashboard correctly displays total assets, liquid cash, investment value, and net worth.
 
 8. A user can create custom expense categories and assign transactions to them.
 

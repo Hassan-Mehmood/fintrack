@@ -128,6 +128,7 @@ Example error response:
 * Do not manually modify the production database schema.
 * Seed data must be deterministic and safe to run in development.
 * Do not permanently delete confirmed financial history without a traceable correction or reversal.
+* Model reversals as linked corrective transactions, not as silent deletes or untracked balance changes.
 * Metadata belongs in PostgreSQL.
 * Large uploaded files belong in object storage if file uploads are added.
 * Do not store large files directly in the database.
@@ -146,6 +147,7 @@ Example error response:
 * Add unit tests for every financial formula and important edge case.
 * Avoid silently correcting invalid financial data. Return a clear validation or business error.
 * Historical calculations must use the values recorded at the time of the transaction.
+* Reversing a transaction must preserve the original transaction and record the link between the original and corrective transaction.
 
 ## Testing
 
@@ -164,6 +166,7 @@ Example error response:
 * `apps/web/` — Next.js pages, layouts, frontend features, components, hooks, and API client usage.
 * `apps/web/src/features/` — Feature-specific UI components, forms, hooks, and frontend schemas.
 * `apps/web/src/components/` — Reusable application-wide presentation components.
+* `apps/web/src/components/ui/` — Generated shadcn/ui components.
 * `apps/web/src/lib/` — Frontend utilities, formatting functions, and client configuration.
 * `apps/api/` — NestJS application, controllers, services, guards, DTOs, and business modules.
 * `apps/api/src/modules/` — Domain modules such as accounts, transactions, investments, budgets, goals, and analytics.
@@ -171,7 +174,6 @@ Example error response:
 * `packages/financial-engine/` — Pure financial calculations and financial-health rules.
 * `packages/shared-types/` — Stable enums, value types, and shared API contracts.
 * `packages/database/` — Prisma schema, migrations, seed scripts, and Prisma client configuration.
-* `packages/ui/` — Shared presentation components used by frontend applications.
 * `context/` — Project overview, architecture, UI context, code standards, AI workflow rules, and progress tracking.
 
 ## Naming Conventions
