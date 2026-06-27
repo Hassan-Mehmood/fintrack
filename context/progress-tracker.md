@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Design the static sidebar and dashboard home page for the Next.js web app.
+- Add Clerk authentication to the Next.js web app and protect application pages.
 
 ## Completed
 
@@ -30,14 +30,23 @@ change.
 - Added shadcn/ui dashboard primitives for cards, sidebar, charts, tables, badges, progress, and supporting overlays.
 - Replaced the default home page with a static finance dashboard containing sidebar navigation, net-worth metrics, charts, connected wallets, expense breakdown, and recent activity.
 - Added chart wrappers under `apps/web/features/dashboard/` using Recharts through shadcn/ui chart components.
+- Installed Clerk for the Next.js web app.
+- Added ClerkProvider with the shadcn Clerk theme to the root layout.
+- Added a protected-first Clerk proxy that keeps only `/sign-in` and `/sign-up` public.
+- Added two-column sign-in and sign-up pages using Clerk prebuilt auth components.
+- Verified the Clerk web setup with `pnpm run lint` and `pnpm run build`.
+- Vertically centered the left-column marketing copy on the sign-in and sign-up pages.
+- Moved the auth page logo into the centered content stack so it no longer overlaps the headline.
+- Increased left-column padding on the sign-in and sign-up pages for better desktop spacing.
 
 ## In Progress
 
-- Ready for the next web UI implementation task.
+- Ready for Clerk environment variables and the next web implementation task.
 
 ## Next Up
 
 - Add additional shadcn/ui components as feature screens require them.
+- Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 
 ## Open Questions
 
@@ -52,6 +61,7 @@ change.
 - Backend domain modules live under `apps/api/src/modules/`; shared backend utilities live under `apps/api/src/common/`.
 - Generated shadcn/ui components live under `apps/web/components/ui/`.
 - Shared UI remains inside `apps/web/components/` for the initial single-frontend MVP.
+- Web routes use a protected-first Clerk proxy: all routes require authentication except `/sign-in` and `/sign-up`.
 
 ## Session Notes
 
@@ -65,3 +75,4 @@ change.
 - User requested basic directory structure only and no app installation for now.
 - User requested shadcn/ui installation in the existing `apps/web` Next.js app.
 - User requested the dashboard home page from `specs/web/001-sidebar-and-dashboard-page.md`.
+- User requested Clerk setup from `specs/web/002-adding-clerk.md`; environment variables will be added later by the user.
