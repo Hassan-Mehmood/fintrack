@@ -79,7 +79,8 @@ This application is a personal finance and investment management platform for in
 * Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
 * Users can enter an opening balance for each account.
 * Users can view the current balance of each account.
-* Users can edit, archive, and restore financial accounts.
+* Users can edit financial accounts.
+* Users can delete financial accounts that do not have recorded transactions.
 
 ### Transactions
 

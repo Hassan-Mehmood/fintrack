@@ -1,0 +1,89 @@
+import {
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Body,
+} from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { AccountsService } from './accounts.service';
+import type {
+  AccountItemResponse,
+  AccountsListResponse,
+  DeleteAccountResponse,
+} from './accounts.types';
+import { CreateAccountDto } from './dto/create-account.dto';
+import { UpdateAccountDto } from './dto/update-account.dto';
+
+@Controller('api/v1/accounts')
+export class AccountsController {
+  constructor(private readonly accountsService: AccountsService) {}
+
+  @Get()
+  async listAccounts(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<AccountsListResponse> {
+    const accounts = await this.accountsService.listAccountsForUser(user);
+
+    return {
+      data: accounts,
+      meta: {
+        total: accounts.length,
+      },
+    };
+  }
+
+  @Get(':accountId')
+  async getAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ): Promise<AccountItemResponse> {
+    return {
+      data: await this.accountsService.getAccountForUser(user, accountId),
+    };
+  }
+
+  @Post()
+  async createAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() payload: CreateAccountDto,
+  ): Promise<AccountItemResponse> {
+    return {
+      data: await this.accountsService.createAccountForUser(user, payload),
+    };
+  }
+
+  @Patch(':accountId')
+  async updateAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() payload: UpdateAccountDto,
+  ): Promise<AccountItemResponse> {
+    return {
+      data: await this.accountsService.updateAccountForUser(
+        user,
+        accountId,
+        payload,
+      ),
+    };
+  }
+
+  @Delete(':accountId')
+  async deleteAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+  ): Promise<DeleteAccountResponse> {
+    await this.accountsService.deleteAccountForUser(user, accountId);
+
+    return {
+      data: {
+        id: accountId,
+        deleted: true,
+      },
+    };
+  }
+}

@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Initial repository scaffolding in progress.
+- Authenticated account management implementation.
 
 ## Current Goal
 
-- Set up Prisma ORM with Neon PostgreSQL for the NestJS API.
+- Verify the new authenticated account CRUD flow against a migrated local database.
 
 ## Completed
 
@@ -54,19 +54,27 @@ change.
 - Verified the Clerk user upsert implementation with Jest, e2e tests, Nest build, and lint.
 - Configured the API Prisma client generator to emit CommonJS-compatible output so the generated client loads correctly under the current NestJS runtime.
 - Added a server-side web sync that sends the active Clerk bearer token to `GET /api/v1/users/me` so authenticated page loads create or refresh the local user row automatically.
+- Added an `accounts` NestJS module with authenticated list, get, create, update, and delete endpoints under `/api/v1/accounts`.
+- Added DTO validation for account payloads and enabled a global NestJS validation pipe.
+- Enforced account ownership in all account queries and blocked account deletion when recorded transactions exist.
+- Added Jest service coverage for account CRUD behavior and delete protections.
+- Added a shared authenticated Query Provider to the web app for client-side API state.
+- Extracted a reusable authenticated app shell so the dashboard and accounts pages share sidebar navigation and header structure.
+- Added the `/accounts` page with authenticated account listing plus create, edit, and delete flows using shadcn dialogs, alerts, empty states, and tables.
+- Documented that account deletion is supported only for accounts without recorded transactions and added the delete endpoint to the architecture overview.
 
 ## In Progress
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
-- Verifying the Clerk web-to-API user sync path and documenting the required API base URL.
+- Ready for end-to-end manual verification of the new `/accounts` flow once the API and web apps are pointed at a migrated database with Clerk environment variables.
 
 ## Next Up
 
 - Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
-- Add additional shadcn/ui components as feature screens require them.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
 - Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
+- Implement transaction entry flows so account balances can move beyond opening-balance-only records.
 
 ## Open Questions
 
@@ -86,6 +94,7 @@ change.
 - The Prisma command config prefers `DIRECT_URL` for Neon migrations when available and falls back to `DATABASE_URL`.
 - The API creates or refreshes the local `users` row on authenticated API requests instead of relying on a Clerk signup webhook for initial user persistence.
 - The web app performs the initial Clerk-to-API sync from the server-rendered root layout so authenticated page loads populate the local user row without requiring a client-side effect.
+- Account deletion is allowed only when the account has no linked source or destination transactions so historical financial records remain traceable.
 
 ## Session Notes
 

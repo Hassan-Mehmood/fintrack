@@ -502,6 +502,7 @@ POST   /api/v1/accounts
 GET    /api/v1/accounts
 GET    /api/v1/accounts/:id
 PATCH  /api/v1/accounts/:id
+DELETE /api/v1/accounts/:id
 
 POST   /api/v1/transactions
 GET    /api/v1/transactions
