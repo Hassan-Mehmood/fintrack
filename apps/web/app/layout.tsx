@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { shadcn } from "@clerk/ui/themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { syncAuthenticatedUser } from "@/lib/sync-authenticated-user";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,11 +21,13 @@ export const metadata: Metadata = {
   description: "Personal finance dashboard for accounts, spending, and investments.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await syncAuthenticatedUser();
+
   return (
     <html
       lang="en"

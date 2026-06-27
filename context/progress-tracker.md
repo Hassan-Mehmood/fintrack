@@ -53,10 +53,12 @@ change.
 - Added `GET /api/v1/users/me` to return the authenticated local user.
 - Verified the Clerk user upsert implementation with Jest, e2e tests, Nest build, and lint.
 - Configured the API Prisma client generator to emit CommonJS-compatible output so the generated client loads correctly under the current NestJS runtime.
+- Added a server-side web sync that sends the active Clerk bearer token to `GET /api/v1/users/me` so authenticated page loads create or refresh the local user row automatically.
 
 ## In Progress
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
+- Verifying the Clerk web-to-API user sync path and documenting the required API base URL.
 
 ## Next Up
 
@@ -64,6 +66,7 @@ change.
 - Add additional shadcn/ui components as feature screens require them.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
+- Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
 
 ## Open Questions
 
@@ -82,6 +85,7 @@ change.
 - Prisma schema and migrations live under `apps/api/prisma` while the API remains a standalone NestJS package.
 - The Prisma command config prefers `DIRECT_URL` for Neon migrations when available and falls back to `DATABASE_URL`.
 - The API creates or refreshes the local `users` row on authenticated API requests instead of relying on a Clerk signup webhook for initial user persistence.
+- The web app performs the initial Clerk-to-API sync from the server-rendered root layout so authenticated page loads populate the local user row without requiring a client-side effect.
 
 ## Session Notes
 
