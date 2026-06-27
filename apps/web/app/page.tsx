@@ -21,6 +21,7 @@ import {
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { SidebarUserProfile } from "@/components/sidebar-user-profile"
 import {
   Card,
   CardAction,
@@ -226,10 +227,7 @@ export default function Home() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 group-data-[collapsible=icon]:hidden">
-            <p className="text-xs font-medium">Base currency</p>
-            <p className="font-mono text-sm font-semibold">PKR</p>
-          </div>
+          <SidebarUserProfile />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

@@ -38,6 +38,8 @@ change.
 - Vertically centered the left-column marketing copy on the sign-in and sign-up pages.
 - Moved the auth page logo into the centered content stack so it no longer overlaps the headline.
 - Increased left-column padding on the sign-in and sign-up pages for better desktop spacing.
+- Added a Clerk-powered sidebar user profile block above the base currency display with visible name/email and profile/logout access.
+- Removed the static sidebar base-currency block and expanded the Clerk profile menu trigger across the full profile row.
 
 ## In Progress
 
