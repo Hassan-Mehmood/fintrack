@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- shadcn/ui setup is complete in the Next.js web app.
+- Design the static sidebar and dashboard home page for the Next.js web app.
 
 ## Completed
 
@@ -27,6 +27,9 @@ change.
 - Aligned shadcn theme variables with the documented finance dashboard color tokens.
 - Added standard Next.js build-output ignores for `.next/` and TypeScript build info.
 - Updated the web folder conventions to keep `components/`, `features/`, `hooks/`, and `lib/` beside `app/`.
+- Added shadcn/ui dashboard primitives for cards, sidebar, charts, tables, badges, progress, and supporting overlays.
+- Replaced the default home page with a static finance dashboard containing sidebar navigation, net-worth metrics, charts, connected wallets, expense breakdown, and recent activity.
+- Added chart wrappers under `apps/web/features/dashboard/` using Recharts through shadcn/ui chart components.
 
 ## In Progress
 
@@ -61,3 +64,4 @@ change.
 - User chose to remove `packages/ui/` from the initial documentation.
 - User requested basic directory structure only and no app installation for now.
 - User requested shadcn/ui installation in the existing `apps/web` Next.js app.
+- User requested the dashboard home page from `specs/web/001-sidebar-and-dashboard-page.md`.
