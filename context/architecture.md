@@ -433,6 +433,12 @@ Authorization: Bearer <token>
 
 The NestJS backend verifies the token before processing the request.
 
+On authenticated API requests, the backend resolves the Clerk user to a local
+PostgreSQL `users` row. If the row does not exist yet, the API creates it from
+the Clerk profile using `clerk_id` as the external identity key. If it already
+exists, the API refreshes mutable profile fields such as email and name before
+continuing with the request.
+
 ---
 
 ### User Ownership
