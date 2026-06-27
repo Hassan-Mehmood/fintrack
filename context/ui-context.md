@@ -43,7 +43,7 @@ Use the monospace font for account balances, transaction amounts, percentages, a
 
 Use shadcn/ui on top of Tailwind CSS.
 
-Generated shadcn/ui components live in `apps/web/src/components/ui/`. Add generated components using the shadcn CLI and do not modify generated components unless explicitly required. Build feature-specific wrappers inside the relevant feature folder.
+Generated shadcn/ui components live in `apps/web/components/ui/`. Add generated components using the shadcn CLI and do not modify generated components unless explicitly required. Build feature-specific wrappers inside the relevant feature folder.
 
 ## Layout Patterns
 

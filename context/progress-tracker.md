@@ -9,7 +9,7 @@ change.
 
 ## Current Goal
 
-- Create the basic monorepo directory structure without installing or scaffolding apps.
+- shadcn/ui setup is complete in the Next.js web app.
 
 ## Completed
 
@@ -18,17 +18,23 @@ change.
 - Finalized MVP transaction types as income, expense, transfer, refund, fee, investment buy, investment sell, and adjustment.
 - Moved receipt file uploads out of MVP scope.
 - Standardized backend domain modules under `apps/api/src/modules/`.
-- Standardized generated shadcn/ui components under `apps/web/src/components/ui/`.
+- Standardized generated shadcn/ui components under `apps/web/components/ui/`.
 - Removed `packages/ui/` from the initial project structure.
 - Created placeholder-only directories for `apps/web`, `apps/api`, `packages/financial-engine`, `packages/shared-types`, and `packages/database`.
+- Initialized shadcn/ui in `apps/web` using the Nova/Radix preset.
+- Configured shadcn/ui generation paths for `apps/web/components/ui` and `apps/web/lib`.
+- Added the generated `Button` component and `cn` utility under the root-level web component structure.
+- Aligned shadcn theme variables with the documented finance dashboard color tokens.
+- Added standard Next.js build-output ignores for `.next/` and TypeScript build info.
+- Updated the web folder conventions to keep `components/`, `features/`, `hooks/`, and `lib/` beside `app/`.
 
 ## In Progress
 
-- Preparing for app scaffolding when requested.
+- Ready for the next web UI implementation task.
 
 ## Next Up
 
-- Add root workspace files and scaffold the web/API applications when app installation is approved.
+- Add additional shadcn/ui components as feature screens require them.
 
 ## Open Questions
 
@@ -41,8 +47,8 @@ change.
 - Reversals are modeled as linked corrective transactions instead of a standalone transaction type so audit history remains traceable.
 - Receipt file uploads are future scope, so file storage is not required for the initial MVP.
 - Backend domain modules live under `apps/api/src/modules/`; shared backend utilities live under `apps/api/src/common/`.
-- Generated shadcn/ui components live under `apps/web/src/components/ui/`.
-- Shared UI remains inside `apps/web/src/components/` for the initial single-frontend MVP.
+- Generated shadcn/ui components live under `apps/web/components/ui/`.
+- Shared UI remains inside `apps/web/components/` for the initial single-frontend MVP.
 
 ## Session Notes
 
@@ -51,6 +57,7 @@ change.
 - User approved the proposed MVP transaction taxonomy and linked-reversal approach.
 - User chose to exclude receipt uploads from the MVP.
 - User chose `apps/api/src/modules/` for backend domain modules.
-- User chose `apps/web/src/components/ui/` for generated shadcn/ui components.
+- User chose `apps/web/components/ui/` for generated shadcn/ui components.
 - User chose to remove `packages/ui/` from the initial documentation.
 - User requested basic directory structure only and no app installation for now.
+- User requested shadcn/ui installation in the existing `apps/web` Next.js app.

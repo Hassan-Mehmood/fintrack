@@ -164,10 +164,10 @@ Example error response:
 ## File Organization
 
 * `apps/web/` — Next.js pages, layouts, frontend features, components, hooks, and API client usage.
-* `apps/web/src/features/` — Feature-specific UI components, forms, hooks, and frontend schemas.
-* `apps/web/src/components/` — Reusable application-wide presentation components.
-* `apps/web/src/components/ui/` — Generated shadcn/ui components.
-* `apps/web/src/lib/` — Frontend utilities, formatting functions, and client configuration.
+* `apps/web/features/` — Feature-specific UI components, forms, hooks, and frontend schemas.
+* `apps/web/components/` — Reusable application-wide presentation components.
+* `apps/web/components/ui/` — Generated shadcn/ui components.
+* `apps/web/lib/` — Frontend utilities, formatting functions, and client configuration.
 * `apps/api/` — NestJS application, controllers, services, guards, DTOs, and business modules.
 * `apps/api/src/modules/` — Domain modules such as accounts, transactions, investments, budgets, goals, and analytics.
 * `apps/api/src/common/` — Shared backend guards, interceptors, exceptions, decorators, and utilities.

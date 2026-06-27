@@ -120,11 +120,11 @@ apps/web/
 │   ├── goals/
 │   └── settings/
 │
-└── src/
-    ├── components/
-    ├── features/
-    ├── hooks/
-    └── lib/
+├── components/
+│   └── ui/
+├── features/
+├── hooks/
+└── lib/
 ```
 
 ---
