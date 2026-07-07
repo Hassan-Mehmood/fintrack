@@ -53,8 +53,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+import { formatAmount, formatDate } from "@/lib/formatting"
+
 import { AccountFormDialog } from "./account-form-dialog"
 import { type AccountFormPayload } from "./account-form-schema"
+import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
+
 import {
   accountsQueryKey,
   createAccount,
@@ -124,7 +128,14 @@ export function AccountsPage() {
     })
 
     setDialogState(null)
-    await queryClient.invalidateQueries({ queryKey: accountsQueryKey })
+    await invalidateAccountData()
+  }
+
+  async function invalidateAccountData(): Promise<void> {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
+    ])
   }
 
   async function handleDeleteAccount(): Promise<void> {
@@ -134,7 +145,7 @@ export function AccountsPage() {
 
     await deleteAccountMutation.mutateAsync(accountToDelete.id)
     setAccountToDelete(null)
-    await queryClient.invalidateQueries({ queryKey: accountsQueryKey })
+    await invalidateAccountData()
   }
 
   return (
@@ -404,22 +415,3 @@ function AccountsTableSkeleton() {
   )
 }
 
-function formatAmount(amount: string, currency: string): string {
-  const [integerPart, decimalPart = ""] = amount.split(".")
-  const isNegative = integerPart.startsWith("-")
-  const unsignedInteger = isNegative ? integerPart.slice(1) : integerPart
-  const groupedInteger = unsignedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-  const trimmedDecimals = decimalPart.replace(/0+$/, "")
-
-  return `${currency} ${isNegative ? "-" : ""}${groupedInteger}${
-    trimmedDecimals ? `.${trimmedDecimals}` : ""
-  }`
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value))
-}

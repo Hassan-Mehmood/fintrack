@@ -17,7 +17,10 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart"
-import { assetAllocation } from "@/features/dashboard/dashboard-data"
+import type {
+  AssetAllocationItem,
+  MonthlySummaryItem,
+} from "./dashboard-types"
 
 const performanceChartConfig = {
   income: {
@@ -36,7 +39,7 @@ const performanceChartConfig = {
 
 const allocationChartConfig = {
   cash: {
-    label: "Cash",
+    label: "Cash & bank",
     color: "var(--accent-primary)",
   },
   brokerage: {
@@ -47,29 +50,35 @@ const allocationChartConfig = {
     label: "Crypto",
     color: "var(--state-warning)",
   },
-  wallets: {
-    label: "Wallets",
-    color: "var(--text-muted)",
-  },
 } satisfies ChartConfig
 
-const monthlyPerformance = [
-  { month: "Jan", income: 420000, expenses: 238000, investments: 90000 },
-  { month: "Feb", income: 455000, expenses: 251000, investments: 110000 },
-  { month: "Mar", income: 438000, expenses: 224000, investments: 125000 },
-  { month: "Apr", income: 470000, expenses: 263000, investments: 120000 },
-  { month: "May", income: 492000, expenses: 276000, investments: 132000 },
-  { month: "Jun", income: 510000, expenses: 281000, investments: 145000 },
-] as const
+const allocationFills: Record<string, string> = {
+  cash: "var(--color-cash)",
+  brokerage: "var(--color-brokerage)",
+  crypto: "var(--color-crypto)",
+}
 
-export function IncomeExpenseInvestmentChart() {
+interface IncomeExpenseInvestmentChartProps {
+  readonly data: readonly MonthlySummaryItem[]
+}
+
+export function IncomeExpenseInvestmentChart({
+  data,
+}: IncomeExpenseInvestmentChartProps) {
+  const chartData = data.map((item) => ({
+    month: item.month,
+    income: Number(item.income),
+    expenses: Number(item.expenses),
+    investments: Number(item.investments),
+  }))
+
   return (
     <ChartContainer
       config={performanceChartConfig}
       className="h-[280px] w-full"
       initialDimension={{ width: 720, height: 280 }}
     >
-      <BarChart accessibilityLayer data={monthlyPerformance} barGap={4}>
+      <BarChart accessibilityLayer data={chartData} barGap={4}>
         <CartesianGrid vertical={false} />
         <XAxis
           dataKey="month"
@@ -99,7 +108,11 @@ export function IncomeExpenseInvestmentChart() {
   )
 }
 
-export function AssetAllocationChart() {
+interface AssetAllocationChartProps {
+  readonly data: readonly AssetAllocationItem[]
+}
+
+export function AssetAllocationChart({ data }: AssetAllocationChartProps) {
   return (
     <ChartContainer
       config={allocationChartConfig}
@@ -112,15 +125,15 @@ export function AssetAllocationChart() {
           content={<ChartTooltipContent hideLabel indicator="dot" />}
         />
         <Pie
-          data={assetAllocation}
+          data={data}
           dataKey="value"
           nameKey="label"
           innerRadius={58}
           outerRadius={96}
           strokeWidth={3}
         >
-          {assetAllocation.map((item) => (
-            <Cell key={item.name} fill={item.fill} />
+          {data.map((item) => (
+            <Cell key={item.name} fill={allocationFills[item.name]} />
           ))}
         </Pie>
       </PieChart>

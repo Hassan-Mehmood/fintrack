@@ -70,9 +70,19 @@ change.
 - Implemented delete as a hard delete for mutable transactions; account balance is restored implicitly because balances are derived from transactions.
 - Added DTO validation for transaction payloads, including transfer-specific destination-account rules.
 - Added Jest service coverage for transaction CRUD, transfer validation, reversal, and delete protections.
+- Added an `analytics` NestJS module under `apps/api/src/modules/analytics/` with a `GET /api/v1/analytics/dashboard` endpoint.
+- Implemented dashboard stat calculations in `AnalyticsService`, including account balances, total net worth, liquid cash, invested cash, monthly summaries, recent activity, and asset allocation.
+- Treated investment purchases with a destination account as internal asset shifts so net worth remains unchanged.
+- Added Jest coverage for dashboard calculations including transfers, investment purchases, reversals, and empty states.
+- Replaced the static dashboard page with a dynamic `DashboardPage` that fetches real stats from the API.
+- Added `dashboard-api.ts`, `dashboard-types.ts`, and `dashboard-page.tsx` under `apps/web/features/dashboard/`.
+- Updated dashboard charts to accept data props and render real monthly and allocation data.
+- Added explicit "Coming soon" cards for expense breakdown, investment performance, goal progress, and budget progress because those database models do not exist yet.
+- Extracted shared formatting utilities into `apps/web/lib/formatting.ts` and reused them in the accounts and dashboard pages.
+- Wired dashboard query invalidation into account and transaction mutations so the dashboard refreshes after changes.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
-- Ready for end-to-end manual verification of the new `/accounts` and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
+- Ready for end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
 
 ## In Progress
 
@@ -83,7 +93,7 @@ change.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
 - Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
-- Run end-to-end manual verification of the `/transactions` flow once the API and database are ready.
+- Run end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and database are ready.
 
 ## Open Questions
 
@@ -104,6 +114,7 @@ change.
 - The API creates or refreshes the local `users` row on authenticated API requests instead of relying on a Clerk signup webhook for initial user persistence.
 - The web app performs the initial Clerk-to-API sync from the server-rendered root layout so authenticated page loads populate the local user row without requiring a client-side effect.
 - Account deletion is allowed only when the account has no linked source or destination transactions so historical financial records remain traceable.
+- Dashboard financial calculations are implemented inside `AnalyticsService` for now because `packages/financial-engine` remains a placeholder and the repository workspace is not yet wired to share packages across apps.
 
 ## Session Notes
 

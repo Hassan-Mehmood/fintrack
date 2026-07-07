@@ -19,6 +19,7 @@ import {
   accountsQueryKey,
   listAccounts,
 } from "@/features/accounts/accounts-api"
+import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
 
 import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
@@ -234,6 +235,7 @@ export function TransactionsPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
     ])
   }
 
