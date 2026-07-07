@@ -63,10 +63,18 @@ change.
 - Added the `/accounts` page with authenticated account listing plus create, edit, and delete flows using shadcn dialogs, alerts, empty states, and tables.
 - Documented that account deletion is supported only for accounts without recorded transactions and added the delete endpoint to the architecture overview.
 
-## In Progress
-
 - Ready to apply the generated Prisma migration to the configured Neon database.
 - Ready for end-to-end manual verification of the new `/accounts` flow once the API and web apps are pointed at a migrated database with Clerk environment variables.
+
+## In Progress
+
+- Transaction CRUD UI is ready for backend wiring.
+  - Added `apps/web/features/transactions/` with types, Zod schema, API client, form dialog, and page.
+  - Added `/transactions` route and wired it into the sidebar navigation.
+  - Supports creating, listing, editing, deleting, and reversing transactions.
+  - Transfer transactions expose a destination-account selector.
+  - Amount direction is displayed based on transaction type using success/error tokens.
+  - Waiting for backend implementation of `/api/v1/transactions` endpoints.
 
 ## Next Up
 
@@ -75,6 +83,7 @@ change.
 - Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
 - Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
 - Implement transaction entry flows so account balances can move beyond opening-balance-only records.
+- Add backend `/api/v1/transactions` endpoints (list, create, get, update, delete, reverse) for the new transaction UI.
 
 ## Open Questions
 
