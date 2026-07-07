@@ -62,19 +62,20 @@ change.
 - Extracted a reusable authenticated app shell so the dashboard and accounts pages share sidebar navigation and header structure.
 - Added the `/accounts` page with authenticated account listing plus create, edit, and delete flows using shadcn dialogs, alerts, empty states, and tables.
 - Documented that account deletion is supported only for accounts without recorded transactions and added the delete endpoint to the architecture overview.
+- Added the transaction CRUD UI under `apps/web/features/transactions/` with types, Zod schema, API client, form dialog, and `/transactions` page.
+- Wired `/transactions` into the sidebar navigation and added active-state support.
+- Added the transactions NestJS module under `apps/api/src/modules/transactions/` with `GET`, `POST`, `GET /:id`, `PATCH`, `DELETE`, and `POST /:id/reverse` endpoints under `/api/v1/transactions`.
+- Enforced user ownership for transaction accounts and destination accounts.
+- Implemented reversal as a linked corrective transaction that offsets the original amount while preserving the original record.
+- Implemented delete as a hard delete for mutable transactions; account balance is restored implicitly because balances are derived from transactions.
+- Added DTO validation for transaction payloads, including transfer-specific destination-account rules.
+- Added Jest service coverage for transaction CRUD, transfer validation, reversal, and delete protections.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
-- Ready for end-to-end manual verification of the new `/accounts` flow once the API and web apps are pointed at a migrated database with Clerk environment variables.
+- Ready for end-to-end manual verification of the new `/accounts` and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
 
 ## In Progress
 
-- Transaction CRUD UI is ready for backend wiring.
-  - Added `apps/web/features/transactions/` with types, Zod schema, API client, form dialog, and page.
-  - Added `/transactions` route and wired it into the sidebar navigation.
-  - Supports creating, listing, editing, deleting, and reversing transactions.
-  - Transfer transactions expose a destination-account selector.
-  - Amount direction is displayed based on transaction type using success/error tokens.
-  - Waiting for backend implementation of `/api/v1/transactions` endpoints.
 
 ## Next Up
 
@@ -82,8 +83,7 @@ change.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
 - Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
-- Implement transaction entry flows so account balances can move beyond opening-balance-only records.
-- Add backend `/api/v1/transactions` endpoints (list, create, get, update, delete, reverse) for the new transaction UI.
+- Run end-to-end manual verification of the `/transactions` flow once the API and database are ready.
 
 ## Open Questions
 

@@ -18,8 +18,8 @@ export class UpdateAccountDto {
   @IsString()
   @MinLength(1)
   @MaxLength(120)
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim() : value,
+  @Transform(({ value }: { value: unknown }): string =>
+    typeof value === 'string' ? value.trim() : '',
   )
   name?: string;
 
@@ -31,8 +31,8 @@ export class UpdateAccountDto {
   @IsString()
   @Length(3, 3)
   @Matches(/^[A-Z]{3}$/)
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
+  @Transform(({ value }: { value: unknown }): string =>
+    typeof value === 'string' ? value.trim().toUpperCase() : '',
   )
   currency?: string;
 

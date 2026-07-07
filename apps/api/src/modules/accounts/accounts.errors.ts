@@ -18,7 +18,9 @@ function buildApiError(
   };
 }
 
-export function createAccountNotFoundException(accountId: string): NotFoundException {
+export function createAccountNotFoundException(
+  accountId: string,
+): NotFoundException {
   return new NotFoundException(
     buildApiError('ACCOUNT_NOT_FOUND', 'The requested account was not found.', {
       accountId,
