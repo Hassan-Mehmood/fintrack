@@ -80,6 +80,14 @@ change.
 - Added explicit "Coming soon" cards for expense breakdown, investment performance, goal progress, and budget progress because those database models do not exist yet.
 - Extracted shared formatting utilities into `apps/web/lib/formatting.ts` and reused them in the accounts and dashboard pages.
 - Wired dashboard query invalidation into account and transaction mutations so the dashboard refreshes after changes.
+- Added `exchangeRate` to the `User` Prisma model and generated a migration (`add_user_exchange_rate`).
+- Added `GET /api/v1/users/me/settings` and `PUT /api/v1/users/me/settings` endpoints for reading and updating user currency preferences.
+- Updated `AuthenticatedUser` type to include `exchangeRate` and updated the auth guard/user service to propagate it.
+- Added a `CurrencyConverter` class in `AnalyticsService` that converts all dashboard amounts to the user's `baseCurrency` using the stored `exchangeRate`.
+- Dashboard metrics, account balances, monthly summaries, recent activity, and asset allocation are now returned in the user's selected default currency (USD or PKR).
+- Added a `/settings` page with a currency selector (USD/PKR) and an exchange-rate input.
+- Settings changes invalidate both the settings query and the dashboard query so the UI updates immediately.
+- Added the Settings route to the sidebar navigation with active-state highlighting.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.

@@ -34,7 +34,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-type AppSection = "dashboard" | "accounts" | "transactions"
+type AppSection = "dashboard" | "accounts" | "transactions" | "settings"
 
 const navigationItems = [
   {
@@ -58,7 +58,12 @@ const navigationItems = [
   { label: "Budgets", icon: GaugeIcon },
   { label: "Investments", icon: BarChart3Icon },
   { label: "Goals", icon: TargetIcon },
-  { label: "Settings", icon: SettingsIcon },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: SettingsIcon,
+    section: "settings" as const,
+  },
 ] as const
 
 interface AppShellProps {

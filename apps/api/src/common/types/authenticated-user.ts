@@ -4,4 +4,5 @@ export interface AuthenticatedUser {
   readonly email: string;
   readonly name: string | null;
   readonly baseCurrency: string;
+  readonly exchangeRate: string | null;
 }

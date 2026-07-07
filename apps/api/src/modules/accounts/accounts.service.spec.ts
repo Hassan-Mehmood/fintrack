@@ -15,6 +15,7 @@ const authenticatedUser: AuthenticatedUser = {
   email: 'user@example.com',
   name: 'Test User',
   baseCurrency: 'USD',
+  exchangeRate: null,
 };
 
 describe('AccountsService', () => {

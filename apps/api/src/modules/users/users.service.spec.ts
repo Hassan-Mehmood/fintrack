@@ -37,6 +37,7 @@ describe('UsersService', () => {
       email: 'person@example.com',
       name: 'Person Example',
       baseCurrency: 'USD',
+      exchangeRate: null,
     };
 
     userUpsert.mockResolvedValue(localUser);
@@ -68,6 +69,7 @@ describe('UsersService', () => {
         email: true,
         name: true,
         baseCurrency: true,
+        exchangeRate: true,
       },
     });
   });

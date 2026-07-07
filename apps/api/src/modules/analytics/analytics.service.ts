@@ -85,12 +85,26 @@ export class AnalyticsService {
       this.fetchTransactions(user.id),
     ]);
 
-    const balances = this.calculateBalances(accounts, transactions);
-    const metrics = this.calculateMetrics(accounts, balances, transactions);
-    const accountItems = this.buildAccountItems(accounts, balances, metrics);
-    const monthlySummary = this.buildMonthlySummary(transactions);
-    const recentActivity = this.buildRecentActivity(transactions);
-    const assetAllocation = this.buildAssetAllocation(accounts, balances);
+    const converter = new CurrencyConverter(
+      user.baseCurrency,
+      user.exchangeRate,
+    );
+
+    const convertedBalances = this.calculateConvertedBalances(
+      accounts,
+      transactions,
+      converter,
+    );
+    const metrics = this.calculateMetrics(accounts, convertedBalances, transactions, converter);
+    const accountItems = this.buildAccountItems(
+      accounts,
+      convertedBalances,
+      metrics,
+      converter,
+    );
+    const monthlySummary = this.buildMonthlySummary(transactions, converter);
+    const recentActivity = this.buildRecentActivity(transactions, converter);
+    const assetAllocation = this.buildAssetAllocation(accounts, convertedBalances);
 
     return {
       baseCurrency: user.baseCurrency,
@@ -145,31 +159,46 @@ export class AnalyticsService {
     });
   }
 
-  private calculateBalances(
+  private calculateConvertedBalances(
     accounts: readonly RawAccount[],
     transactions: readonly RawTransaction[],
+    converter: CurrencyConverter,
   ): ReadonlyMap<string, Decimal> {
     const balances = new Map<string, Decimal>();
 
     for (const account of accounts) {
-      balances.set(account.id, account.openingBalance);
+      balances.set(
+        account.id,
+        converter.convert(account.openingBalance, account.currency),
+      );
     }
 
     for (const transaction of transactions) {
       const sourceEffect = getSourceAccountEffect(transaction);
+      const convertedSourceEffect = converter.convert(
+        sourceEffect,
+        transaction.currency,
+      );
       const sourceBalance =
         balances.get(transaction.accountId) ?? new Decimal(0);
-      balances.set(transaction.accountId, sourceBalance.add(sourceEffect));
+      balances.set(
+        transaction.accountId,
+        sourceBalance.add(convertedSourceEffect),
+      );
 
       if (
         transaction.destinationAccountId &&
         hasDestinationBalanceEffect(transaction.type)
       ) {
+        const convertedDestinationAmount = converter.convert(
+          transaction.amount,
+          transaction.currency,
+        );
         const destinationBalance =
           balances.get(transaction.destinationAccountId) ?? new Decimal(0);
         balances.set(
           transaction.destinationAccountId,
-          destinationBalance.add(transaction.amount),
+          destinationBalance.add(convertedDestinationAmount),
         );
       }
     }
@@ -181,6 +210,7 @@ export class AnalyticsService {
     accounts: readonly RawAccount[],
     balances: ReadonlyMap<string, Decimal>,
     transactions: readonly RawTransaction[],
+    converter: CurrencyConverter,
   ): DashboardMetrics {
     const totalNetWorth = accounts.reduce(
       (sum, account) => sum.add(balances.get(account.id) ?? new Decimal(0)),
@@ -215,6 +245,7 @@ export class AnalyticsService {
     const currentMonthNetWorthChange = this.calculateNetWorthChange(
       transactions,
       currentMonthStart,
+      converter,
     );
 
     const previousMonthEndNetWorth = totalNetWorth.sub(
@@ -232,6 +263,7 @@ export class AnalyticsService {
       transactions,
       ['INVESTMENT_BUY'],
       currentMonthStart,
+      converter,
     );
 
     return {
@@ -249,6 +281,7 @@ export class AnalyticsService {
   private calculateNetWorthChange(
     transactions: readonly RawTransaction[],
     start: Date,
+    converter: CurrencyConverter,
     end?: Date,
   ): Decimal {
     return transactions
@@ -258,17 +291,21 @@ export class AnalyticsService {
         return isAfterStart && isBeforeEnd;
       })
       .reduce((sum, transaction) => {
+        const convertedAmount = converter.convert(
+          transaction.amount,
+          transaction.currency,
+        );
         switch (transaction.type) {
           case 'INCOME':
-            return sum.add(transaction.amount);
+            return sum.add(convertedAmount);
           case 'EXPENSE':
           case 'FEE':
-            return sum.sub(transaction.amount);
+            return sum.sub(convertedAmount);
           case 'ADJUSTMENT':
-            return sum.add(transaction.amount);
+            return sum.add(convertedAmount);
           case 'REFUND':
           case 'INVESTMENT_SELL':
-            return sum.add(transaction.amount);
+            return sum.add(convertedAmount);
           case 'INVESTMENT_BUY':
           case 'TRANSFER':
             return sum;
@@ -282,6 +319,7 @@ export class AnalyticsService {
     transactions: readonly RawTransaction[],
     types: readonly TransactionType[],
     start: Date,
+    converter: CurrencyConverter,
     end?: Date,
   ): Decimal {
     const typeSet = new Set<TransactionType>(types);
@@ -292,16 +330,20 @@ export class AnalyticsService {
         const isBeforeEnd = end ? transaction.occurredAt < end : true;
         return typeSet.has(transaction.type) && isAfterStart && isBeforeEnd;
       })
-      .reduce(
-        (sum, transaction) => sum.add(transaction.amount),
-        new Decimal(0),
-      );
+      .reduce((sum, transaction) => {
+        const convertedAmount = converter.convert(
+          transaction.amount,
+          transaction.currency,
+        );
+        return sum.add(convertedAmount);
+      }, new Decimal(0));
   }
 
   private buildAccountItems(
     accounts: readonly RawAccount[],
     balances: ReadonlyMap<string, Decimal>,
     metrics: DashboardMetrics,
+    converter: CurrencyConverter,
   ): readonly DashboardAccountItem[] {
     const totalNetWorth = new Decimal(metrics.totalNetWorth);
 
@@ -321,7 +363,7 @@ export class AnalyticsService {
         type: account.type,
         typeLabel: accountTypeLabels[account.type],
         balance: balance.toFixed(2),
-        currency: account.currency,
+        currency: converter.baseCurrency,
         share,
       };
     });
@@ -329,6 +371,7 @@ export class AnalyticsService {
 
   private buildMonthlySummary(
     transactions: readonly RawTransaction[],
+    converter: CurrencyConverter,
   ): readonly MonthlySummaryItem[] {
     const now = new Date();
     const months: MonthlySummaryItem[] = [];
@@ -346,18 +389,21 @@ export class AnalyticsService {
         transactions,
         ['INCOME'],
         monthStart,
+        converter,
         monthEnd,
       );
       const expenses = this.sumByTypeAndPeriod(
         transactions,
         ['EXPENSE', 'FEE'],
         monthStart,
+        converter,
         monthEnd,
       );
       const investments = this.sumByTypeAndPeriod(
         transactions,
         ['INVESTMENT_BUY'],
         monthStart,
+        converter,
         monthEnd,
       );
 
@@ -374,17 +420,22 @@ export class AnalyticsService {
 
   private buildRecentActivity(
     transactions: readonly RawTransaction[],
+    converter: CurrencyConverter,
   ): readonly RecentActivityItem[] {
     return transactions.slice(0, 5).map((transaction) => {
       const sourceEffect = getSourceAccountEffect(transaction);
+      const convertedEffect = converter.convert(
+        sourceEffect,
+        transaction.currency,
+      );
       const tone = getActivityTone(transaction.type, sourceEffect);
 
       return {
         id: transaction.id,
         label: transaction.description,
         account: transaction.account.name,
-        amount: sourceEffect.toFixed(2),
-        currency: transaction.currency,
+        amount: convertedEffect.toFixed(2),
+        currency: converter.baseCurrency,
         type: transaction.type,
         tone,
         occurredAt: transaction.occurredAt.toISOString(),
@@ -452,6 +503,38 @@ export class AnalyticsService {
         reason: 'Monthly budgets are not available yet.',
       },
     ];
+  }
+}
+
+class CurrencyConverter {
+  readonly baseCurrency: string;
+  private readonly rate: Decimal | null;
+
+  constructor(baseCurrency: string, exchangeRate: string | null) {
+    this.baseCurrency = baseCurrency;
+    this.rate = exchangeRate ? new Decimal(exchangeRate) : null;
+  }
+
+  convert(amount: Decimal, fromCurrency: string): Decimal {
+    if (fromCurrency === this.baseCurrency) {
+      return amount;
+    }
+
+    if (!this.rate || this.rate.isZero()) {
+      return amount;
+    }
+
+    // If base is USD and from is PKR: divide by rate (e.g., 280 PKR / 280 = 1 USD)
+    // If base is PKR and from is USD: multiply by rate (e.g., 1 USD * 280 = 280 PKR)
+    if (this.baseCurrency === 'USD' && fromCurrency === 'PKR') {
+      return amount.dividedBy(this.rate).toDecimalPlaces(8);
+    }
+
+    if (this.baseCurrency === 'PKR' && fromCurrency === 'USD') {
+      return amount.times(this.rate).toDecimalPlaces(8);
+    }
+
+    return amount;
   }
 }
 

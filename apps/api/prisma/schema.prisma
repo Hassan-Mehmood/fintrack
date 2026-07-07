@@ -33,6 +33,7 @@ model User {
   email        String        @unique
   name         String?
   baseCurrency String        @default("USD") @map("base_currency") @db.VarChar(3)
+  exchangeRate Decimal?      @map("exchange_rate") @db.Decimal(24, 8)
   accounts     Account[]
   transactions Transaction[]
   createdAt    DateTime      @default(now()) @map("created_at")

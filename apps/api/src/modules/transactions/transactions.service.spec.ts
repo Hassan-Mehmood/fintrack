@@ -17,6 +17,7 @@ const authenticatedUser: AuthenticatedUser = {
   email: 'user@example.com',
   name: 'Test User',
   baseCurrency: 'USD',
+  exchangeRate: null,
 };
 
 const mockDate = new Date('2026-07-07T10:00:00.000Z');
