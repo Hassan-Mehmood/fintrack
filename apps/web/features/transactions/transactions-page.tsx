@@ -20,6 +20,7 @@ import {
   listAccounts,
 } from "@/features/accounts/accounts-api"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
+import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
 
 import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
@@ -107,6 +108,11 @@ export function TransactionsPage() {
   const transactionsQuery = useQuery({
     queryKey: transactionsQueryKey,
     queryFn: () => listTransactions(getToken),
+  })
+
+  const settingsQuery = useQuery({
+    queryKey: settingsQueryKey,
+    queryFn: () => getSettings(getToken),
   })
 
   const saveTransactionMutation = useMutation({
@@ -277,7 +283,12 @@ export function TransactionsPage() {
             value={
               isLoading
                 ? "..."
-                : formatVolume(totalVolume, accounts[0]?.currency ?? "USD")
+                : formatVolume(
+                    totalVolume,
+                    settingsQuery.data?.baseCurrency ??
+                      accounts[0]?.currency ??
+                      "USD"
+                  )
             }
             detail="Sum of absolute amounts"
           />
@@ -488,6 +499,11 @@ export function TransactionsPage() {
           dialogState?.mode === "edit" ? dialogState.transaction : null
         }
         accounts={accounts}
+        defaultCurrency={
+          (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
+            | "USD"
+            | "PKR"
+        }
         isPending={saveTransactionMutation.isPending}
         errorMessage={
           saveTransactionMutation.isError

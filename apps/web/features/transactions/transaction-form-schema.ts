@@ -4,6 +4,8 @@ import { transactionTypeValues } from "./transaction-types"
 
 const amountPattern = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
 
+export const currencyValues = ["USD", "PKR"] as const
+
 export const transactionFormSchema = z
   .object({
     type: z.enum(transactionTypeValues, {
@@ -12,11 +14,9 @@ export const transactionFormSchema = z
     accountId: z.string().uuid("Select an account."),
     destinationAccountId: z.string().uuid().optional().or(z.literal("")),
     amount: z.string().trim().regex(amountPattern, "Enter a valid amount."),
-    currency: z
-      .string()
-      .trim()
-      .toUpperCase()
-      .regex(/^[A-Z]{3}$/, "Use a 3-letter currency code."),
+    currency: z.enum(currencyValues, {
+      error: "Select a currency.",
+    }),
     occurredAt: z.string().trim().min(1, "Select a date."),
     description: z
       .string()

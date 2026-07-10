@@ -4,16 +4,16 @@ import { accountTypeValues } from "./account-types"
 
 const openingBalancePattern = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
 
+export const currencyValues = ["USD", "PKR"] as const
+
 export const accountFormSchema = z.object({
   name: z.string().trim().min(1, "Enter an account name.").max(120),
   type: z.enum(accountTypeValues, {
     error: "Select an account type.",
   }),
-  currency: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Use a 3-letter currency code."),
+  currency: z.enum(currencyValues, {
+    error: "Select a currency.",
+  }),
   openingBalance: z
     .string()
     .trim()

@@ -34,6 +34,7 @@ import { Spinner } from "@/components/ui/spinner"
 
 import {
   accountFormSchema,
+  currencyValues,
   type AccountFormPayload,
   type AccountFormValues,
 } from "./account-form-schema"
@@ -41,6 +42,7 @@ import { accountTypeOptions, type Account } from "./account-types"
 
 interface AccountFormDialogProps {
   readonly account?: Account | null
+  readonly defaultCurrency?: (typeof currencyValues)[number]
   readonly errorMessage?: string | null
   readonly isPending?: boolean
   readonly mode: "create" | "edit"
@@ -51,6 +53,7 @@ interface AccountFormDialogProps {
 
 export function AccountFormDialog({
   account,
+  defaultCurrency = "USD",
   errorMessage,
   isPending = false,
   mode,
@@ -59,14 +62,14 @@ export function AccountFormDialog({
   open,
 }: AccountFormDialogProps) {
   const form = useForm<AccountFormValues>({
-    defaultValues: getDefaultValues(account),
+    defaultValues: getDefaultValues(account, defaultCurrency),
   })
 
   useEffect(() => {
     if (open) {
-      form.reset(getDefaultValues(account))
+      form.reset(getDefaultValues(account, defaultCurrency))
     }
-  }, [account, form, open])
+  }, [account, defaultCurrency, form, open])
 
   const {
     control,
@@ -166,17 +169,25 @@ export function AccountFormDialog({
 
             <Field data-invalid={Boolean(errors.currency) || undefined}>
               <FieldLabel htmlFor="account-currency">Currency</FieldLabel>
-              <Input
-                id="account-currency"
-                aria-invalid={Boolean(errors.currency) || undefined}
-                className="uppercase"
-                maxLength={3}
-                placeholder="USD"
-                {...register("currency")}
+              <Controller
+                control={control}
+                name="currency"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="account-currency"
+                      aria-invalid={Boolean(errors.currency) || undefined}
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD — US Dollar</SelectItem>
+                      <SelectItem value="PKR">PKR — Pakistani Rupee</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               />
-              <FieldDescription>
-                Use a 3-letter currency code such as USD or PKR.
-              </FieldDescription>
               <FieldError errors={[errors.currency]} />
             </Field>
 
@@ -230,12 +241,15 @@ export function AccountFormDialog({
   )
 }
 
-function getDefaultValues(account?: Account | null): AccountFormValues {
+function getDefaultValues(
+  account: Account | null | undefined,
+  defaultCurrency: (typeof currencyValues)[number]
+): AccountFormValues {
   if (!account) {
     return {
       name: "",
       type: "BANK",
-      currency: "USD",
+      currency: defaultCurrency,
       openingBalance: "0",
       openedAt: "",
     }
@@ -244,7 +258,7 @@ function getDefaultValues(account?: Account | null): AccountFormValues {
   return {
     name: account.name,
     type: account.type,
-    currency: account.currency,
+    currency: account.currency as (typeof currencyValues)[number],
     openingBalance: account.openingBalance,
     openedAt: account.openedAt.slice(0, 10),
   }

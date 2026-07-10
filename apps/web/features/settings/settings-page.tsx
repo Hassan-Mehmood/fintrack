@@ -79,8 +79,8 @@ export function SettingsPage() {
 
   const form = useForm<SettingsFormValues>({
     defaultValues: {
-      baseCurrency: "USD",
-      exchangeRate: "",
+      baseCurrency: settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD",
+      exchangeRate: settingsQuery.data?.exchangeRate ?? "",
     },
     values: {
       baseCurrency:

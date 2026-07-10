@@ -34,6 +34,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 
 import {
+  currencyValues,
   transactionFormSchema,
   type TransactionFormPayload,
   type TransactionFormValues,
@@ -46,6 +47,7 @@ import {
 
 interface TransactionFormDialogProps {
   readonly accounts: readonly Account[]
+  readonly defaultCurrency?: (typeof currencyValues)[number]
   readonly errorMessage?: string | null
   readonly isPending?: boolean
   readonly mode: "create" | "edit"
@@ -57,6 +59,7 @@ interface TransactionFormDialogProps {
 
 export function TransactionFormDialog({
   accounts,
+  defaultCurrency = "USD",
   errorMessage,
   isPending = false,
   mode,
@@ -66,14 +69,14 @@ export function TransactionFormDialog({
   transaction,
 }: TransactionFormDialogProps) {
   const form = useForm<TransactionFormValues>({
-    defaultValues: getDefaultValues(transaction),
+    defaultValues: getDefaultValues(transaction, defaultCurrency),
   })
 
   useEffect(() => {
     if (open) {
-      form.reset(getDefaultValues(transaction))
+      form.reset(getDefaultValues(transaction, defaultCurrency))
     }
-  }, [form, open, transaction])
+  }, [defaultCurrency, form, open, transaction])
 
   const {
     control,
@@ -96,7 +99,10 @@ export function TransactionFormDialog({
 
   useEffect(() => {
     if (selectedAccount) {
-      setValue("currency", selectedAccount.currency)
+      setValue(
+        "currency",
+        selectedAccount.currency as (typeof currencyValues)[number]
+      )
     }
   }, [selectedAccount, setValue])
 
@@ -283,13 +289,24 @@ export function TransactionFormDialog({
 
             <Field data-invalid={Boolean(errors.currency) || undefined}>
               <FieldLabel htmlFor="transaction-currency">Currency</FieldLabel>
-              <Input
-                id="transaction-currency"
-                aria-invalid={Boolean(errors.currency) || undefined}
-                className="uppercase"
-                maxLength={3}
-                placeholder="USD"
-                {...register("currency")}
+              <Controller
+                control={control}
+                name="currency"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="transaction-currency"
+                      aria-invalid={Boolean(errors.currency) || undefined}
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="USD">USD — US Dollar</SelectItem>
+                      <SelectItem value="PKR">PKR — Pakistani Rupee</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               />
               <FieldError errors={[errors.currency]} />
             </Field>
@@ -369,7 +386,8 @@ export function TransactionFormDialog({
 }
 
 function getDefaultValues(
-  transaction?: Transaction | null
+  transaction: Transaction | null | undefined,
+  defaultCurrency: (typeof currencyValues)[number]
 ): TransactionFormValues {
   if (!transaction) {
     return {
@@ -377,7 +395,7 @@ function getDefaultValues(
       accountId: "",
       destinationAccountId: "",
       amount: "",
-      currency: "USD",
+      currency: defaultCurrency,
       occurredAt: new Date().toISOString().slice(0, 10),
       description: "",
       merchant: "",
@@ -390,7 +408,7 @@ function getDefaultValues(
     accountId: transaction.accountId,
     destinationAccountId: transaction.destinationAccountId ?? "",
     amount: transaction.amount,
-    currency: transaction.currency,
+    currency: transaction.currency as (typeof currencyValues)[number],
     occurredAt: transaction.occurredAt.slice(0, 10),
     description: transaction.description,
     merchant: transaction.merchant ?? "",

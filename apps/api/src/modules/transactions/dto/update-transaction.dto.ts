@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -14,6 +15,7 @@ import {
 import { TransactionType } from '../../../generated/prisma/enums';
 
 const SIGNED_DECIMAL_PATTERN = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
+const CURRENCY_VALUES = ['USD', 'PKR'] as const;
 
 export class UpdateTransactionDto {
   @IsOptional()
@@ -38,9 +40,7 @@ export class UpdateTransactionDto {
   amount?: string;
 
   @IsOptional()
-  @IsString()
-  @Length(3, 3)
-  @Matches(/^[A-Z]{3}$/)
+  @IsIn(CURRENCY_VALUES)
   @Transform(({ value }: { value: unknown }): string =>
     typeof value === 'string' ? value.trim().toUpperCase() : '',
   )

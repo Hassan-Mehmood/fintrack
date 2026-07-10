@@ -58,6 +58,7 @@ import { formatAmount, formatDate } from "@/lib/formatting"
 import { AccountFormDialog } from "./account-form-dialog"
 import { type AccountFormPayload } from "./account-form-schema"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
+import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
 
 import {
   accountsQueryKey,
@@ -82,6 +83,11 @@ export function AccountsPage() {
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
     queryFn: () => listAccounts(getToken),
+  })
+
+  const settingsQuery = useQuery({
+    queryKey: settingsQueryKey,
+    queryFn: () => getSettings(getToken),
   })
 
   const saveAccountMutation = useMutation({
@@ -302,6 +308,11 @@ export function AccountsPage() {
         open={dialogState !== null}
         mode={dialogState?.mode ?? "create"}
         account={dialogState?.mode === "edit" ? dialogState.account : null}
+        defaultCurrency={
+          (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
+            | "USD"
+            | "PKR"
+        }
         isPending={saveAccountMutation.isPending}
         errorMessage={
           saveAccountMutation.isError ? saveAccountMutation.error.message : null
