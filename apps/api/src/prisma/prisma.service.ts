@@ -1,6 +1,8 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaNeon } from '@prisma/adapter-neon';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
+import { Pool as PgPool } from 'pg';
 import { PrismaClient } from '../generated/prisma/client';
 
 config({ path: '../../.env', quiet: true });
@@ -16,15 +18,25 @@ function getDatabaseUrl(): string {
   return databaseUrl;
 }
 
+function createAdapter(databaseUrl: string) {
+  if (databaseUrl.includes('neon.tech')) {
+    return new PrismaNeon({
+      connectionString: databaseUrl,
+    });
+  }
+
+  const pool = new PgPool({ connectionString: databaseUrl });
+  return new PrismaPg(pool);
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
-    const adapter = new PrismaNeon({
-      connectionString: getDatabaseUrl(),
-    });
+    const databaseUrl = getDatabaseUrl();
+    const adapter = createAdapter(databaseUrl);
 
     super({ adapter });
   }

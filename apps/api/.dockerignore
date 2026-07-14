@@ -1,0 +1,17 @@
+node_modules
+dist
+src/generated
+.env*
+*.log
+.git
+.vscode
+.idea
+coverage
+.nyc_output
+.temp
+.tmp
+pids
+*.pid
+*.seed
+*.pid.lock
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

@@ -87,6 +87,11 @@ change.
 - Dashboard metrics, account balances, monthly summaries, recent activity, and asset allocation are now returned in the user's selected default currency (USD or PKR).
 - Added a `/settings` page with a currency selector (USD/PKR) and an exchange-rate input.
 - Settings changes invalidate both the settings query and the dashboard query so the UI updates immediately.
+- Added Docker support for the NestJS API (`apps/api/Dockerfile`) with multi-stage pnpm builds and Prisma client generation.
+- Added Docker support for the Next.js web app (`apps/web/Dockerfile`) with build-time `NEXT_PUBLIC_*` arguments.
+- Added a root `docker-compose.yml` that orchestrates PostgreSQL, the API, and the web app with health checks and migrations.
+- Added a root `.env.example` with the Clerk and public API URL variables required by Docker Compose.
+- Updated `PrismaService` to select the Neon adapter for Neon URLs and the standard `pg` adapter for local PostgreSQL so Docker Compose can use a local database.
 - Added the Settings route to the sidebar navigation with active-state highlighting.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
