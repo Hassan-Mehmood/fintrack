@@ -37,6 +37,7 @@ model User {
   exchangeRate Decimal?      @map("exchange_rate") @db.Decimal(24, 8)
   accounts     Account[]
   transactions Transaction[]
+  assets       Asset[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -89,4 +90,49 @@ model Transaction {
   @@index([accountId])
   @@index([destinationAccountId])
   @@map("transactions")
+}
+
+model AssetCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  assets    Asset[]
+
+  @@map("asset_categories")
+}
+
+model RiskProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  score     Int
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  assets    Asset[]
+
+  @@map("risk_profiles")
+}
+
+model Asset {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  symbol          String?
+  categoryId      String        @map("category_id") @db.Uuid
+  category        AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  riskProfileId   String?       @map("risk_profile_id") @db.Uuid
+  riskProfile     RiskProfile?  @relation(fields: [riskProfileId], references: [id], onDelete: SetNull)
+  currentPrice    Decimal?      @map("current_price") @db.Decimal(24, 8)
+  priceCurrency   String?       @map("price_currency") @db.VarChar(3)
+  notes           String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, categoryId])
+  @@index([categoryId])
+  @@map("assets")
 }

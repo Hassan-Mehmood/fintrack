@@ -104,10 +104,7 @@ export class AccountsService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
-        OR: [
-          { accountId: account.id },
-          { destinationAccountId: account.id },
-        ],
+        OR: [{ accountId: account.id }, { destinationAccountId: account.id }],
       },
       select: {
         type: true,
@@ -144,10 +141,7 @@ export class AccountsService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
-        OR: [
-          { accountId: account.id },
-          { destinationAccountId: account.id },
-        ],
+        OR: [{ accountId: account.id }, { destinationAccountId: account.id }],
       },
       select: {
         type: true,

@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Authenticated account management implementation.
+- Investment module Phase 1: core schema, asset management, and reference data.
 
 ## Current Goal
 
-- Verify the new authenticated account CRUD flow against a migrated local database.
+- Complete Phase 1 of `specs/api/004-adding-investments.md` and verify the assets CRUD flow end to end.
 
 ## Completed
 
@@ -97,6 +97,17 @@ change.
 - Allowed account deletion even when transactions exist; the backend now deletes linked transactions and the frontend shows a warning.
 - Updated `PrismaService` to select the Neon adapter for Neon URLs and the standard `pg` adapter for local PostgreSQL so Docker Compose can use a local database.
 - Added the Settings route to the sidebar navigation with active-state highlighting.
+- Added `AssetCategory`, `RiskProfile`, and `Asset` models to the Prisma schema.
+- Generated and applied the `add_investment_core_models` migration to the Neon database.
+- Created a Prisma seed script (`apps/api/prisma/seed.ts`) with default asset categories and risk profiles.
+- Configured `prisma db seed` through `apps/api/prisma.config.ts` and added a `prisma:seed` script.
+- Added a NestJS `assets` module with `GET /api/v1/assets/metadata`, `GET /api/v1/assets`, `GET /api/v1/assets/:id`, `POST /api/v1/assets`, `PATCH /api/v1/assets/:id`, and `DELETE /api/v1/assets/:id`.
+- Enforced user ownership for assets and validated category/risk-profile references in `AssetsService`.
+- Added Jest service tests for asset CRUD, reference validation, and ownership checks.
+- Added the `/assets` page under `apps/web/app/assets/page.tsx` and the `AssetsPage` feature component.
+- Added an asset form dialog with category/risk-profile selectors, current price, and currency fields.
+- Added the `Assets` route to the sidebar navigation with active-state highlighting.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 1 changes.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
@@ -106,11 +117,12 @@ change.
 
 ## Next Up
 
+- Investment module Phase 2: extend transactions with optional `InvestmentTransactionDetail` for buy/sell events.
+- Investment module Phase 3: derive holdings, cost basis, and realized P&L from transactions.
+- Investment module Phase 4: add investment summary metrics to the dashboard and remove the "Investment performance" coming-soon card.
 - Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
-- Send Clerk session tokens from the web app to the API as `Authorization: Bearer <token>` when connecting dynamic API data.
-- Add `API_BASE_URL` (or `NEXT_PUBLIC_API_BASE_URL`) in the web app environment so server-side authenticated sync can reach the Nest API.
-- Run end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and database are ready.
+- Run end-to-end manual verification of the `/assets` flow once Clerk environment variables are configured.
 
 ## Open Questions
 
@@ -132,6 +144,9 @@ change.
 - The web app performs the initial Clerk-to-API sync from the server-rendered root layout so authenticated page loads populate the local user row without requiring a client-side effect.
 - Account deletion is allowed only when the account has no linked source or destination transactions so historical financial records remain traceable.
 - Dashboard financial calculations are implemented inside `AnalyticsService` for now because `packages/financial-engine` remains a placeholder and the repository workspace is not yet wired to share packages across apps.
+- Investment assets are modeled as user-owned records linked to global `AssetCategory` and `RiskProfile` reference tables, matching the existing per-user ownership model.
+- Asset categories and risk profiles ship as seed data and are configurable by extending the reference tables; no admin UI is required for MVP.
+- Holdings, cost basis, and investment performance will be derived from transactions rather than stored independently, per `specs/api/004-adding-investments.md`.
 
 ## Session Notes
 
