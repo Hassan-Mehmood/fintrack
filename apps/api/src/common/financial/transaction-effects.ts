@@ -1,0 +1,57 @@
+import { Prisma } from '../../generated/prisma/client';
+import type { TransactionType } from '../../generated/prisma/enums';
+
+const Decimal = Prisma.Decimal;
+
+export function getSourceAccountEffect(
+  type: TransactionType,
+  amount: Prisma.Decimal,
+): Prisma.Decimal {
+  switch (type) {
+    case 'INCOME':
+    case 'REFUND':
+    case 'INVESTMENT_SELL':
+      return amount;
+    case 'EXPENSE':
+    case 'FEE':
+    case 'INVESTMENT_BUY':
+    case 'TRANSFER':
+      return amount.neg();
+    case 'ADJUSTMENT':
+      return amount;
+  }
+}
+
+export function hasDestinationBalanceEffect(type: TransactionType): boolean {
+  return type === 'TRANSFER' || type === 'INVESTMENT_BUY';
+}
+
+export function calculateAccountBalance(
+  openingBalance: Prisma.Decimal,
+  accountId: string,
+  transactions: ReadonlyArray<{
+    readonly type: TransactionType;
+    readonly accountId: string;
+    readonly destinationAccountId: string | null;
+    readonly amount: Prisma.Decimal;
+  }>,
+): Prisma.Decimal {
+  let balance = new Decimal(openingBalance.toString());
+
+  for (const transaction of transactions) {
+    if (transaction.accountId === accountId) {
+      balance = balance.add(
+        getSourceAccountEffect(transaction.type, transaction.amount),
+      );
+    }
+
+    if (
+      transaction.destinationAccountId === accountId &&
+      hasDestinationBalanceEffect(transaction.type)
+    ) {
+      balance = balance.add(transaction.amount);
+    }
+  }
+
+  return balance;
+}

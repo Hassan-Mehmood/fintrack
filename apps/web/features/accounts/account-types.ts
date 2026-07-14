@@ -18,6 +18,7 @@ export interface Account {
   readonly type: AccountType
   readonly currency: string
   readonly openingBalance: string
+  readonly currentBalance: string
   readonly openedAt: string
   readonly archivedAt: string | null
   readonly transactionCount: number

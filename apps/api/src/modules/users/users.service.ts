@@ -40,7 +40,9 @@ export class UsersService {
     };
   }
 
-  async getSettings(userId: string): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
+  async getSettings(
+    userId: string,
+  ): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {

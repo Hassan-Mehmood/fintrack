@@ -91,6 +91,10 @@ change.
 - Added Docker support for the Next.js web app (`apps/web/Dockerfile`) with build-time `NEXT_PUBLIC_*` arguments.
 - Added a root `docker-compose.yml` that orchestrates PostgreSQL, the API, and the web app with health checks and migrations.
 - Added a root `.env.example` with the Clerk and public API URL variables required by Docker Compose.
+- Updated the transaction form to display the selected account and lock the currency field to that account's default currency.
+- Enforced transaction currency matching the selected account currency on the backend and added corresponding tests.
+- Replaced the accounts page opening-balance column with a computed current balance and removed the deletable summary/activity text.
+- Allowed account deletion even when transactions exist; the backend now deletes linked transactions and the frontend shows a warning.
 - Updated `PrismaService` to select the Neon adapter for Neon URLs and the standard `pg` adapter for local PostgreSQL so Docker Compose can use a local database.
 - Added the Settings route to the sidebar navigation with active-state highlighting.
 

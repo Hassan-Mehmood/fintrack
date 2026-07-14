@@ -66,6 +66,10 @@ jest.mock('../../generated/prisma/client', () => ({
       toFixed(places: number): string {
         return this.value.toFixed(places);
       }
+
+      toString(): string {
+        return String(this.value);
+      }
     },
   },
 }));

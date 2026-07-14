@@ -6,6 +6,11 @@ import type {
 } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  calculateAccountBalance,
+  hasDestinationBalanceEffect,
+  getSourceAccountEffect,
+} from '../../common/financial/transaction-effects';
 import type {
   AssetAllocationItem,
   DashboardAccountItem,
@@ -95,7 +100,12 @@ export class AnalyticsService {
       transactions,
       converter,
     );
-    const metrics = this.calculateMetrics(accounts, convertedBalances, transactions, converter);
+    const metrics = this.calculateMetrics(
+      accounts,
+      convertedBalances,
+      transactions,
+      converter,
+    );
     const accountItems = this.buildAccountItems(
       accounts,
       convertedBalances,
@@ -104,7 +114,10 @@ export class AnalyticsService {
     );
     const monthlySummary = this.buildMonthlySummary(transactions, converter);
     const recentActivity = this.buildRecentActivity(transactions, converter);
-    const assetAllocation = this.buildAssetAllocation(accounts, convertedBalances);
+    const assetAllocation = this.buildAssetAllocation(
+      accounts,
+      convertedBalances,
+    );
 
     return {
       baseCurrency: user.baseCurrency,
@@ -167,40 +180,12 @@ export class AnalyticsService {
     const balances = new Map<string, Decimal>();
 
     for (const account of accounts) {
-      balances.set(
+      const balance = calculateAccountBalance(
+        account.openingBalance,
         account.id,
-        converter.convert(account.openingBalance, account.currency),
+        transactions,
       );
-    }
-
-    for (const transaction of transactions) {
-      const sourceEffect = getSourceAccountEffect(transaction);
-      const convertedSourceEffect = converter.convert(
-        sourceEffect,
-        transaction.currency,
-      );
-      const sourceBalance =
-        balances.get(transaction.accountId) ?? new Decimal(0);
-      balances.set(
-        transaction.accountId,
-        sourceBalance.add(convertedSourceEffect),
-      );
-
-      if (
-        transaction.destinationAccountId &&
-        hasDestinationBalanceEffect(transaction.type)
-      ) {
-        const convertedDestinationAmount = converter.convert(
-          transaction.amount,
-          transaction.currency,
-        );
-        const destinationBalance =
-          balances.get(transaction.destinationAccountId) ?? new Decimal(0);
-        balances.set(
-          transaction.destinationAccountId,
-          destinationBalance.add(convertedDestinationAmount),
-        );
-      }
+      balances.set(account.id, converter.convert(balance, account.currency));
     }
 
     return balances;
@@ -423,7 +408,10 @@ export class AnalyticsService {
     converter: CurrencyConverter,
   ): readonly RecentActivityItem[] {
     return transactions.slice(0, 5).map((transaction) => {
-      const sourceEffect = getSourceAccountEffect(transaction);
+      const sourceEffect = getSourceAccountEffect(
+        transaction.type,
+        transaction.amount,
+      );
       const convertedEffect = converter.convert(
         sourceEffect,
         transaction.currency,
@@ -535,26 +523,6 @@ class CurrencyConverter {
     }
 
     return amount;
-  }
-}
-
-function hasDestinationBalanceEffect(type: TransactionType): boolean {
-  return type === 'TRANSFER' || type === 'INVESTMENT_BUY';
-}
-
-function getSourceAccountEffect(transaction: RawTransaction): Decimal {
-  switch (transaction.type) {
-    case 'INCOME':
-    case 'REFUND':
-    case 'INVESTMENT_SELL':
-      return transaction.amount;
-    case 'EXPENSE':
-    case 'FEE':
-    case 'INVESTMENT_BUY':
-    case 'TRANSFER':
-      return transaction.amount.neg();
-    case 'ADJUSTMENT':
-      return transaction.amount;
   }
 }
 

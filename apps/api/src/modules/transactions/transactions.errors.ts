@@ -77,3 +77,16 @@ export function createInvalidTransferException(
     buildApiError('INVALID_TRANSFER', reason, {}),
   );
 }
+
+export function createTransactionCurrencyMismatchException(
+  accountCurrency: string,
+  transactionCurrency: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'TRANSACTION_CURRENCY_MISMATCH',
+      `Transaction currency must match the selected account currency (${accountCurrency}).`,
+      { accountCurrency, transactionCurrency },
+    ),
+  );
+}

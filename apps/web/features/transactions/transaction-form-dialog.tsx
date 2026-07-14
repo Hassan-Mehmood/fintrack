@@ -220,6 +220,12 @@ export function TransactionFormDialog({
                 )}
               />
               <FieldError errors={[errors.accountId]} />
+              {selectedAccount ? (
+                <FieldDescription>
+                  Selected account: {selectedAccount.name} (
+                  {selectedAccount.currency})
+                </FieldDescription>
+              ) : null}
             </Field>
 
             {showDestination ? (
@@ -293,21 +299,23 @@ export function TransactionFormDialog({
                 control={control}
                 name="currency"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger
-                      id="transaction-currency"
-                      aria-invalid={Boolean(errors.currency) || undefined}
-                      className="w-full"
-                    >
-                      <SelectValue placeholder="Select a currency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD — US Dollar</SelectItem>
-                      <SelectItem value="PKR">PKR — Pakistani Rupee</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="transaction-currency"
+                    readOnly
+                    aria-readonly="true"
+                    aria-invalid={Boolean(errors.currency) || undefined}
+                    placeholder={
+                      selectedAccount
+                        ? selectedAccount.currency
+                        : "Select an account first"
+                    }
+                    {...field}
+                  />
                 )}
               />
+              <FieldDescription>
+                Currency is set automatically by the selected account.
+              </FieldDescription>
               <FieldError errors={[errors.currency]} />
             </Field>
 

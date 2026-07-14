@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { TransactionsService } from './transactions.service';
 import {
   createInvalidTransferException,
+  createTransactionCurrencyMismatchException,
   createTransactionLockedException,
   createTransactionNotFoundException,
   createTransactionNotReversibleException,
@@ -95,7 +96,10 @@ describe('TransactionsService', () => {
   });
 
   it('creates an expense transaction and deducts from account balance implicitly', async () => {
-    prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
     prisma.transaction.create.mockResolvedValue(
       createTransactionRecord({ amount: '100.50' }),
     );
@@ -122,8 +126,8 @@ describe('TransactionsService', () => {
 
   it('creates a transfer between two owned accounts', async () => {
     prisma.account.findFirst
-      .mockResolvedValueOnce({ id: 'account-1' })
-      .mockResolvedValueOnce({ id: 'account-2' });
+      .mockResolvedValueOnce({ id: 'account-1', currency: 'USD' })
+      .mockResolvedValueOnce({ id: 'account-2', currency: 'USD' });
     prisma.transaction.create.mockResolvedValue(
       createTransactionRecord({
         type: 'TRANSFER',
@@ -152,7 +156,10 @@ describe('TransactionsService', () => {
   });
 
   it('rejects a transfer to the same account', async () => {
-    prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
 
     await expect(
       service.createTransactionForUser(authenticatedUser, {
@@ -171,9 +178,32 @@ describe('TransactionsService', () => {
     );
   });
 
+  it('rejects a transaction when the currency does not match the account currency', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'PKR',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'EXPENSE',
+        accountId: 'account-1',
+        amount: '100',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Wrong currency',
+      }),
+    ).rejects.toEqual(createTransactionCurrencyMismatchException('PKR', 'USD'));
+
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+  });
+
   it('updates an owned transaction', async () => {
     prisma.transaction.findFirst.mockResolvedValue(createTransactionRecord());
-    prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
     prisma.transaction.update.mockResolvedValue(
       createTransactionRecord({ description: 'Updated description' }),
     );

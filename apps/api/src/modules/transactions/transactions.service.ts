@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   createAccountNotFoundForTransactionException,
   createInvalidTransferException,
+  createTransactionCurrencyMismatchException,
   createTransactionLockedException,
   createTransactionNotFoundException,
   createTransactionNotReversibleException,
@@ -94,7 +95,10 @@ export class TransactionsService {
     user: AuthenticatedUser,
     payload: CreateTransactionDto,
   ): Promise<TransactionResponse> {
-    await this.validateTransactionAccounts(user.id, payload);
+    await this.validateTransactionAccounts(user.id, {
+      ...payload,
+      currency: payload.currency,
+    });
 
     const transaction = await this.prisma.transaction.create({
       data: {
@@ -132,11 +136,13 @@ export class TransactionsService {
       payload.accountId ?? existingTransaction.accountId;
     const effectiveDestinationAccountId =
       payload.destinationAccountId ?? existingTransaction.destinationAccountId;
+    const effectiveCurrency = payload.currency ?? existingTransaction.currency;
 
     await this.validateTransactionAccounts(user.id, {
       type: effectiveType,
       accountId: effectiveAccountId,
       destinationAccountId: effectiveDestinationAccountId ?? undefined,
+      currency: effectiveCurrency,
     });
 
     const transaction = await this.prisma.transaction.update({
@@ -253,6 +259,7 @@ export class TransactionsService {
       readonly type: string;
       readonly accountId: string;
       readonly destinationAccountId?: string;
+      readonly currency?: string;
     },
   ): Promise<void> {
     const account = await this.prisma.account.findFirst({
@@ -262,11 +269,22 @@ export class TransactionsService {
       },
       select: {
         id: true,
+        currency: true,
       },
     });
 
     if (!account) {
       throw createAccountNotFoundForTransactionException(payload.accountId);
+    }
+
+    if (
+      payload.currency !== undefined &&
+      payload.currency !== account.currency
+    ) {
+      throw createTransactionCurrencyMismatchException(
+        account.currency,
+        payload.currency,
+      );
     }
 
     if (payload.type === 'TRANSFER') {

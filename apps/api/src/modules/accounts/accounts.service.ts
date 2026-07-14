@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
+import type { TransactionType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  createAccountHasTransactionsException,
-  createAccountNotFoundException,
-} from './accounts.errors';
+import { calculateAccountBalance } from '../../common/financial/transaction-effects';
+import { createAccountNotFoundException } from './accounts.errors';
 import type { CreateAccountDto } from './dto/create-account.dto';
 import type { UpdateAccountDto } from './dto/update-account.dto';
 import type { AccountResponse } from './accounts.types';
@@ -39,15 +38,30 @@ export class AccountsService {
   async listAccountsForUser(
     user: AuthenticatedUser,
   ): Promise<readonly AccountResponse[]> {
-    const accounts = await this.prisma.account.findMany({
-      where: {
-        userId: user.id,
-      },
-      orderBy: [{ createdAt: 'desc' }],
-      select: accountSelect,
-    });
+    const [accounts, transactions] = await Promise.all([
+      this.prisma.account.findMany({
+        where: {
+          userId: user.id,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        select: accountSelect,
+      }),
+      this.prisma.transaction.findMany({
+        where: {
+          userId: user.id,
+        },
+        select: {
+          type: true,
+          accountId: true,
+          destinationAccountId: true,
+          amount: true,
+        },
+      }),
+    ]);
 
-    return accounts.map((account) => this.toAccountResponse(account));
+    return accounts.map((account) =>
+      this.toAccountResponse(account, transactions),
+    );
   }
 
   async getAccountForUser(
@@ -55,8 +69,20 @@ export class AccountsService {
     accountId: string,
   ): Promise<AccountResponse> {
     const account = await this.findOwnedAccountOrThrow(user.id, accountId);
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        userId: user.id,
+        OR: [{ accountId }, { destinationAccountId: accountId }],
+      },
+      select: {
+        type: true,
+        accountId: true,
+        destinationAccountId: true,
+        amount: true,
+      },
+    });
 
-    return this.toAccountResponse(account);
+    return this.toAccountResponse(account, transactions);
   }
 
   async createAccountForUser(
@@ -75,7 +101,23 @@ export class AccountsService {
       select: accountSelect,
     });
 
-    return this.toAccountResponse(account);
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        userId: user.id,
+        OR: [
+          { accountId: account.id },
+          { destinationAccountId: account.id },
+        ],
+      },
+      select: {
+        type: true,
+        accountId: true,
+        destinationAccountId: true,
+        amount: true,
+      },
+    });
+
+    return this.toAccountResponse(account, transactions);
   }
 
   async updateAccountForUser(
@@ -99,7 +141,23 @@ export class AccountsService {
       select: accountSelect,
     });
 
-    return this.toAccountResponse(account);
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        userId: user.id,
+        OR: [
+          { accountId: account.id },
+          { destinationAccountId: account.id },
+        ],
+      },
+      select: {
+        type: true,
+        accountId: true,
+        destinationAccountId: true,
+        amount: true,
+      },
+    });
+
+    return this.toAccountResponse(account, transactions);
   }
 
   async deleteAccountForUser(
@@ -108,21 +166,65 @@ export class AccountsService {
   ): Promise<void> {
     await this.assertOwnedAccountExists(user.id, accountId);
 
-    const transactionCount = await this.prisma.transaction.count({
+    const transactionsToDelete = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
         OR: [{ accountId }, { destinationAccountId: accountId }],
       },
+      select: {
+        id: true,
+        reversalOfId: true,
+      },
     });
 
-    if (transactionCount > 0) {
-      throw createAccountHasTransactionsException(accountId);
-    }
+    const transactionIds = transactionsToDelete.map(
+      (transaction) => transaction.id,
+    );
 
-    await this.prisma.account.delete({
-      where: {
-        id: accountId,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      // Unlink reversals that point to any transaction being deleted so
+      // foreign-key constraints are not violated during the delete.
+      await tx.transaction.updateMany({
+        where: {
+          userId: user.id,
+          reversalOfId: {
+            in: transactionIds,
+          },
+        },
+        data: {
+          reversalOfId: null,
+        },
+      });
+
+      // Delete reversal transactions first because they reference other
+      // transactions through reversalOfId.
+      await tx.transaction.deleteMany({
+        where: {
+          userId: user.id,
+          id: {
+            in: transactionIds,
+          },
+          reversalOfId: {
+            not: null,
+          },
+        },
+      });
+
+      // Delete the remaining transactions for this account.
+      await tx.transaction.deleteMany({
+        where: {
+          userId: user.id,
+          id: {
+            in: transactionIds,
+          },
+        },
+      });
+
+      await tx.account.delete({
+        where: {
+          id: accountId,
+        },
+      });
     });
   }
 
@@ -164,9 +266,22 @@ export class AccountsService {
     return account;
   }
 
-  private toAccountResponse(account: AccountRecord): AccountResponse {
+  private toAccountResponse(
+    account: AccountRecord,
+    transactions: ReadonlyArray<{
+      readonly type: TransactionType;
+      readonly accountId: string;
+      readonly destinationAccountId: string | null;
+      readonly amount: Prisma.Decimal;
+    }>,
+  ): AccountResponse {
     const transactionCount =
       account._count.transactions + account._count.transfersIn;
+    const currentBalance = calculateAccountBalance(
+      account.openingBalance,
+      account.id,
+      transactions,
+    );
 
     return {
       id: account.id,
@@ -174,6 +289,7 @@ export class AccountsService {
       type: account.type,
       currency: account.currency,
       openingBalance: account.openingBalance.toString(),
+      currentBalance: currentBalance.toString(),
       openedAt: account.openedAt.toISOString(),
       archivedAt: account.archivedAt?.toISOString() ?? null,
       transactionCount,

@@ -1,9 +1,6 @@
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AccountsService } from './accounts.service';
-import {
-  createAccountHasTransactionsException,
-  createAccountNotFoundException,
-} from './accounts.errors';
+import { createAccountNotFoundException } from './accounts.errors';
 
 jest.mock('../../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -30,7 +27,11 @@ describe('AccountsService', () => {
     };
     transaction: {
       count: jest.Mock;
+      deleteMany: jest.Mock;
+      findMany: jest.Mock;
+      updateMany: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
 
   beforeEach(() => {
@@ -44,7 +45,24 @@ describe('AccountsService', () => {
       },
       transaction: {
         count: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      $transaction: jest.fn(async (callback: unknown) => {
+        if (typeof callback === 'function') {
+          return callback(prisma);
+        }
+
+        const operations = callback as Array<Promise<unknown>>;
+        const results: unknown[] = [];
+
+        for (const operation of operations) {
+          results.push(await operation);
+        }
+
+        return results;
+      }),
     };
 
     service = new AccountsService(prisma as never);
@@ -64,6 +82,7 @@ describe('AccountsService', () => {
       expect.objectContaining({
         id: 'account-1',
         openingBalance: '1500.25',
+        currentBalance: '1500.25',
         transactionCount: 3,
         canDelete: false,
       }),
@@ -85,6 +104,7 @@ describe('AccountsService', () => {
       expect.objectContaining({
         name: 'Primary Checking',
         openingBalance: '1500.25',
+        currentBalance: '1500.25',
       }),
     );
 
@@ -114,30 +134,47 @@ describe('AccountsService', () => {
       expect.objectContaining({
         name: 'Updated Name',
         openingBalance: '1500.25',
+        currentBalance: '1500.25',
       }),
     );
   });
 
-  it('prevents deleting an account with recorded transactions', async () => {
+  it('deletes an account and all of its recorded transactions', async () => {
     prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
-    prisma.transaction.count.mockResolvedValue(2);
-
-    await expect(
-      service.deleteAccountForUser(authenticatedUser, 'account-1'),
-    ).rejects.toEqual(createAccountHasTransactionsException('account-1'));
-
-    expect(prisma.account.delete).not.toHaveBeenCalled();
-  });
-
-  it('deletes an account without recorded transactions', async () => {
-    prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
-    prisma.transaction.count.mockResolvedValue(0);
-    prisma.account.delete.mockResolvedValue({ id: 'account-1' });
+    prisma.transaction.findMany.mockResolvedValue([
+      { id: 'transaction-1', reversalOfId: null },
+      { id: 'transaction-2', reversalOfId: null },
+    ]);
 
     await expect(
       service.deleteAccountForUser(authenticatedUser, 'account-1'),
     ).resolves.toBeUndefined();
 
+    expect(prisma.transaction.deleteMany).toHaveBeenCalledTimes(2);
+    expect(prisma.account.delete).toHaveBeenCalledWith({
+      where: {
+        id: 'account-1',
+      },
+    });
+  });
+
+  it('deletes an account that has reversal transactions', async () => {
+    prisma.account.findFirst.mockResolvedValue({ id: 'account-1' });
+    prisma.transaction.findMany.mockResolvedValue([
+      { id: 'transaction-1', reversalOfId: null },
+      { id: 'transaction-reversal', reversalOfId: 'transaction-1' },
+    ]);
+
+    await expect(
+      service.deleteAccountForUser(authenticatedUser, 'account-1'),
+    ).resolves.toBeUndefined();
+
+    expect(prisma.transaction.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { reversalOfId: null },
+      }),
+    );
+    expect(prisma.transaction.deleteMany).toHaveBeenCalledTimes(2);
     expect(prisma.account.delete).toHaveBeenCalledWith({
       where: {
         id: 'account-1',

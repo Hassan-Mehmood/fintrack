@@ -7,7 +7,6 @@ import {
   CircleAlertIcon,
   PencilLineIcon,
   PlusIcon,
-  ReceiptTextIcon,
   Trash2Icon,
   WalletCardsIcon,
 } from "lucide-react"
@@ -118,9 +117,7 @@ export function AccountsPage() {
 
   const accounts = accountsQuery.data ?? []
   const totalAccounts = accounts.length
-  const deletableAccounts = accounts.filter((account) => account.canDelete).length
   const currenciesCount = new Set(accounts.map((account) => account.currency)).size
-  const accountsWithHistory = totalAccounts - deletableAccounts
 
   async function handleSaveAccount(payload: AccountFormPayload): Promise<void> {
     if (!dialogState) {
@@ -186,31 +183,16 @@ export function AccountsPage() {
             value={accountsQuery.isLoading ? "..." : String(currenciesCount)}
             detail="Distinct reporting currencies"
           />
-          <SummaryCard
-            label="Deletable"
-            value={accountsQuery.isLoading ? "..." : String(deletableAccounts)}
-            detail="Accounts without recorded activity"
-          />
         </section>
 
         <Card>
           <CardHeader>
             <CardTitle>Managed accounts</CardTitle>
             <CardDescription>
-              Accounts with transaction history stay protected so financial records remain traceable.
+              Manage your bank accounts, wallets, and investment accounts from one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {accountsWithHistory > 0 ? (
-              <Alert>
-                <ReceiptTextIcon aria-hidden="true" />
-                <AlertTitle>Delete is limited by account history</AlertTitle>
-                <AlertDescription>
-                  {accountsWithHistory} {accountsWithHistory === 1 ? "account has" : "accounts have"} linked transactions and cannot be deleted.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
             {accountsQuery.isLoading ? (
               <AccountsTableSkeleton />
             ) : accounts.length === 0 ? (
@@ -238,7 +220,7 @@ export function AccountsPage() {
                     <TableHead>Account</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Currency</TableHead>
-                    <TableHead className="text-right">Opening balance</TableHead>
+                    <TableHead className="text-right">Current balance</TableHead>
                     <TableHead>Opened</TableHead>
                     <TableHead>Activity</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -260,17 +242,15 @@ export function AccountsPage() {
                       </TableCell>
                       <TableCell className="font-mono">{account.currency}</TableCell>
                       <TableCell className="text-right font-mono font-medium">
-                        {formatAmount(account.openingBalance, account.currency)}
+                        {formatAmount(account.currentBalance, account.currency)}
                       </TableCell>
                       <TableCell>{formatDate(account.openedAt)}</TableCell>
                       <TableCell>
-                        {account.canDelete ? (
-                          <Badge variant="secondary">No transactions</Badge>
-                        ) : (
+                        {account.transactionCount > 0 ? (
                           <Badge variant="secondary">
                             {account.transactionCount} {account.transactionCount === 1 ? "transaction" : "transactions"}
                           </Badge>
-                        )}
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -287,7 +267,6 @@ export function AccountsPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            disabled={!account.canDelete}
                             onClick={() => setAccountToDelete(account)}
                           >
                             <Trash2Icon data-icon="inline-start" />
@@ -343,7 +322,7 @@ export function AccountsPage() {
             <AlertDialogTitle>Delete account</AlertDialogTitle>
             <AlertDialogDescription>
               {accountToDelete
-                ? `Delete ${accountToDelete.name}? This only works while the account has no recorded transactions.`
+                ? `Delete ${accountToDelete.name}? All transactions linked to this account will be permanently removed.`
                 : "Delete this account?"}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -412,8 +391,9 @@ function AccountsTableSkeleton() {
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-3"
+          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-3"
         >
+          <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
