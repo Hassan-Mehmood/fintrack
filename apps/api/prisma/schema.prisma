@@ -28,6 +28,21 @@ enum TransactionType {
   ADJUSTMENT
 }
 
+enum TradeType {
+  BUY
+  SELL
+  DIVIDEND
+  INTEREST
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER
+  SPLIT
+  BONUS
+  FEE
+  TAX
+  REINVESTMENT
+}
+
 model User {
   id           String        @id @default(uuid()) @db.Uuid
   clerkId      String        @unique @map("clerk_id")
@@ -76,14 +91,15 @@ model Transaction {
   reversalOf           Transaction?    @relation("TransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversal             Transaction?    @relation("TransactionReversal")
   type                 TransactionType
-  amount               Decimal         @db.Decimal(24, 8)
-  currency             String          @db.VarChar(3)
-  occurredAt           DateTime        @map("occurred_at")
+  amount               Decimal                    @db.Decimal(24, 8)
+  currency             String                     @db.VarChar(3)
+  occurredAt           DateTime                   @map("occurred_at")
   description          String
   merchant             String?
   notes                String?
-  createdAt            DateTime        @default(now()) @map("created_at")
-  updatedAt            DateTime        @updatedAt @map("updated_at")
+  investmentDetail     InvestmentTransactionDetail?
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([userId, occurredAt])
@@ -125,14 +141,34 @@ model Asset {
   category        AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   riskProfileId   String?       @map("risk_profile_id") @db.Uuid
   riskProfile     RiskProfile?  @relation(fields: [riskProfileId], references: [id], onDelete: SetNull)
-  currentPrice    Decimal?      @map("current_price") @db.Decimal(24, 8)
-  priceCurrency   String?       @map("price_currency") @db.VarChar(3)
-  notes           String?
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  currentPrice        Decimal?                     @map("current_price") @db.Decimal(24, 8)
+  priceCurrency       String?                      @map("price_currency") @db.VarChar(3)
+  notes               String?
+  investmentDetails   InvestmentTransactionDetail[]
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([userId, categoryId])
   @@index([categoryId])
   @@map("assets")
+}
+
+model InvestmentTransactionDetail {
+  id            String     @id @default(uuid()) @db.Uuid
+  transactionId String     @unique @map("transaction_id") @db.Uuid
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  assetId       String     @map("asset_id") @db.Uuid
+  asset         Asset      @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  tradeType     TradeType  @map("trade_type")
+  quantity      Decimal    @db.Decimal(24, 8)
+  price         Decimal    @db.Decimal(24, 8)
+  fees          Decimal    @default(0) @db.Decimal(24, 8)
+  notes         String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  @@index([assetId])
+  @@index([transactionId])
+  @@map("investment_transaction_details")
 }

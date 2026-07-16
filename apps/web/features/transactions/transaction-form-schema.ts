@@ -3,8 +3,29 @@ import { z } from "zod/v4"
 import { transactionTypeValues } from "./transaction-types"
 
 const amountPattern = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
+const positiveDecimalPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
 
 export const currencyValues = ["USD", "PKR"] as const
+
+const investmentSchema = z.object({
+  assetId: z.string().uuid("Select an asset."),
+  tradeType: z.enum(["BUY", "SELL"]),
+  quantity: z
+    .string()
+    .trim()
+    .regex(positiveDecimalPattern, "Enter a valid quantity."),
+  price: z
+    .string()
+    .trim()
+    .regex(positiveDecimalPattern, "Enter a valid price."),
+  fees: z
+    .string()
+    .trim()
+    .regex(positiveDecimalPattern, "Enter a valid fee amount.")
+    .optional()
+    .or(z.literal("")),
+  notes: z.string().trim().max(1000).optional().or(z.literal("")),
+})
 
 export const transactionFormSchema = z
   .object({
@@ -25,6 +46,7 @@ export const transactionFormSchema = z
       .max(255),
     merchant: z.string().trim().max(120).optional().or(z.literal("")),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
+    investment: investmentSchema.optional(),
   })
   .refine(
     (data) => {
@@ -51,6 +73,37 @@ export const transactionFormSchema = z
       message:
         "The destination account must be different from the source account.",
       path: ["destinationAccountId"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (data.type === "INVESTMENT_BUY" || data.type === "INVESTMENT_SELL") {
+        return Boolean(data.investment)
+      }
+
+      return true
+    },
+    {
+      message: "Enter investment details for buy and sell transactions.",
+      path: ["investment"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (
+        data.investment &&
+        (data.type === "INVESTMENT_BUY" || data.type === "INVESTMENT_SELL")
+      ) {
+        const expectedTradeType =
+          data.type === "INVESTMENT_BUY" ? "BUY" : "SELL"
+        return data.investment.tradeType === expectedTradeType
+      }
+
+      return true
+    },
+    {
+      message: "Trade type does not match the transaction type.",
+      path: ["investment", "tradeType"],
     }
   )
 

@@ -1,10 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../../generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
+import type { TradeType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   createAccountNotFoundForTransactionException,
+  createAssetNotFoundForTransactionException,
+  createInvalidInvestmentAmountException,
+  createInvalidInvestmentTradeTypeException,
   createInvalidTransferException,
+  createInvestmentDetailRequiredException,
   createTransactionCurrencyMismatchException,
   createTransactionLockedException,
   createTransactionNotFoundException,
@@ -12,7 +17,26 @@ import {
 } from './transactions.errors';
 import type { CreateTransactionDto } from './dto/create-transaction.dto';
 import type { UpdateTransactionDto } from './dto/update-transaction.dto';
-import type { TransactionResponse } from './transactions.types';
+import type {
+  InvestmentTransactionDetailResponse,
+  TransactionResponse,
+} from './transactions.types';
+
+const investmentDetailSelect = {
+  id: true,
+  assetId: true,
+  asset: {
+    select: {
+      name: true,
+      symbol: true,
+    },
+  },
+  tradeType: true,
+  quantity: true,
+  price: true,
+  fees: true,
+  notes: true,
+} satisfies Prisma.InvestmentTransactionDetailSelect;
 
 const transactionSelect = {
   id: true,
@@ -42,6 +66,9 @@ const transactionSelect = {
   description: true,
   merchant: true,
   notes: true,
+  investmentDetail: {
+    select: investmentDetailSelect,
+  },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.TransactionSelect;
@@ -49,6 +76,8 @@ const transactionSelect = {
 type TransactionRecord = Prisma.TransactionGetPayload<{
   select: typeof transactionSelect;
 }>;
+
+const investmentTypes = new Set<string>(['INVESTMENT_BUY', 'INVESTMENT_SELL']);
 
 const reversibleTypes = new Set<string>([
   'INCOME',
@@ -100,6 +129,11 @@ export class TransactionsService {
       currency: payload.currency,
     });
 
+    if (investmentTypes.has(payload.type)) {
+      this.validateInvestmentPayload(payload.type, payload.investment);
+      await this.validateInvestmentAsset(user.id, payload.investment!.assetId);
+    }
+
     const transaction = await this.prisma.transaction.create({
       data: {
         userId: user.id,
@@ -112,6 +146,18 @@ export class TransactionsService {
         description: payload.description,
         merchant: payload.merchant,
         notes: payload.notes,
+        investmentDetail: payload.investment
+          ? {
+              create: {
+                assetId: payload.investment.assetId,
+                tradeType: payload.investment.tradeType,
+                quantity: payload.investment.quantity,
+                price: payload.investment.price,
+                fees: payload.investment.fees ?? '0',
+                notes: payload.investment.notes,
+              },
+            }
+          : undefined,
       },
       select: transactionSelect,
     });
@@ -137,6 +183,11 @@ export class TransactionsService {
     const effectiveDestinationAccountId =
       payload.destinationAccountId ?? existingTransaction.destinationAccountId;
     const effectiveCurrency = payload.currency ?? existingTransaction.currency;
+    const effectiveInvestment =
+      payload.investment ??
+      (existingTransaction.investmentDetail
+        ? this.recordToInvestmentPayload(existingTransaction.investmentDetail)
+        : undefined);
 
     await this.validateTransactionAccounts(user.id, {
       type: effectiveType,
@@ -144,6 +195,11 @@ export class TransactionsService {
       destinationAccountId: effectiveDestinationAccountId ?? undefined,
       currency: effectiveCurrency,
     });
+
+    if (investmentTypes.has(effectiveType)) {
+      this.validateInvestmentPayload(effectiveType, effectiveInvestment);
+      await this.validateInvestmentAsset(user.id, effectiveInvestment!.assetId);
+    }
 
     const transaction = await this.prisma.transaction.update({
       where: {
@@ -164,6 +220,11 @@ export class TransactionsService {
         description: payload.description,
         merchant: payload.merchant,
         notes: payload.notes,
+        investmentDetail: this.buildInvestmentDetailUpdatePayload(
+          effectiveType,
+          existingTransaction.investmentDetail,
+          payload.investment,
+        ),
       },
       select: transactionSelect,
     });
@@ -202,6 +263,18 @@ export class TransactionsService {
           description: `Reversal: ${originalTransaction.description}`,
           merchant: originalTransaction.merchant,
           notes: 'Reversal of transaction ' + originalTransaction.id,
+          investmentDetail: originalTransaction.investmentDetail
+            ? {
+                create: {
+                  assetId: originalTransaction.investmentDetail.assetId,
+                  tradeType: originalTransaction.investmentDetail.tradeType,
+                  quantity: originalTransaction.investmentDetail.quantity.toString(),
+                  price: originalTransaction.investmentDetail.price.toString(),
+                  fees: originalTransaction.investmentDetail.fees.toString(),
+                  notes: originalTransaction.investmentDetail.notes,
+                },
+              }
+            : undefined,
         },
         select: transactionSelect,
       }),
@@ -318,6 +391,151 @@ export class TransactionsService {
     }
   }
 
+  private validateInvestmentPayload(
+    type: string,
+    investment:
+      | {
+          readonly assetId: string;
+          readonly tradeType: string;
+          readonly quantity: string;
+          readonly price: string;
+          readonly fees?: string;
+        }
+      | undefined,
+  ): void {
+    if (!investment) {
+      throw createInvestmentDetailRequiredException(type);
+    }
+
+    const expectedTradeType = type === 'INVESTMENT_BUY' ? 'BUY' : 'SELL';
+    if (investment.tradeType !== expectedTradeType) {
+      throw createInvalidInvestmentTradeTypeException(
+        expectedTradeType,
+        investment.tradeType,
+      );
+    }
+
+    const quantity = new Prisma.Decimal(investment.quantity);
+    if (quantity.isZero() || quantity.isNegative()) {
+      throw createInvalidInvestmentAmountException(
+        'Quantity must be greater than zero.',
+      );
+    }
+
+    const price = new Prisma.Decimal(investment.price);
+    if (price.isZero() || price.isNegative()) {
+      throw createInvalidInvestmentAmountException(
+        'Price must be greater than zero.',
+      );
+    }
+
+    if (investment.fees !== undefined) {
+      const fees = new Prisma.Decimal(investment.fees);
+      if (fees.isNegative()) {
+        throw createInvalidInvestmentAmountException(
+          'Fees cannot be negative.',
+        );
+      }
+    }
+  }
+
+  private async validateInvestmentAsset(
+    userId: string,
+    assetId: string,
+  ): Promise<void> {
+    const asset = await this.prisma.asset.findFirst({
+      where: {
+        id: assetId,
+        userId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!asset) {
+      throw createAssetNotFoundForTransactionException(assetId);
+    }
+  }
+
+  private buildInvestmentDetailUpdatePayload(
+    effectiveType: string,
+    existingDetail: TransactionRecord['investmentDetail'],
+    payloadInvestment:
+      | {
+          readonly assetId: string;
+          readonly tradeType: string;
+          readonly quantity: string;
+          readonly price: string;
+          readonly fees?: string;
+          readonly notes?: string;
+        }
+      | undefined,
+  ):
+    | {
+        create?: Prisma.InvestmentTransactionDetailCreateWithoutTransactionInput;
+        update?: Prisma.InvestmentTransactionDetailUpdateWithoutTransactionInput;
+        delete?: true;
+      }
+    | undefined {
+    if (!investmentTypes.has(effectiveType)) {
+      if (existingDetail) {
+        return { delete: true };
+      }
+
+      return undefined;
+    }
+
+    if (!payloadInvestment) {
+      return undefined;
+    }
+
+    const detailData = {
+      asset: {
+        connect: {
+          id: payloadInvestment.assetId,
+        },
+      },
+      tradeType: payloadInvestment.tradeType as TradeType,
+      quantity: payloadInvestment.quantity,
+      price: payloadInvestment.price,
+      fees: payloadInvestment.fees ?? '0',
+      notes: payloadInvestment.notes,
+    };
+
+    if (existingDetail) {
+      return { update: detailData };
+    }
+
+    return { create: detailData };
+  }
+
+  private recordToInvestmentPayload(
+    detail: TransactionRecord['investmentDetail'],
+  ):
+    | {
+        readonly assetId: string;
+        readonly tradeType: string;
+        readonly quantity: string;
+        readonly price: string;
+        readonly fees?: string;
+        readonly notes?: string;
+      }
+    | undefined {
+    if (!detail) {
+      return undefined;
+    }
+
+    return {
+      assetId: detail.assetId,
+      tradeType: detail.tradeType,
+      quantity: detail.quantity.toString(),
+      price: detail.price.toString(),
+      fees: detail.fees.toString(),
+      notes: detail.notes ?? undefined,
+    };
+  }
+
   private toTransactionResponse(
     transaction: TransactionRecord,
   ): TransactionResponse {
@@ -337,8 +555,29 @@ export class TransactionsService {
       description: transaction.description,
       merchant: transaction.merchant,
       notes: transaction.notes,
+      investmentDetail: transaction.investmentDetail
+        ? this.toInvestmentDetailResponse(transaction.investmentDetail)
+        : null,
       createdAt: transaction.createdAt.toISOString(),
       updatedAt: transaction.updatedAt.toISOString(),
+    };
+  }
+
+  private toInvestmentDetailResponse(
+    detail: Prisma.InvestmentTransactionDetailGetPayload<{
+      select: typeof investmentDetailSelect;
+    }>,
+  ): InvestmentTransactionDetailResponse {
+    return {
+      id: detail.id,
+      assetId: detail.assetId,
+      assetName: detail.asset.name,
+      assetSymbol: detail.asset.symbol,
+      tradeType: detail.tradeType,
+      quantity: detail.quantity.toString(),
+      price: detail.price.toString(),
+      fees: detail.fees.toString(),
+      notes: detail.notes,
     };
   }
 }

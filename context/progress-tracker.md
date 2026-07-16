@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Investment module Phase 1: core schema, asset management, and reference data.
+- Investment module Phase 2: investment transaction details for buy/sell events.
 
 ## Current Goal
 
-- Complete Phase 1 of `specs/api/004-adding-investments.md` and verify the assets CRUD flow end to end.
+- Complete Phase 2 of `specs/api/004-adding-investments.md` and verify buy/sell transactions can record asset, quantity, price, and fees.
 
 ## Completed
 
@@ -108,6 +108,18 @@ change.
 - Added an asset form dialog with category/risk-profile selectors, current price, and currency fields.
 - Added the `Assets` route to the sidebar navigation with active-state highlighting.
 - Verified the API build, Jest tests, web lint, and web build after the Phase 1 changes.
+- Added `TradeType` enum and `InvestmentTransactionDetail` model linked to `Transaction` and `Asset`.
+- Generated and applied the `add_investment_transaction_details` migration to the Neon database.
+- Extended transaction DTOs with an optional `investment` object containing `assetId`, `tradeType`, `quantity`, `price`, `fees`, and `notes`.
+- Enforced investment detail validation in `TransactionsService`: required for buy/sell, asset ownership check, trade-type matching, and positive quantity/price/non-negative fees.
+- Created/updated `InvestmentTransactionDetail` rows atomically with transaction creates and updates.
+- Copied investment details to reversal transactions so buy/sell reversals offset both cash and holdings.
+- Added Jest tests for investment buy/sell creation, missing details, wrong trade type, asset ownership, and invalid amounts.
+- Extended frontend `Transaction` and `TransactionPayload` types with `investmentDetail`.
+- Extended the transaction form schema and dialog with conditional investment fields for buy/sell transactions.
+- Fetched assets in the transactions page and passed them to the form dialog.
+- Added investment detail summary (asset, quantity, price) to the transactions table.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 2 changes.
 
 - Ready to apply the generated Prisma migration to the configured Neon database.
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
@@ -117,12 +129,11 @@ change.
 
 ## Next Up
 
-- Investment module Phase 2: extend transactions with optional `InvestmentTransactionDetail` for buy/sell events.
 - Investment module Phase 3: derive holdings, cost basis, and realized P&L from transactions.
 - Investment module Phase 4: add investment summary metrics to the dashboard and remove the "Investment performance" coming-soon card.
 - Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
-- Run end-to-end manual verification of the `/assets` flow once Clerk environment variables are configured.
+- Run end-to-end manual verification of the `/assets` and `/transactions` investment flows once Clerk environment variables are configured.
 
 ## Open Questions
 

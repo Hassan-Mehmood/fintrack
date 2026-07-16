@@ -19,6 +19,7 @@ import {
   accountsQueryKey,
   listAccounts,
 } from "@/features/accounts/accounts-api"
+import { assetsQueryKey, listAssets } from "@/features/assets/assets-api"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
 import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
 
@@ -105,6 +106,11 @@ export function TransactionsPage() {
     queryFn: () => listAccounts(getToken),
   })
 
+  const assetsQuery = useQuery({
+    queryKey: assetsQueryKey,
+    queryFn: () => listAssets(getToken),
+  })
+
   const transactionsQuery = useQuery({
     queryKey: transactionsQueryKey,
     queryFn: () => listTransactions(getToken),
@@ -148,6 +154,7 @@ export function TransactionsPage() {
   })
 
   const accounts = accountsQuery.data ?? []
+  const assets = assetsQuery.data ?? []
   const transactions = useMemo(
     () => transactionsQuery.data ?? [],
     [transactionsQuery.data]
@@ -196,8 +203,10 @@ export function TransactionsPage() {
     [transactions]
   )
 
-  const hasError = accountsQuery.isError || transactionsQuery.isError
-  const isLoading = accountsQuery.isLoading || transactionsQuery.isLoading
+  const hasError =
+    accountsQuery.isError || assetsQuery.isError || transactionsQuery.isError
+  const isLoading =
+    accountsQuery.isLoading || assetsQuery.isLoading || transactionsQuery.isLoading
 
   async function handleSaveTransaction(
     payload: TransactionFormPayload
@@ -241,6 +250,7 @@ export function TransactionsPage() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: assetsQueryKey }),
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
     ])
   }
@@ -267,7 +277,9 @@ export function TransactionsPage() {
             <CircleAlertIcon aria-hidden="true" />
             <AlertTitle>Unable to load transactions</AlertTitle>
             <AlertDescription>
-              {accountsQuery.error?.message ?? transactionsQuery.error?.message}
+              {accountsQuery.error?.message ??
+                assetsQuery.error?.message ??
+                transactionsQuery.error?.message}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -419,6 +431,17 @@ export function TransactionsPage() {
                                 {transaction.merchant}
                               </span>
                             ) : null}
+                            {transaction.investmentDetail ? (
+                              <span className="truncate text-xs text-muted-foreground">
+                                {transaction.investmentDetail.assetName}
+                                {transaction.investmentDetail.assetSymbol
+                                  ? ` (${transaction.investmentDetail.assetSymbol})`
+                                  : null}
+                                {" · "}
+                                {transaction.investmentDetail.quantity} @{" "}
+                                {transaction.investmentDetail.price}
+                              </span>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell
@@ -499,6 +522,7 @@ export function TransactionsPage() {
           dialogState?.mode === "edit" ? dialogState.transaction : null
         }
         accounts={accounts}
+        assets={assets}
         defaultCurrency={
           (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
             | "USD"

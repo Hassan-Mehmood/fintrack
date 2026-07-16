@@ -1,3 +1,5 @@
+
+
 export const transactionTypeOptions = [
   { value: "INCOME", label: "Income" },
   { value: "EXPENSE", label: "Expense" },
@@ -15,6 +17,18 @@ export const transactionTypeValues = transactionTypeOptions.map(
 
 export type TransactionType = (typeof transactionTypeOptions)[number]["value"]
 
+export interface InvestmentTransactionDetail {
+  readonly id: string
+  readonly assetId: string
+  readonly assetName: string
+  readonly assetSymbol: string | null
+  readonly tradeType: "BUY" | "SELL"
+  readonly quantity: string
+  readonly price: string
+  readonly fees: string
+  readonly notes: string | null
+}
+
 export interface Transaction {
   readonly id: string
   readonly type: TransactionType
@@ -31,6 +45,7 @@ export interface Transaction {
   readonly description: string
   readonly merchant: string | null
   readonly notes: string | null
+  readonly investmentDetail: InvestmentTransactionDetail | null
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -45,6 +60,14 @@ export interface TransactionPayload {
   readonly description: string
   readonly merchant?: string
   readonly notes?: string
+  readonly investment?: {
+    readonly assetId: string
+    readonly tradeType: "BUY" | "SELL"
+    readonly quantity: string
+    readonly price: string
+    readonly fees?: string
+    readonly notes?: string
+  }
 }
 
 export function getTransactionTypeLabel(type: TransactionType): string {
@@ -55,6 +78,10 @@ export function getTransactionTypeLabel(type: TransactionType): string {
 
 export function isTransferType(type: TransactionType): boolean {
   return type === "TRANSFER"
+}
+
+export function isInvestmentType(type: TransactionType): boolean {
+  return type === "INVESTMENT_BUY" || type === "INVESTMENT_SELL"
 }
 
 export function isReversibleType(type: TransactionType): boolean {
@@ -75,4 +102,18 @@ export function getTransactionSign(type: TransactionType): 1 | -1 {
     case "ADJUSTMENT":
       return 1
   }
+}
+
+export function getInvestmentTradeType(
+  type: TransactionType
+): "BUY" | "SELL" | null {
+  if (type === "INVESTMENT_BUY") {
+    return "BUY"
+  }
+
+  if (type === "INVESTMENT_SELL") {
+    return "SELL"
+  }
+
+  return null
 }

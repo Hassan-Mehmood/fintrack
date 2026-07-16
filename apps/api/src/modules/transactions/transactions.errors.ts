@@ -90,3 +90,48 @@ export function createTransactionCurrencyMismatchException(
     ),
   );
 }
+
+export function createInvestmentDetailRequiredException(
+  transactionType: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INVESTMENT_DETAIL_REQUIRED',
+      `Investment transactions require asset, quantity, and price details.`,
+      { transactionType },
+    ),
+  );
+}
+
+export function createInvalidInvestmentTradeTypeException(
+  expectedTradeType: string,
+  actualTradeType: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INVALID_INVESTMENT_TRADE_TYPE',
+      `Trade type must be ${expectedTradeType} for this transaction type.`,
+      { expectedTradeType, actualTradeType },
+    ),
+  );
+}
+
+export function createAssetNotFoundForTransactionException(
+  assetId: string,
+): NotFoundException {
+  return new NotFoundException(
+    buildApiError(
+      'ASSET_NOT_FOUND_FOR_TRANSACTION',
+      'The selected asset was not found.',
+      { assetId },
+    ),
+  );
+}
+
+export function createInvalidInvestmentAmountException(
+  reason: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError('INVALID_INVESTMENT_AMOUNT', reason, {}),
+  );
+}

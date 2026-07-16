@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -6,13 +6,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Length,
   Matches,
   MaxLength,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { TransactionType } from '../../../generated/prisma/enums';
+import { InvestmentTransactionDetailDto } from './investment-transaction-detail.dto';
 
 const SIGNED_DECIMAL_PATTERN = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
 const CURRENCY_VALUES = ['USD', 'PKR'] as const;
@@ -68,4 +69,9 @@ export class CreateTransactionDto {
     typeof value === 'string' ? value.trim() : '',
   )
   notes?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InvestmentTransactionDetailDto)
+  investment?: InvestmentTransactionDetailDto;
 }

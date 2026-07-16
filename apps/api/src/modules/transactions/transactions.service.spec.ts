@@ -1,7 +1,11 @@
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { TransactionsService } from './transactions.service';
 import {
+  createAssetNotFoundForTransactionException,
+  createInvalidInvestmentAmountException,
+  createInvalidInvestmentTradeTypeException,
   createInvalidTransferException,
+  createInvestmentDetailRequiredException,
   createTransactionCurrencyMismatchException,
   createTransactionLockedException,
   createTransactionNotFoundException,
@@ -29,6 +33,9 @@ describe('TransactionsService', () => {
     account: {
       findFirst: jest.Mock;
     };
+    asset: {
+      findFirst: jest.Mock;
+    };
     transaction: {
       create: jest.Mock;
       delete: jest.Mock;
@@ -42,6 +49,9 @@ describe('TransactionsService', () => {
   beforeEach(() => {
     prisma = {
       account: {
+        findFirst: jest.fn(),
+      },
+      asset: {
         findFirst: jest.fn(),
       },
       transaction: {
@@ -198,6 +208,146 @@ describe('TransactionsService', () => {
     expect(prisma.transaction.create).not.toHaveBeenCalled();
   });
 
+  it('creates an investment buy transaction with asset details', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_BUY',
+        amount: '1005',
+        investmentDetail: createInvestmentDetailRecord(),
+      }),
+    );
+
+    const result = await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_BUY',
+      accountId: 'account-1',
+      amount: '1005',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'Buy BTC',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'BUY',
+        quantity: '0.015',
+        price: '67000',
+        fees: '5',
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        type: 'INVESTMENT_BUY',
+        investmentDetail: expect.objectContaining({
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '0.015',
+        }),
+      }),
+    );
+    expect(prisma.transaction.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an investment buy without investment details', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        amount: '1000',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Buy BTC',
+      }),
+    ).rejects.toEqual(
+      createInvestmentDetailRequiredException('INVESTMENT_BUY'),
+    );
+
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an investment buy with the wrong trade type', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        amount: '1000',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Buy BTC',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'SELL',
+          quantity: '0.015',
+          price: '67000',
+        },
+      }),
+    ).rejects.toEqual(createInvalidInvestmentTradeTypeException('BUY', 'SELL'));
+  });
+
+  it('rejects an investment transaction with an asset not owned by the user', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        amount: '1000',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Buy BTC',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '0.015',
+          price: '67000',
+        },
+      }),
+    ).rejects.toEqual(createAssetNotFoundForTransactionException('asset-1'));
+  });
+
+  it('rejects an investment transaction with a non-positive quantity', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        amount: '1000',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Buy BTC',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '0',
+          price: '67000',
+        },
+      }),
+    ).rejects.toEqual(
+      createInvalidInvestmentAmountException('Quantity must be greater than zero.'),
+    );
+  });
+
   it('updates an owned transaction', async () => {
     prisma.transaction.findFirst.mockResolvedValue(createTransactionRecord());
     prisma.account.findFirst.mockResolvedValue({
@@ -266,6 +416,42 @@ describe('TransactionsService', () => {
     expect(prisma.transaction.create).toHaveBeenCalledTimes(1);
   });
 
+  it('reverses an investment transaction and copies investment details', async () => {
+    prisma.transaction.findFirst.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_BUY',
+        amount: '1005',
+        investmentDetail: createInvestmentDetailRecord(),
+      }),
+    );
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        id: 'transaction-reversal',
+        type: 'INVESTMENT_BUY',
+        amount: '-1005',
+        reversalOfId: 'transaction-1',
+        investmentDetail: createInvestmentDetailRecord(),
+      }),
+    );
+
+    const result = await service.reverseTransactionForUser(
+      authenticatedUser,
+      'transaction-1',
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        type: 'INVESTMENT_BUY',
+        amount: '-1005',
+        reversalOfId: 'transaction-1',
+        investmentDetail: expect.objectContaining({
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+        }),
+      }),
+    );
+  });
+
   it('rejects reversing a transfer', async () => {
     prisma.transaction.findFirst.mockResolvedValue(
       createTransactionRecord({ type: 'TRANSFER' }),
@@ -321,6 +507,7 @@ function createTransactionRecord({
   destinationAccountId = null,
   destinationAccountName = null,
   id = 'transaction-1',
+  investmentDetail = null,
   reversalOfId = null,
   reversedById = null,
   type = 'EXPENSE',
@@ -331,6 +518,7 @@ function createTransactionRecord({
   readonly destinationAccountId?: string | null;
   readonly destinationAccountName?: string | null;
   readonly id?: string;
+  readonly investmentDetail?: ReturnType<typeof createInvestmentDetailRecord> | null;
   readonly reversalOfId?: string | null;
   readonly reversedById?: string | null;
   readonly type?: string;
@@ -357,7 +545,46 @@ function createTransactionRecord({
     description,
     merchant: null,
     notes: null,
+    investmentDetail,
     createdAt,
     updatedAt: new Date('2026-07-02T10:00:00.000Z'),
+  };
+}
+
+function createInvestmentDetailRecord({
+  assetId = 'asset-1',
+  assetName = 'Bitcoin',
+  assetSymbol = 'BTC',
+  fees = '5',
+  price = '67000',
+  quantity = '0.015',
+  tradeType = 'BUY',
+}: {
+  readonly assetId?: string;
+  readonly assetName?: string;
+  readonly assetSymbol?: string;
+  readonly fees?: string;
+  readonly price?: string;
+  readonly quantity?: string;
+  readonly tradeType?: string;
+} = {}) {
+  return {
+    id: 'detail-1',
+    assetId,
+    asset: {
+      name: assetName,
+      symbol: assetSymbol,
+    },
+    tradeType,
+    quantity: {
+      toString: () => quantity,
+    },
+    price: {
+      toString: () => price,
+    },
+    fees: {
+      toString: () => fees,
+    },
+    notes: null,
   };
 }

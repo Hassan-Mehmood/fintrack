@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react"
 import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react"
 
 import type { Account } from "@/features/accounts/account-types"
+import type { Asset } from "@/features/assets/asset-types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,6 +41,8 @@ import {
   type TransactionFormValues,
 } from "./transaction-form-schema"
 import {
+  getInvestmentTradeType,
+  isInvestmentType,
   isTransferType,
   transactionTypeOptions,
   type Transaction,
@@ -47,6 +50,7 @@ import {
 
 interface TransactionFormDialogProps {
   readonly accounts: readonly Account[]
+  readonly assets: readonly Asset[]
   readonly defaultCurrency?: (typeof currencyValues)[number]
   readonly errorMessage?: string | null
   readonly isPending?: boolean
@@ -59,6 +63,7 @@ interface TransactionFormDialogProps {
 
 export function TransactionFormDialog({
   accounts,
+  assets,
   defaultCurrency = "USD",
   errorMessage,
   isPending = false,
@@ -91,6 +96,7 @@ export function TransactionFormDialog({
   const watchedType = useWatch({ control, name: "type" })
   const watchedAccountId = useWatch({ control, name: "accountId" })
   const showDestination = isTransferType(watchedType)
+  const showInvestment = isInvestmentType(watchedType)
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === watchedAccountId),
@@ -111,6 +117,14 @@ export function TransactionFormDialog({
       setValue("destinationAccountId", "")
     }
   }, [showDestination, setValue])
+
+  useEffect(() => {
+    const tradeType = getInvestmentTradeType(watchedType)
+
+    if (tradeType) {
+      setValue("investment.tradeType", tradeType)
+    }
+  }, [watchedType, setValue])
 
   const otherAccounts = useMemo(
     () => accounts.filter((account) => account.id !== watchedAccountId),
@@ -331,6 +345,128 @@ export function TransactionFormDialog({
             </Field>
           </FieldGroup>
 
+          {showInvestment ? (
+            <div className="rounded-lg border bg-card p-4">
+              <p className="mb-4 text-sm font-medium">Investment details</p>
+              <FieldGroup className="grid gap-5 md:grid-cols-2">
+                <Field
+                  data-invalid={Boolean(errors.investment?.assetId) || undefined}
+                >
+                  <FieldLabel htmlFor="transaction-investment-asset">
+                    Asset
+                  </FieldLabel>
+                  <Controller
+                    control={control}
+                    name="investment.assetId"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? ""}
+                        onValueChange={field.onChange}
+                      >
+                        <SelectTrigger
+                          id="transaction-investment-asset"
+                          aria-invalid={
+                            Boolean(errors.investment?.assetId) || undefined
+                          }
+                          className="w-full"
+                        >
+                          <SelectValue placeholder="Select an asset" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {assets.length === 0 ? (
+                              <SelectItem value="" disabled>
+                                No assets available
+                              </SelectItem>
+                            ) : null}
+                            {assets.map((asset) => (
+                              <SelectItem key={asset.id} value={asset.id}>
+                                {asset.name}
+                                {asset.symbol ? ` (${asset.symbol})` : null}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError errors={[errors.investment?.assetId]} />
+                </Field>
+
+                <Field
+                  data-invalid={
+                    Boolean(errors.investment?.quantity) || undefined
+                  }
+                >
+                  <FieldLabel htmlFor="transaction-investment-quantity">
+                    Quantity
+                  </FieldLabel>
+                  <Input
+                    id="transaction-investment-quantity"
+                    aria-invalid={
+                      Boolean(errors.investment?.quantity) || undefined
+                    }
+                    inputMode="decimal"
+                    placeholder="0.015"
+                    {...register("investment.quantity")}
+                  />
+                  <FieldError errors={[errors.investment?.quantity]} />
+                </Field>
+
+                <Field
+                  data-invalid={Boolean(errors.investment?.price) || undefined}
+                >
+                  <FieldLabel htmlFor="transaction-investment-price">
+                    Price per unit
+                  </FieldLabel>
+                  <Input
+                    id="transaction-investment-price"
+                    aria-invalid={
+                      Boolean(errors.investment?.price) || undefined
+                    }
+                    inputMode="decimal"
+                    placeholder="67000"
+                    {...register("investment.price")}
+                  />
+                  <FieldError errors={[errors.investment?.price]} />
+                </Field>
+
+                <Field
+                  data-invalid={Boolean(errors.investment?.fees) || undefined}
+                >
+                  <FieldLabel htmlFor="transaction-investment-fees">
+                    Fees
+                  </FieldLabel>
+                  <Input
+                    id="transaction-investment-fees"
+                    aria-invalid={Boolean(errors.investment?.fees) || undefined}
+                    inputMode="decimal"
+                    placeholder="0"
+                    {...register("investment.fees")}
+                  />
+                  <FieldError errors={[errors.investment?.fees]} />
+                </Field>
+
+                <Field
+                  data-invalid={Boolean(errors.investment?.notes) || undefined}
+                >
+                  <FieldLabel htmlFor="transaction-investment-notes">
+                    Investment notes
+                  </FieldLabel>
+                  <Input
+                    id="transaction-investment-notes"
+                    aria-invalid={
+                      Boolean(errors.investment?.notes) || undefined
+                    }
+                    placeholder="Optional"
+                    {...register("investment.notes")}
+                  />
+                  <FieldError errors={[errors.investment?.notes]} />
+                </Field>
+              </FieldGroup>
+            </div>
+          ) : null}
+
           <Field data-invalid={Boolean(errors.description) || undefined}>
             <FieldLabel htmlFor="transaction-description">
               Description
@@ -421,5 +557,15 @@ function getDefaultValues(
     description: transaction.description,
     merchant: transaction.merchant ?? "",
     notes: transaction.notes ?? "",
+    investment: transaction.investmentDetail
+      ? {
+          assetId: transaction.investmentDetail.assetId,
+          tradeType: transaction.investmentDetail.tradeType,
+          quantity: transaction.investmentDetail.quantity,
+          price: transaction.investmentDetail.price,
+          fees: transaction.investmentDetail.fees,
+          notes: transaction.investmentDetail.notes ?? "",
+        }
+      : undefined,
   }
 }
