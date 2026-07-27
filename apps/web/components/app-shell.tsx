@@ -139,7 +139,10 @@ export function AppShell({
                         </Link>
                       </SidebarMenuButton>
                     ) : (
-                      <SidebarMenuButton tooltip={item.label}>
+                      <SidebarMenuButton
+                        disabled
+                        tooltip={`${item.label} (coming soon)`}
+                      >
                         <item.icon aria-hidden="true" />
                         <span>{item.label}</span>
                       </SidebarMenuButton>

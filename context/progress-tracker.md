@@ -97,6 +97,7 @@ change.
 - Allowed account deletion even when transactions exist; the backend now deletes linked transactions and the frontend shows a warning.
 - Updated `PrismaService` to select the Neon adapter for Neon URLs and the standard `pg` adapter for local PostgreSQL so Docker Compose can use a local database.
 - Added the Settings route to the sidebar navigation with active-state highlighting.
+- Disabled and visually muted the unavailable Budgets and Goals sidebar pages.
 - Added `AssetCategory`, `RiskProfile`, and `Asset` models to the Prisma schema.
 - Generated and applied the `add_investment_core_models` migration to the Neon database.
 - Created a Prisma seed script (`apps/api/prisma/seed.ts`) with default asset categories and risk profiles.
