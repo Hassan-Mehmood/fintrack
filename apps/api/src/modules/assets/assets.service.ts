@@ -1,13 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MarketDataService } from '../market-data/market-data.service';
+import type { AssetPrice } from '../market-data/market-data.types';
 import {
   createAssetCategoryNotFoundException,
+  createDuplicateProviderAssetException,
   createAssetNotFoundException,
+  createProviderAssetLockedException,
   createRiskProfileNotFoundException,
 } from './assets.errors';
 import type { CreateAssetDto } from './dto/create-asset.dto';
+import type { CreateProviderAssetDto } from './dto/create-provider-asset.dto';
 import type { UpdateAssetDto } from './dto/update-asset.dto';
 import type {
   AssetCategoryResponse,
@@ -19,6 +24,11 @@ const assetSelect = {
   id: true,
   name: true,
   symbol: true,
+  provider: true,
+  marketType: true,
+  providerAssetId: true,
+  exchange: true,
+  imageUrl: true,
   categoryId: true,
   category: {
     select: {
@@ -44,7 +54,10 @@ type AssetRecord = Prisma.AssetGetPayload<{
 
 @Injectable()
 export class AssetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly marketData?: MarketDataService,
+  ) {}
 
   async listAssetCategories(): Promise<readonly AssetCategoryResponse[]> {
     const categories = await this.prisma.assetCategory.findMany({
@@ -84,7 +97,16 @@ export class AssetsService {
       select: assetSelect,
     });
 
-    return assets.map((asset) => this.toAssetResponse(asset));
+    const prices = this.marketData
+      ? await this.marketData.getPricesForSources(assets)
+      : [];
+    const pricesByAsset = new Map(
+      prices.map((price) => [price.assetId, price]),
+    );
+
+    return assets.map((asset) =>
+      this.toAssetResponse(asset, pricesByAsset.get(asset.id)),
+    );
   }
 
   async getAssetForUser(
@@ -93,7 +115,10 @@ export class AssetsService {
   ): Promise<AssetResponse> {
     const asset = await this.findOwnedAssetOrThrow(user.id, assetId);
 
-    return this.toAssetResponse(asset);
+    const [price] = this.marketData
+      ? await this.marketData.getPricesForSources([asset])
+      : [];
+    return this.toAssetResponse(asset, price);
   }
 
   async createAssetForUser(
@@ -122,12 +147,81 @@ export class AssetsService {
     return this.toAssetResponse(asset);
   }
 
+  async createProviderAssetForUser(
+    user: AuthenticatedUser,
+    payload: CreateProviderAssetDto,
+  ): Promise<AssetResponse> {
+    if (!this.marketData) {
+      throw new Error('Market data service is unavailable.');
+    }
+    const candidate = await this.marketData.verifyProviderAsset(
+      payload.type,
+      payload.provider,
+      payload.providerAssetId,
+    );
+    const [category, riskProfile] = await Promise.all([
+      this.prisma.assetCategory.findUnique({
+        where: { name: payload.type === 'STOCK' ? 'Stock' : 'Crypto' },
+        select: { id: true },
+      }),
+      this.prisma.riskProfile.findUnique({
+        where: { name: payload.type === 'STOCK' ? 'Stocks' : 'Crypto' },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!category) {
+      throw createAssetCategoryNotFoundException(payload.type);
+    }
+
+    try {
+      const asset = await this.prisma.asset.create({
+        data: {
+          userId: user.id,
+          name: candidate.name,
+          symbol: candidate.symbol,
+          provider: candidate.provider,
+          marketType: candidate.type,
+          providerAssetId: candidate.providerAssetId,
+          exchange: candidate.exchange,
+          imageUrl: candidate.imageUrl,
+          categoryId: category.id,
+          riskProfileId: riskProfile?.id,
+          priceCurrency: candidate.quoteCurrency,
+        },
+        select: assetSelect,
+      });
+
+      const [price] = await this.marketData.getPricesForSources([asset]);
+      return this.toAssetResponse(asset, price);
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw createDuplicateProviderAssetException();
+      }
+      throw error;
+    }
+  }
+
   async updateAssetForUser(
     user: AuthenticatedUser,
     assetId: string,
     payload: UpdateAssetDto,
   ): Promise<AssetResponse> {
-    await this.findOwnedAssetOrThrow(user.id, assetId);
+    const existingAsset = await this.findOwnedAssetOrThrow(user.id, assetId);
+
+    if (
+      existingAsset.provider &&
+      (payload.name !== undefined ||
+        payload.symbol !== undefined ||
+        payload.categoryId !== undefined ||
+        payload.currentPrice !== undefined ||
+        payload.priceCurrency !== undefined)
+    ) {
+      throw createProviderAssetLockedException();
+    }
 
     if (
       payload.categoryId !== undefined ||
@@ -155,7 +249,10 @@ export class AssetsService {
       select: assetSelect,
     });
 
-    return this.toAssetResponse(asset);
+    const [price] = this.marketData
+      ? await this.marketData.getPricesForSources([asset])
+      : [];
+    return this.toAssetResponse(asset, price);
   }
 
   async deleteAssetForUser(
@@ -225,17 +322,30 @@ export class AssetsService {
     }
   }
 
-  private toAssetResponse(asset: AssetRecord): AssetResponse {
+  private toAssetResponse(
+    asset: AssetRecord,
+    price?: AssetPrice,
+  ): AssetResponse {
     return {
       id: asset.id,
       name: asset.name,
       symbol: asset.symbol ?? null,
+      provider: asset.provider,
+      marketType: asset.marketType,
+      providerAssetId: asset.providerAssetId,
+      exchange: asset.exchange,
+      imageUrl: asset.imageUrl,
       categoryId: asset.categoryId,
       categoryName: asset.category.name,
       riskProfileId: asset.riskProfileId,
       riskProfileName: asset.riskProfile?.name ?? null,
-      currentPrice: asset.currentPrice?.toString() ?? null,
-      priceCurrency: asset.priceCurrency,
+      currentPrice: price?.price ?? asset.currentPrice?.toString() ?? null,
+      priceCurrency: price?.currency ?? asset.priceCurrency,
+      priceStatus:
+        price?.status ?? (asset.currentPrice ? 'AVAILABLE' : 'UNAVAILABLE'),
+      priceUpdatedAt: price?.fetchedAt ?? null,
+      providerMarketAt: price?.providerMarketAt ?? null,
+      priceChangePercent: price?.changePercent ?? null,
       notes: asset.notes,
       createdAt: asset.createdAt.toISOString(),
       updatedAt: asset.updatedAt.toISOString(),

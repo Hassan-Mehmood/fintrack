@@ -113,7 +113,9 @@ This application is a personal finance and investment management platform for in
 
 * Users can add stocks, ETFs, mutual funds, and cryptocurrency holdings.
 * Users can record investment purchases and sales.
-* Users can manually enter or update the current market price of an asset.
+* Users can search for and add US stocks from Finnhub and cryptocurrencies from CoinGecko.
+* Provider-backed assets receive cached current market prices automatically.
+* Users can manually enter or update the current market price of assets that are not provider-backed.
 * The application calculates quantity held, cost basis, current value, realized profit or loss, and unrealized profit or loss.
 * Users can view their investment allocation by asset and asset type.
 
@@ -144,6 +146,7 @@ This application is a personal finance and investment management platform for in
 * Expense categories and monthly budgets.
 * A centralized financial dashboard.
 * Manual investment holdings and market-price updates.
+* On-demand cached market prices for Finnhub-backed US stocks and CoinGecko-backed cryptocurrencies.
 * Basic realized and unrealized profit-and-loss calculations.
 * Savings goals and contribution plans.
 * Rules-based financial health calculations.
@@ -156,7 +159,7 @@ This application is a personal finance and investment management platform for in
 
 * Direct synchronization with banks, brokers, mutual funds, or cryptocurrency exchanges.
 * Automatic collection of transactions from SMS messages, emails, or mobile notifications.
-* Live or real-time market-price streaming.
+* Live streaming market prices or background market-price polling.
 * Automated trading or investment execution.
 * Cryptocurrency private-key or seed-phrase management.
 * Professional investment, tax, accounting, or legal advice.
@@ -193,7 +196,7 @@ This application is a personal finance and investment management platform for in
 
 10. A user can add an investment purchase and view the correct quantity, cost basis, current value, and unrealized profit or loss.
 
-11. A user can manually update an asset’s market price, and the related holding value, profit or loss, and dashboard totals update correctly.
+11. A user can manually update a manual asset’s market price or retrieve a provider-backed asset price, and the related holding value, profit or loss, and dashboard totals update correctly.
 
 12. A user can create a financial goal with a target amount and deadline and receive correct daily, weekly, and monthly savings requirements.
 

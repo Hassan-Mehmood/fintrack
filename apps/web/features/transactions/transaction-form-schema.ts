@@ -21,6 +21,8 @@ const investmentSchema = z.object({
     "SPLIT",
     "BONUS",
     "REINVESTMENT",
+    "DEPOSIT",
+    "WITHDRAWAL",
   ]),
   quantity: z
     .string()
@@ -124,7 +126,9 @@ export const transactionFormSchema = z
         data.type === "INVESTMENT_SELL" ||
         data.type === "INVESTMENT_REINVESTMENT" ||
         data.type === "INVESTMENT_SPLIT" ||
-        data.type === "INVESTMENT_BONUS"
+        data.type === "INVESTMENT_BONUS" ||
+        data.type === "INVESTMENT_DEPOSIT" ||
+        data.type === "INVESTMENT_WITHDRAWAL"
 
       if (needsPositiveQuantity && Number(data.investment.quantity) <= 0) {
         return false
@@ -139,6 +143,21 @@ export const transactionFormSchema = z
   )
   .refine(
     (data) => {
+      if (
+        data.type === "INVESTMENT_DEPOSIT" ||
+        data.type === "INVESTMENT_WITHDRAWAL"
+      ) {
+        return Number(data.amount) === 0
+      }
+      return true
+    },
+    {
+      message: "Asset deposits and withdrawals must use a zero account amount.",
+      path: ["amount"],
+    }
+  )
+  .refine(
+    (data) => {
       if (!data.investment || !isInvestmentType(data.type)) {
         return true
       }
@@ -146,7 +165,9 @@ export const transactionFormSchema = z
       const needsPositivePrice =
         data.type === "INVESTMENT_BUY" ||
         data.type === "INVESTMENT_SELL" ||
-        data.type === "INVESTMENT_REINVESTMENT"
+        data.type === "INVESTMENT_REINVESTMENT" ||
+        data.type === "INVESTMENT_DEPOSIT" ||
+        data.type === "INVESTMENT_WITHDRAWAL"
 
       if (needsPositivePrice && Number(data.investment.price) <= 0) {
         return false

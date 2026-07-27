@@ -105,12 +105,16 @@ export function TransactionFormDialog({
     watchedInvestmentTradeType === "BUY" ||
     watchedInvestmentTradeType === "SELL" ||
     watchedInvestmentTradeType === "REINVESTMENT" ||
+    watchedInvestmentTradeType === "DEPOSIT" ||
+    watchedInvestmentTradeType === "WITHDRAWAL" ||
     watchedInvestmentTradeType === "SPLIT" ||
     watchedInvestmentTradeType === "BONUS"
   const showInvestmentPrice =
     watchedInvestmentTradeType === "BUY" ||
     watchedInvestmentTradeType === "SELL" ||
-    watchedInvestmentTradeType === "REINVESTMENT"
+    watchedInvestmentTradeType === "REINVESTMENT" ||
+    watchedInvestmentTradeType === "DEPOSIT" ||
+    watchedInvestmentTradeType === "WITHDRAWAL"
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === watchedAccountId),
@@ -149,6 +153,37 @@ export function TransactionFormDialog({
       }
     }
   }, [watchedType, setValue])
+
+  useEffect(() => {
+    if (
+      watchedType === "INVESTMENT_DEPOSIT" ||
+      watchedType === "INVESTMENT_WITHDRAWAL"
+    ) {
+      setValue("amount", "0")
+    }
+  }, [watchedType, setValue])
+
+  const availableAccounts = useMemo(
+    () =>
+      showInvestment
+        ? accounts.filter(
+            (account) =>
+              account.type === "BROKER" || account.type === "CRYPTO_WALLET"
+          )
+        : accounts,
+    [accounts, showInvestment]
+  )
+
+  useEffect(() => {
+    if (
+      showInvestment &&
+      selectedAccount &&
+      selectedAccount.type !== "BROKER" &&
+      selectedAccount.type !== "CRYPTO_WALLET"
+    ) {
+      setValue("accountId", "")
+    }
+  }, [selectedAccount, setValue, showInvestment])
 
   const otherAccounts = useMemo(
     () => accounts.filter((account) => account.id !== watchedAccountId),
@@ -247,7 +282,7 @@ export function TransactionFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {accounts.map((account) => (
+                        {availableAccounts.map((account) => (
                           <SelectItem key={account.id} value={account.id}>
                             {account.name} ({account.currency})
                           </SelectItem>
@@ -314,17 +349,31 @@ export function TransactionFormDialog({
               </Field>
             ) : null}
 
-            <Field data-invalid={Boolean(errors.amount) || undefined}>
+            <Field
+              data-disabled={
+                watchedType === "INVESTMENT_DEPOSIT" ||
+                watchedType === "INVESTMENT_WITHDRAWAL" ||
+                undefined
+              }
+              data-invalid={Boolean(errors.amount) || undefined}
+            >
               <FieldLabel htmlFor="transaction-amount">Amount</FieldLabel>
               <Input
                 id="transaction-amount"
                 aria-invalid={Boolean(errors.amount) || undefined}
                 inputMode="decimal"
                 placeholder="0.00"
+                disabled={
+                  watchedType === "INVESTMENT_DEPOSIT" ||
+                  watchedType === "INVESTMENT_WITHDRAWAL"
+                }
                 {...register("amount")}
               />
               <FieldDescription>
-                {watchedType === "ADJUSTMENT"
+                {watchedType === "INVESTMENT_DEPOSIT" ||
+                watchedType === "INVESTMENT_WITHDRAWAL"
+                  ? "Asset movements do not change the account cash balance."
+                  : watchedType === "ADJUSTMENT"
                   ? "Use a negative value to reduce the account balance."
                   : "Enter the absolute amount. The type determines whether it is added or deducted."}
               </FieldDescription>

@@ -18,6 +18,7 @@ import type {
   DeleteAssetResponse,
 } from './assets.types';
 import { CreateAssetDto } from './dto/create-asset.dto';
+import { CreateProviderAssetDto } from './dto/create-provider-asset.dto';
 import { UpdateAssetDto } from './dto/update-asset.dto';
 
 @Controller('api/v1/assets')
@@ -70,6 +71,16 @@ export class AssetsController {
   ): Promise<AssetItemResponse> {
     return {
       data: await this.assetsService.createAssetForUser(user, payload),
+    };
+  }
+
+  @Post('from-provider')
+  async createProviderAsset(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() payload: CreateProviderAssetDto,
+  ): Promise<AssetItemResponse> {
+    return {
+      data: await this.assetsService.createProviderAssetForUser(user, payload),
     };
   }
 

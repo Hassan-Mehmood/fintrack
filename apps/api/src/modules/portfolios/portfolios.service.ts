@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { calculateAccountBalance } from '../../common/financial/transaction-effects';
 import {
@@ -8,6 +8,7 @@ import {
 import { CurrencyConverter } from '../../common/financial/currency-converter';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MarketDataService } from '../market-data/market-data.service';
 import {
   createAccountNotFoundForPortfolioException,
   createPortfolioNotFoundException,
@@ -24,14 +25,6 @@ import type { UpdatePortfolioDto } from './dto/update-portfolio.dto';
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
 
-interface AccountRecord {
-  readonly id: string;
-  readonly name: string;
-  readonly type: string;
-  readonly currency: string;
-  readonly openingBalance: Decimal;
-}
-
 interface InvestmentDetailRecord {
   readonly assetId: string;
   readonly tradeType: string;
@@ -39,9 +32,12 @@ interface InvestmentDetailRecord {
   readonly price: Decimal;
   readonly fees: Decimal;
   readonly asset: {
+    readonly id: string;
     readonly name: string;
     readonly currentPrice: Decimal | null;
     readonly priceCurrency: string | null;
+    readonly provider: 'FINNHUB' | 'COINGECKO' | null;
+    readonly providerAssetId: string | null;
     readonly category: {
       readonly name: string;
     };
@@ -57,9 +53,9 @@ interface InvestmentDetailRecord {
 }
 
 interface PortfolioHolding {
-  readonly currentValue: Decimal;
+  readonly currentValue: Decimal | null;
   readonly costBasis: Decimal;
-  readonly unrealizedGain: Decimal;
+  readonly unrealizedGain: Decimal | null;
   readonly realizedGain: Decimal;
   readonly categoryName: string;
   readonly riskScore: number | null;
@@ -67,7 +63,10 @@ interface PortfolioHolding {
 
 @Injectable()
 export class PortfoliosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly marketData?: MarketDataService,
+  ) {}
 
   async listPortfoliosForUser(
     user: AuthenticatedUser,
@@ -92,7 +91,9 @@ export class PortfoliosService {
     });
 
     return Promise.all(
-      portfolios.map((portfolio) => this.buildPortfolioResponse(user, portfolio)),
+      portfolios.map((portfolio) =>
+        this.buildPortfolioResponse(user, portfolio),
+      ),
     );
   }
 
@@ -100,7 +101,10 @@ export class PortfoliosService {
     user: AuthenticatedUser,
     portfolioId: string,
   ): Promise<PortfolioResponse> {
-    const portfolio = await this.findOwnedPortfolioOrThrow(user.id, portfolioId);
+    const portfolio = await this.findOwnedPortfolioOrThrow(
+      user.id,
+      portfolioId,
+    );
 
     return this.buildPortfolioResponse(user, portfolio);
   }
@@ -148,10 +152,7 @@ export class PortfoliosService {
     portfolioId: string,
     payload: UpdatePortfolioDto,
   ): Promise<PortfolioResponse> {
-    const existingPortfolio = await this.findOwnedPortfolioOrThrow(
-      user.id,
-      portfolioId,
-    );
+    await this.findOwnedPortfolioOrThrow(user.id, portfolioId);
 
     if (payload.accountIds !== undefined) {
       await this.assertAccountsOwnedByUser(user.id, payload.accountIds);
@@ -404,7 +405,8 @@ export class PortfoliosService {
     );
 
     const totalHoldingsValue = holdings.reduce(
-      (sum, holding) => sum.add(holding.currentValue),
+      (sum, holding) =>
+        holding.currentValue ? sum.add(holding.currentValue) : sum,
       new Decimal(0),
     );
     const totalCostBasis = holdings.reduce(
@@ -412,7 +414,8 @@ export class PortfoliosService {
       new Decimal(0),
     );
     const totalUnrealizedGain = holdings.reduce(
-      (sum, holding) => sum.add(holding.unrealizedGain),
+      (sum, holding) =>
+        holding.unrealizedGain ? sum.add(holding.unrealizedGain) : sum,
       new Decimal(0),
     );
     const totalRealizedGain = holdings.reduce(
@@ -424,7 +427,7 @@ export class PortfoliosService {
     let riskWeightedDenominator = new Decimal(0);
 
     for (const holding of holdings) {
-      if (holding.riskScore !== null) {
+      if (holding.riskScore !== null && holding.currentValue) {
         riskWeightedSum = riskWeightedSum.add(
           holding.currentValue.times(holding.riskScore),
         );
@@ -448,6 +451,10 @@ export class PortfoliosService {
       totalRealizedGain: totalRealizedGain.toFixed(2),
       weightedRiskScore,
       baseCurrency: converter.baseCurrency,
+      isPartial: holdings.some((holding) => holding.currentValue === null),
+      unpricedAssetCount: holdings.filter(
+        (holding) => holding.currentValue === null,
+      ).length,
     };
   }
 
@@ -520,13 +527,30 @@ export class PortfoliosService {
 
     const details = await this.fetchInvestmentDetails(userId, accountIds);
     const detailsByAsset = this.groupDetailsByAsset(details);
+    const assetSources = [
+      ...new Map(
+        details.map((detail) => [detail.asset.id, detail.asset]),
+      ).values(),
+    ];
+    const prices = this.marketData
+      ? await this.marketData.getPricesForSources(assetSources)
+      : [];
+    const pricesByAsset = new Map(
+      prices.map((price) => [price.assetId, price]),
+    );
     const holdings: PortfolioHolding[] = [];
 
     for (const [assetId, assetDetails] of detailsByAsset.entries()) {
       const firstDetail = assetDetails[0];
-      const currency = this.resolveHoldingCurrency(firstDetail.asset, assetDetails);
+      const currency = this.resolveHoldingCurrency(
+        firstDetail.asset,
+        assetDetails,
+      );
+      const price = pricesByAsset.get(assetId);
       const calculation = calculateHolding({
-        currentPrice: firstDetail.asset.currentPrice,
+        currentPrice: price?.price
+          ? new Decimal(price.price)
+          : firstDetail.asset.currentPrice,
         priceCurrency: currency,
         transactions: assetDetails.map((detail) => ({
           type: detail.tradeType as InvestmentTransactionInput['type'],
@@ -537,12 +561,13 @@ export class PortfoliosService {
       });
 
       holdings.push({
-        currentValue: converter.convert(calculation.currentValue, currency),
+        currentValue: calculation.currentValue
+          ? converter.convert(calculation.currentValue, currency)
+          : null,
         costBasis: converter.convert(calculation.costBasis, currency),
-        unrealizedGain: converter.convert(
-          calculation.unrealizedGain,
-          currency,
-        ),
+        unrealizedGain: calculation.unrealizedGain
+          ? converter.convert(calculation.unrealizedGain, currency)
+          : null,
         realizedGain: converter.convert(calculation.realizedGain, currency),
         categoryName: firstDetail.asset.category.name,
         riskScore: firstDetail.asset.riskProfile?.score ?? null,
@@ -567,7 +592,8 @@ export class PortfoliosService {
     );
 
     const totalValue = holdings.reduce(
-      (sum, holding) => sum.add(holding.currentValue),
+      (sum, holding) =>
+        holding.currentValue ? sum.add(holding.currentValue) : sum,
       new Decimal(0),
     );
 
@@ -578,7 +604,11 @@ export class PortfoliosService {
     const categoryValues = new Map<string, Decimal>();
 
     for (const holding of holdings) {
-      const current = categoryValues.get(holding.categoryName) ?? new Decimal(0);
+      if (!holding.currentValue) {
+        continue;
+      }
+      const current =
+        categoryValues.get(holding.categoryName) ?? new Decimal(0);
       categoryValues.set(
         holding.categoryName,
         current.add(holding.currentValue),
@@ -587,7 +617,11 @@ export class PortfoliosService {
 
     return Array.from(categoryValues.entries()).map(([category, value]) => ({
       category,
-      value: value.dividedBy(totalValue).times(100).toDecimalPlaces(1).toNumber(),
+      value: value
+        .dividedBy(totalValue)
+        .times(100)
+        .toDecimalPlaces(1)
+        .toNumber(),
     }));
   }
 
@@ -614,9 +648,12 @@ export class PortfoliosService {
         fees: true,
         asset: {
           select: {
+            id: true,
             name: true,
             currentPrice: true,
             priceCurrency: true,
+            provider: true,
+            providerAssetId: true,
             category: {
               select: {
                 name: true,

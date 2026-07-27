@@ -11,7 +11,9 @@ export interface InvestmentTransactionInput {
     | 'INTEREST'
     | 'SPLIT'
     | 'BONUS'
-    | 'REINVESTMENT';
+    | 'REINVESTMENT'
+    | 'DEPOSIT'
+    | 'WITHDRAWAL';
   readonly quantity: Decimal;
   readonly price: Decimal;
   readonly fees: Decimal;
@@ -27,38 +29,51 @@ export interface HoldingCalculationResult {
   readonly quantity: Decimal;
   readonly averageCost: Decimal | null;
   readonly costBasis: Decimal;
-  readonly currentValue: Decimal;
+  readonly currentValue: Decimal | null;
   readonly realizedGain: Decimal;
-  readonly unrealizedGain: Decimal;
+  readonly unrealizedGain: Decimal | null;
   readonly unrealizedGainPercent: Decimal | null;
 }
 
 export function calculateHolding(
   input: HoldingCalculationInput,
 ): HoldingCalculationResult {
-  let totalBuyQuantity = new Decimal(0);
-  let totalBuyCost = new Decimal(0);
-  let totalSellQuantity = new Decimal(0);
-  let totalSellProceeds = new Decimal(0);
   let quantity = new Decimal(0);
+  let costBasis = new Decimal(0);
+  let realizedGain = new Decimal(0);
 
   for (const transaction of input.transactions) {
     switch (transaction.type) {
       case 'BUY':
       case 'REINVESTMENT':
-        totalBuyQuantity = totalBuyQuantity.add(transaction.quantity);
-        totalBuyCost = totalBuyCost.add(
+      case 'DEPOSIT':
+        costBasis = costBasis.add(
           transaction.quantity.times(transaction.price).add(transaction.fees),
         );
         quantity = quantity.add(transaction.quantity);
         break;
-      case 'SELL':
-        totalSellQuantity = totalSellQuantity.add(transaction.quantity);
-        totalSellProceeds = totalSellProceeds.add(
-          transaction.quantity.times(transaction.price).sub(transaction.fees),
-        );
+      case 'SELL': {
+        const averageCost = quantity.isZero()
+          ? new Decimal(0)
+          : costBasis.dividedBy(quantity);
+        const removedCost = transaction.quantity.times(averageCost);
+        const proceeds = transaction.quantity
+          .times(transaction.price)
+          .sub(transaction.fees);
+        realizedGain = realizedGain.add(proceeds.sub(removedCost));
+        costBasis = costBasis.sub(removedCost);
         quantity = quantity.sub(transaction.quantity);
         break;
+      }
+      case 'WITHDRAWAL': {
+        const averageCost = quantity.isZero()
+          ? new Decimal(0)
+          : costBasis.dividedBy(quantity);
+        costBasis = costBasis.sub(transaction.quantity.times(averageCost));
+        realizedGain = realizedGain.sub(transaction.fees);
+        quantity = quantity.sub(transaction.quantity);
+        break;
+      }
       case 'BONUS':
         quantity = quantity.add(transaction.quantity);
         break;
@@ -71,31 +86,25 @@ export function calculateHolding(
     }
   }
 
-  const averageCost = totalBuyQuantity.isZero()
-    ? null
-    : totalBuyCost.dividedBy(totalBuyQuantity).toDecimalPlaces(8);
-
-  const costBasisOfSoldShares = averageCost
-    ? totalSellQuantity.times(averageCost)
-    : new Decimal(0);
-  const realizedGain = totalSellProceeds.sub(costBasisOfSoldShares);
-
-  const currentCostBasis = totalBuyCost.sub(costBasisOfSoldShares);
-  const displayAverageCost =
-    !quantity.isZero() && !currentCostBasis.isZero()
-      ? currentCostBasis.dividedBy(quantity).toDecimalPlaces(8)
-      : averageCost;
-  const currentPrice = input.currentPrice ?? new Decimal(0);
-  const currentValue = quantity.times(currentPrice);
-  const unrealizedGain = currentValue.sub(currentCostBasis);
-  const unrealizedGainPercent = currentCostBasis.isZero()
-    ? null
-    : unrealizedGain.dividedBy(currentCostBasis).times(100).toDecimalPlaces(2);
+  const averageCost =
+    !quantity.isZero() && !costBasis.isZero()
+      ? costBasis.dividedBy(quantity).toDecimalPlaces(8)
+      : null;
+  const currentValue = input.currentPrice
+    ? quantity.times(input.currentPrice)
+    : quantity.isZero()
+      ? new Decimal(0)
+      : null;
+  const unrealizedGain = currentValue ? currentValue.sub(costBasis) : null;
+  const unrealizedGainPercent =
+    unrealizedGain && !costBasis.isZero()
+      ? unrealizedGain.dividedBy(costBasis).times(100).toDecimalPlaces(2)
+      : null;
 
   return {
     quantity,
-    averageCost: displayAverageCost,
-    costBasis: currentCostBasis,
+    averageCost,
+    costBasis,
     currentValue,
     realizedGain,
     unrealizedGain,

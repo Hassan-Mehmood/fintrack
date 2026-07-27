@@ -7,6 +7,7 @@ import {
   CircleAlertIcon,
   PencilLineIcon,
   PlusIcon,
+  RefreshCwIcon,
   Trash2Icon,
   WalletCardsIcon,
 } from "lucide-react"
@@ -58,17 +59,20 @@ import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
 import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
 
 import { AssetFormDialog } from "./asset-form-dialog"
+import { AddAssetDialog } from "./add-asset-dialog"
 import { type AssetFormPayload } from "./asset-form-schema"
 import {
   assetsQueryKey,
   assetMetadataQueryKey,
   createAsset,
+  createProviderAsset,
   deleteAsset,
   getAssetMetadata,
   listAssets,
   updateAsset,
 } from "./assets-api"
 import { type Asset } from "./asset-types"
+import { type MarketSearchResult } from "./asset-types"
 
 type AssetDialogState =
   | { readonly mode: "create" }
@@ -79,6 +83,7 @@ export function AssetsPage() {
   const { getToken } = useAuth()
   const queryClient = useQueryClient()
   const [dialogState, setDialogState] = useState<AssetDialogState>(null)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null)
 
   const assetsQuery = useQuery({
@@ -122,6 +127,15 @@ export function AssetsPage() {
     mutationFn: async (assetId: string) => deleteAsset(getToken, assetId),
   })
 
+  const createProviderAssetMutation = useMutation({
+    mutationFn: (result: MarketSearchResult) =>
+      createProviderAsset(getToken, {
+        provider: result.provider,
+        type: result.type,
+        providerAssetId: result.providerAssetId,
+      }),
+  })
+
   const assets = assetsQuery.data ?? []
   const categories = metadataQuery.data?.categories ?? []
   const riskProfiles = metadataQuery.data?.riskProfiles ?? []
@@ -134,13 +148,29 @@ export function AssetsPage() {
       return
     }
 
+    const effectivePayload =
+      dialogState.mode === "edit" && dialogState.asset.provider
+        ? {
+            riskProfileId: payload.riskProfileId,
+            notes: payload.notes,
+          }
+        : payload
+
     await saveAssetMutation.mutateAsync({
       assetId: dialogState.mode === "edit" ? dialogState.asset.id : undefined,
       mode: dialogState.mode,
-      payload,
+      payload: effectivePayload as AssetFormPayload,
     })
 
     setDialogState(null)
+    await invalidateAssetData()
+  }
+
+  async function handleAddProviderAsset(
+    result: MarketSearchResult
+  ): Promise<void> {
+    await createProviderAssetMutation.mutateAsync(result)
+    setIsAddDialogOpen(false)
     await invalidateAssetData()
   }
 
@@ -170,10 +200,25 @@ export function AssetsPage() {
       title="Assets"
       description="Manage the investment assets you track across accounts."
       primaryAction={
-        <Button size="sm" onClick={() => setDialogState({ mode: "create" })}>
-          <PlusIcon data-icon="inline-start" />
-          Add asset
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => invalidateAssetData()}
+            disabled={assetsQuery.isFetching}
+          >
+            {assetsQuery.isFetching ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <RefreshCwIcon data-icon="inline-start" />
+            )}
+            Refresh
+          </Button>
+          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
+            <PlusIcon data-icon="inline-start" />
+            Add asset
+          </Button>
+        </div>
       }
     >
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
@@ -222,7 +267,7 @@ export function AssetsPage() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button onClick={() => setDialogState({ mode: "create" })}>
+                  <Button onClick={() => setIsAddDialogOpen(true)}>
                     <PlusIcon data-icon="inline-start" />
                     Create asset
                   </Button>
@@ -268,11 +313,39 @@ export function AssetsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono font-medium">
-                        {asset.currentPrice && asset.priceCurrency
-                          ? formatAmount(asset.currentPrice, asset.priceCurrency)
-                          : "—"}
+                        <div className="flex flex-col items-end gap-1">
+                          <span>
+                            {asset.currentPrice && asset.priceCurrency
+                              ? formatAmount(
+                                  asset.currentPrice,
+                                  asset.priceCurrency
+                                )
+                              : "Unavailable"}
+                          </span>
+                          {asset.provider ? (
+                            <Badge
+                              variant={
+                                asset.priceStatus === "STALE"
+                                  ? "outline"
+                                  : "secondary"
+                              }
+                            >
+                              {asset.priceStatus === "STALE"
+                                ? "Stale"
+                                : asset.provider}
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">
+                              Manual
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell>{formatDate(asset.updatedAt)}</TableCell>
+                      <TableCell>
+                        {asset.priceUpdatedAt
+                          ? formatDate(asset.priceUpdatedAt)
+                          : formatDate(asset.updatedAt)}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -303,6 +376,28 @@ export function AssetsPage() {
           </CardContent>
         </Card>
       </main>
+
+      <AddAssetDialog
+        open={isAddDialogOpen}
+        getToken={getToken}
+        isPending={createProviderAssetMutation.isPending}
+        errorMessage={
+          createProviderAssetMutation.isError
+            ? createProviderAssetMutation.error.message
+            : null
+        }
+        onOpenChange={(open) => {
+          setIsAddDialogOpen(open)
+          if (!open) {
+            createProviderAssetMutation.reset()
+          }
+        }}
+        onAddProviderAsset={handleAddProviderAsset}
+        onManualAsset={() => {
+          setIsAddDialogOpen(false)
+          setDialogState({ mode: "create" })
+        }}
+      />
 
       <AssetFormDialog
         open={dialogState !== null}

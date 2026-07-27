@@ -30,7 +30,19 @@ enum TransactionType {
   INVESTMENT_SPLIT
   INVESTMENT_BONUS
   INVESTMENT_REINVESTMENT
+  INVESTMENT_DEPOSIT
+  INVESTMENT_WITHDRAWAL
   ADJUSTMENT
+}
+
+enum AssetProvider {
+  FINNHUB
+  COINGECKO
+}
+
+enum AssetMarketType {
+  STOCK
+  CRYPTO
 }
 
 enum TradeType {
@@ -124,6 +136,7 @@ model Transaction {
   reversalOf           Transaction?    @relation("TransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversal             Transaction?    @relation("TransactionReversal")
   type                 TransactionType
+  idempotencyKey       String                     @default(uuid()) @map("idempotency_key") @db.Uuid
   amount               Decimal                    @db.Decimal(24, 8)
   currency             String                     @db.VarChar(3)
   occurredAt           DateTime                   @map("occurred_at")
@@ -138,6 +151,7 @@ model Transaction {
   @@index([userId, occurredAt])
   @@index([accountId])
   @@index([destinationAccountId])
+  @@unique([userId, idempotencyKey])
   @@map("transactions")
 }
 
@@ -170,6 +184,11 @@ model Asset {
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   symbol          String?
+  provider        AssetProvider?
+  marketType      AssetMarketType? @map("market_type")
+  providerAssetId String?          @map("provider_asset_id")
+  exchange        String?
+  imageUrl        String?          @map("image_url")
   categoryId      String        @map("category_id") @db.Uuid
   category        AssetCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   riskProfileId   String?       @map("risk_profile_id") @db.Uuid
@@ -184,6 +203,7 @@ model Asset {
   @@index([userId])
   @@index([userId, categoryId])
   @@index([categoryId])
+  @@unique([userId, provider, providerAssetId])
   @@map("assets")
 }
 

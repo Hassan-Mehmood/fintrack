@@ -2,10 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { TradeType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import {
+  calculateHolding,
+  type InvestmentTransactionInput,
+} from '../../common/financial/holdings';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   createAccountNotFoundForTransactionException,
   createAssetNotFoundForTransactionException,
+  createInsufficientHoldingException,
+  createInvalidInvestmentAccountException,
   createInvalidInvestmentAmountException,
   createInvalidInvestmentTradeTypeException,
   createInvalidTransferException,
@@ -85,6 +91,8 @@ const investmentTypes = new Set<string>([
   'INVESTMENT_SPLIT',
   'INVESTMENT_BONUS',
   'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_DEPOSIT',
+  'INVESTMENT_WITHDRAWAL',
 ]);
 
 const reversibleTypes = new Set<string>([
@@ -135,19 +143,40 @@ export class TransactionsService {
     user: AuthenticatedUser,
     payload: CreateTransactionDto,
   ): Promise<TransactionResponse> {
+    if (payload.idempotencyKey) {
+      const existing = await this.prisma.transaction.findFirst({
+        where: {
+          userId: user.id,
+          idempotencyKey: payload.idempotencyKey,
+        },
+        select: transactionSelect,
+      });
+
+      if (existing) {
+        return this.toTransactionResponse(existing);
+      }
+    }
+
     await this.validateTransactionAccounts(user.id, {
       ...payload,
       currency: payload.currency,
     });
+    this.validateNonCashInvestmentAmount(payload.type, payload.amount);
 
     if (investmentTypes.has(payload.type)) {
       this.validateInvestmentPayload(payload.type, payload.investment);
       await this.validateInvestmentAsset(user.id, payload.investment!.assetId);
+      await this.assertSufficientHolding(
+        user.id,
+        payload.type,
+        payload.investment!,
+      );
     }
 
     const transaction = await this.prisma.transaction.create({
       data: {
         userId: user.id,
+        idempotencyKey: payload.idempotencyKey,
         type: payload.type,
         accountId: payload.accountId,
         destinationAccountId: payload.destinationAccountId,
@@ -199,6 +228,8 @@ export class TransactionsService {
       (existingTransaction.investmentDetail
         ? this.recordToInvestmentPayload(existingTransaction.investmentDetail)
         : undefined);
+    const effectiveAmount =
+      payload.amount ?? existingTransaction.amount.toString();
 
     await this.validateTransactionAccounts(user.id, {
       type: effectiveType,
@@ -206,10 +237,17 @@ export class TransactionsService {
       destinationAccountId: effectiveDestinationAccountId ?? undefined,
       currency: effectiveCurrency,
     });
+    this.validateNonCashInvestmentAmount(effectiveType, effectiveAmount);
 
     if (investmentTypes.has(effectiveType)) {
       this.validateInvestmentPayload(effectiveType, effectiveInvestment);
       await this.validateInvestmentAsset(user.id, effectiveInvestment!.assetId);
+      await this.assertSufficientHolding(
+        user.id,
+        effectiveType,
+        effectiveInvestment!,
+        transactionId,
+      );
     }
 
     const transaction = await this.prisma.transaction.update({
@@ -279,7 +317,8 @@ export class TransactionsService {
                 create: {
                   assetId: originalTransaction.investmentDetail.assetId,
                   tradeType: originalTransaction.investmentDetail.tradeType,
-                  quantity: originalTransaction.investmentDetail.quantity.toString(),
+                  quantity:
+                    originalTransaction.investmentDetail.quantity.toString(),
                   price: originalTransaction.investmentDetail.price.toString(),
                   fees: originalTransaction.investmentDetail.fees.toString(),
                   notes: originalTransaction.investmentDetail.notes,
@@ -354,6 +393,7 @@ export class TransactionsService {
       select: {
         id: true,
         currency: true,
+        type: true,
       },
     });
 
@@ -369,6 +409,15 @@ export class TransactionsService {
         account.currency,
         payload.currency,
       );
+    }
+
+    if (
+      investmentTypes.has(payload.type) &&
+      account.type !== undefined &&
+      account.type !== 'BROKER' &&
+      account.type !== 'CRYPTO_WALLET'
+    ) {
+      throw createInvalidInvestmentAccountException();
     }
 
     if (payload.type === 'TRANSFER') {
@@ -429,7 +478,13 @@ export class TransactionsService {
     const quantity = new Prisma.Decimal(investment.quantity);
     const price = new Prisma.Decimal(investment.price);
 
-    if (type === 'INVESTMENT_BUY' || type === 'INVESTMENT_SELL' || type === 'INVESTMENT_REINVESTMENT') {
+    if (
+      type === 'INVESTMENT_BUY' ||
+      type === 'INVESTMENT_SELL' ||
+      type === 'INVESTMENT_REINVESTMENT' ||
+      type === 'INVESTMENT_DEPOSIT' ||
+      type === 'INVESTMENT_WITHDRAWAL'
+    ) {
       if (quantity.isZero() || quantity.isNegative()) {
         throw createInvalidInvestmentAmountException(
           'Quantity must be greater than zero.',
@@ -481,6 +536,17 @@ export class TransactionsService {
     }
   }
 
+  private validateNonCashInvestmentAmount(type: string, amount: string): void {
+    if (
+      (type === 'INVESTMENT_DEPOSIT' || type === 'INVESTMENT_WITHDRAWAL') &&
+      !new Prisma.Decimal(amount).isZero()
+    ) {
+      throw createInvalidInvestmentAmountException(
+        'Deposit and withdrawal account amounts must be zero.',
+      );
+    }
+  }
+
   private getExpectedTradeType(type: string): string {
     switch (type) {
       case 'INVESTMENT_BUY':
@@ -497,6 +563,10 @@ export class TransactionsService {
         return 'BONUS';
       case 'INVESTMENT_REINVESTMENT':
         return 'REINVESTMENT';
+      case 'INVESTMENT_DEPOSIT':
+        return 'DEPOSIT';
+      case 'INVESTMENT_WITHDRAWAL':
+        return 'WITHDRAWAL';
       default:
         return type;
     }
@@ -518,6 +588,50 @@ export class TransactionsService {
 
     if (!asset) {
       throw createAssetNotFoundForTransactionException(assetId);
+    }
+  }
+
+  private async assertSufficientHolding(
+    userId: string,
+    type: string,
+    investment: {
+      readonly assetId: string;
+      readonly quantity: string;
+    },
+    excludedTransactionId?: string,
+  ): Promise<void> {
+    if (type !== 'INVESTMENT_SELL' && type !== 'INVESTMENT_WITHDRAWAL') {
+      return;
+    }
+
+    const details = await this.prisma.investmentTransactionDetail.findMany({
+      where: {
+        assetId: investment.assetId,
+        asset: { userId },
+        transactionId: excludedTransactionId
+          ? { not: excludedTransactionId }
+          : undefined,
+      },
+      select: {
+        tradeType: true,
+        quantity: true,
+        price: true,
+        fees: true,
+      },
+    });
+    const holding = calculateHolding({
+      currentPrice: null,
+      priceCurrency: null,
+      transactions: details.map((detail) => ({
+        type: detail.tradeType as InvestmentTransactionInput['type'],
+        quantity: detail.quantity,
+        price: detail.price,
+        fees: detail.fees,
+      })),
+    });
+
+    if (holding.quantity.lessThan(investment.quantity)) {
+      throw createInsufficientHoldingException(investment.assetId);
     }
   }
 

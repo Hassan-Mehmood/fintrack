@@ -1,8 +1,12 @@
 "use client"
 
 import { useAuth } from "@clerk/nextjs"
-import { useQuery } from "@tanstack/react-query"
-import { CircleAlertIcon, PiggyBankIcon } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  CircleAlertIcon,
+  PiggyBankIcon,
+  RefreshCwIcon,
+} from "lucide-react"
 
 import { AppShell } from "@/components/app-shell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -23,6 +27,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
 import { formatAmount } from "@/lib/formatting"
 import Link from "next/link"
@@ -37,6 +42,7 @@ import { HoldingsTable } from "./holdings-table"
 
 export function InvestmentsPage() {
   const { getToken } = useAuth()
+  const queryClient = useQueryClient()
 
   const holdingsQuery = useQuery({
     queryKey: holdingsQueryKey,
@@ -61,11 +67,31 @@ export function InvestmentsPage() {
       title="Investments"
       description="Track your portfolio holdings, cost basis, and unrealized or realized gains."
       primaryAction={
-        <Button size="sm" asChild>
-          <Link href="/transactions">
-            Add transaction
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={holdingsQuery.isFetching || summaryQuery.isFetching}
+            onClick={() =>
+              Promise.all([
+                queryClient.invalidateQueries({ queryKey: holdingsQueryKey }),
+                queryClient.invalidateQueries({
+                  queryKey: investmentSummaryQueryKey,
+                }),
+              ])
+            }
+          >
+            {holdingsQuery.isFetching || summaryQuery.isFetching ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <RefreshCwIcon data-icon="inline-start" />
+            )}
+            Refresh prices
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/transactions">Add transaction</Link>
+          </Button>
+        </div>
       }
     >
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
@@ -75,6 +101,18 @@ export function InvestmentsPage() {
             <AlertTitle>Unable to load investments</AlertTitle>
             <AlertDescription>
               {holdingsQuery.error?.message ?? summaryQuery.error?.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {summary?.isPartial ? (
+          <Alert>
+            <CircleAlertIcon aria-hidden="true" />
+            <AlertTitle>Portfolio total is partial</AlertTitle>
+            <AlertDescription>
+              {summary.unpricedAssetCount} held asset
+              {summary.unpricedAssetCount === 1 ? "" : "s"} could not be priced.
+              Totals include only assets with an available or stale quote.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -130,8 +168,8 @@ export function InvestmentsPage() {
           <CardHeader>
             <CardTitle>Holdings</CardTitle>
             <CardDescription>
-              Derived from your buy and sell transactions. Update asset prices
-              from the Assets page to see current values.
+              Derived from your investment transactions and the latest cached
+              provider or manual prices.
             </CardDescription>
           </CardHeader>
           <CardContent>

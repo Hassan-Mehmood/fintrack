@@ -19,6 +19,9 @@ const SIGNED_DECIMAL_PATTERN = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
 const CURRENCY_VALUES = ['USD', 'PKR'] as const;
 
 export class CreateTransactionDto {
+  @IsUUID()
+  idempotencyKey?: string;
+
   @IsEnum(TransactionType)
   type!: TransactionType;
 

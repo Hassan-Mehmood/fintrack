@@ -1,4 +1,9 @@
-import type { Asset, AssetCategory, RiskProfile } from "./asset-types"
+import type {
+  Asset,
+  AssetCategory,
+  MarketSearchResult,
+  RiskProfile,
+} from "./asset-types"
 
 interface GetToken {
   (): Promise<string | null>
@@ -89,7 +94,7 @@ export async function createAsset(
 export async function updateAsset(
   getToken: GetToken,
   assetId: string,
-  payload: AssetPayload
+  payload: Partial<AssetPayload>
 ): Promise<Asset> {
   const response = await apiRequest<AssetItemResponse>(
     getToken,
@@ -100,6 +105,38 @@ export async function updateAsset(
     }
   )
 
+  return response.data
+}
+
+export async function searchMarketAssets(
+  getToken: GetToken,
+  type: "STOCK" | "CRYPTO",
+  query: string,
+  signal?: AbortSignal
+): Promise<readonly MarketSearchResult[]> {
+  const params = new URLSearchParams({ type, query })
+  const response = await apiRequest<{
+    readonly data: readonly MarketSearchResult[]
+  }>(getToken, `/api/v1/market-data/search?${params}`, { signal })
+  return response.data
+}
+
+export async function createProviderAsset(
+  getToken: GetToken,
+  payload: {
+    readonly provider: "FINNHUB" | "COINGECKO"
+    readonly type: "STOCK" | "CRYPTO"
+    readonly providerAssetId: string
+  }
+): Promise<Asset> {
+  const response = await apiRequest<AssetItemResponse>(
+    getToken,
+    "/api/v1/assets/from-provider",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    }
+  )
   return response.data
 }
 

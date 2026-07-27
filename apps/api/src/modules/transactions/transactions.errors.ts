@@ -135,3 +135,24 @@ export function createInvalidInvestmentAmountException(
     buildApiError('INVALID_INVESTMENT_AMOUNT', reason, {}),
   );
 }
+
+export function createInvalidInvestmentAccountException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INVALID_INVESTMENT_ACCOUNT',
+      'Investment transactions require a broker or cryptocurrency-wallet account.',
+    ),
+  );
+}
+
+export function createInsufficientHoldingException(
+  assetId: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INSUFFICIENT_HOLDING',
+      'The transaction quantity exceeds the current holding.',
+      { assetId },
+    ),
+  );
+}

@@ -129,23 +129,31 @@ export function AssetFormDialog({
           ) : null}
 
           <FieldGroup className="grid gap-5 md:grid-cols-2">
-            <Field data-invalid={Boolean(errors.name) || undefined}>
+            <Field
+              data-disabled={Boolean(asset?.provider) || undefined}
+              data-invalid={Boolean(errors.name) || undefined}
+            >
               <FieldLabel htmlFor="asset-name">Asset name</FieldLabel>
               <Input
                 id="asset-name"
                 aria-invalid={Boolean(errors.name) || undefined}
                 placeholder="Bitcoin"
+                disabled={Boolean(asset?.provider)}
                 {...register("name")}
               />
               <FieldError errors={[errors.name]} />
             </Field>
 
-            <Field data-invalid={Boolean(errors.symbol) || undefined}>
+            <Field
+              data-disabled={Boolean(asset?.provider) || undefined}
+              data-invalid={Boolean(errors.symbol) || undefined}
+            >
               <FieldLabel htmlFor="asset-symbol">Symbol</FieldLabel>
               <Input
                 id="asset-symbol"
                 aria-invalid={Boolean(errors.symbol) || undefined}
                 placeholder="BTC"
+                disabled={Boolean(asset?.provider)}
                 {...register("symbol")}
               />
               <FieldDescription>
@@ -154,13 +162,20 @@ export function AssetFormDialog({
               <FieldError errors={[errors.symbol]} />
             </Field>
 
-            <Field data-invalid={Boolean(errors.categoryId) || undefined}>
+            <Field
+              data-disabled={Boolean(asset?.provider) || undefined}
+              data-invalid={Boolean(errors.categoryId) || undefined}
+            >
               <FieldLabel htmlFor="asset-category">Category</FieldLabel>
               <Controller
                 control={control}
                 name="categoryId"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    disabled={Boolean(asset?.provider)}
+                  >
                     <SelectTrigger
                       id="asset-category"
                       aria-invalid={Boolean(errors.categoryId) || undefined}
@@ -216,7 +231,10 @@ export function AssetFormDialog({
               <FieldError errors={[errors.riskProfileId]} />
             </Field>
 
-            <Field data-invalid={Boolean(errors.currentPrice) || undefined}>
+            <Field
+              data-disabled={Boolean(asset?.provider) || undefined}
+              data-invalid={Boolean(errors.currentPrice) || undefined}
+            >
               <FieldLabel htmlFor="asset-current-price">
                 Current price
               </FieldLabel>
@@ -225,12 +243,16 @@ export function AssetFormDialog({
                 aria-invalid={Boolean(errors.currentPrice) || undefined}
                 inputMode="decimal"
                 placeholder="0.00"
+                disabled={Boolean(asset?.provider)}
                 {...register("currentPrice")}
               />
               <FieldError errors={[errors.currentPrice]} />
             </Field>
 
-            <Field data-invalid={Boolean(errors.priceCurrency) || undefined}>
+            <Field
+              data-disabled={Boolean(asset?.provider) || undefined}
+              data-invalid={Boolean(errors.priceCurrency) || undefined}
+            >
               <FieldLabel htmlFor="asset-price-currency">
                 Price currency
               </FieldLabel>
@@ -241,6 +263,7 @@ export function AssetFormDialog({
                   <Select
                     value={field.value ?? ""}
                     onValueChange={field.onChange}
+                    disabled={Boolean(asset?.provider)}
                   >
                     <SelectTrigger
                       id="asset-price-currency"

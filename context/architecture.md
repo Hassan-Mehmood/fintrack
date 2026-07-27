@@ -11,7 +11,7 @@ The system uses:
 * **PostgreSQL** for persistent data
 * **Prisma** for database access
 
-The first version will use a simple modular architecture. It will not include microservices, AI processing, background workers, live market integrations, or advanced caching.
+The first version uses a simple modular architecture. It does not include microservices, AI processing, background workers, or streaming market data. On-demand Finnhub and CoinGecko requests are normalized by the API and cached in Redis.
 
 ---
 
@@ -33,6 +33,8 @@ The first version will use a simple modular architecture. It will not include mi
 | Database            | PostgreSQL                      | Stores financial and user data                    |
 | ORM                 | Prisma                          | Manages database queries, schema, and migrations  |
 | Authentication      | Clerk                           | Handles registration, login, and sessions         |
+| Market data         | Finnhub and CoinGecko           | Provides US stock and cryptocurrency search and quotes |
+| Cache               | Redis                            | Caches quotes and coordinates provider rate limits |
 | Package manager     | pnpm                            | Manages project dependencies                      |
 
 ---
@@ -282,6 +284,7 @@ If introduced later, this package may own:
 | `categories`   | Manages expense and income categories                             |
 | `budgets`      | Manages monthly spending limits                                   |
 | `investments`  | Manages investment purchases, sales, holdings, and profit or loss |
+| `market-data`  | Searches provider assets and retrieves normalized cached quotes |
 | `goals`        | Manages savings goals and contribution plans                      |
 | `analytics`    | Produces dashboard totals and charts                              |
 
@@ -305,6 +308,7 @@ Store the following in PostgreSQL:
 * Investment assets
 * Investment trades
 * Current manually entered asset prices
+* Stable provider identifiers and metadata for provider-backed assets
 * Financial goals
 * Goal contributions
 
@@ -340,11 +344,7 @@ owner user ID
 
 ### Cache
 
-A cache is not required for the initial MVP.
-
-Dashboard totals and balances should initially be calculated directly from PostgreSQL.
-
-Redis may be introduced later only if database queries become slow or the application requires scheduled background work.
+Redis stores short-lived normalized market quotes, stale quote fallbacks, and provider request-budget counters. PostgreSQL remains authoritative for assets and transactions; Redis loss must not corrupt financial history.
 
 ---
 
@@ -526,7 +526,7 @@ All initial functionality should run through normal API requests, including:
 * Updating balances
 * Creating budgets
 * Adding investment trades
-* Updating investment prices manually
+* Updating manual investment prices and retrieving provider-backed prices on demand
 * Creating financial goals
 * Calculating dashboard analytics
 
@@ -650,7 +650,6 @@ PostgreSQL can be hosted using:
 
 The first version does not require:
 
-* Redis
 * Background-worker containers
 * Microservices
 * AI infrastructure
@@ -667,4 +666,6 @@ The first version does not require:
 4. Transactions are the source of account balances.
 5. Financial calculations use decimal arithmetic.
 6. Every user-owned operation is scoped to the authenticated user.
-7. The initial version does not include AI, background workers, Redis, or automatic financial integrations.
+7. The initial version does not include AI, background workers, streaming prices, or automatic transaction imports.
+8. Finnhub and CoinGecko credentials remain in the API environment; provider responses are normalized before reaching the web application.
+9. Provider-backed assets use immutable provider identifiers, while historical transaction prices remain independent of current quotes.

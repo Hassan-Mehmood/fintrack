@@ -22,6 +22,8 @@ export function getSourceAccountEffect(
       return amount.neg();
     case 'INVESTMENT_SPLIT':
     case 'INVESTMENT_BONUS':
+    case 'INVESTMENT_DEPOSIT':
+    case 'INVESTMENT_WITHDRAWAL':
       return new Decimal(0);
     case 'ADJUSTMENT':
       return amount;

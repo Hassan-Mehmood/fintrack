@@ -1,1 +1,2 @@
 - Fixed: query client default `staleTime` was 30 seconds, so data stayed fresh across page switches and tables did not refresh. Reduced default `staleTime` to `0` and enabled `refetchOnWindowFocus` in `apps/web/components/query-provider.tsx`.
+

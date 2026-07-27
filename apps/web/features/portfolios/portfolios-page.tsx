@@ -304,7 +304,12 @@ function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle>{portfolio.name}</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>{portfolio.name}</CardTitle>
+              {portfolio.metrics.isPartial ? (
+                <Badge variant="outline">Partial prices</Badge>
+              ) : null}
+            </div>
             {portfolio.description ? (
               <CardDescription>{portfolio.description}</CardDescription>
             ) : null}
@@ -326,7 +331,11 @@ function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
           <SummaryCard
             label="Total value"
             value={formatAmount(portfolio.metrics.totalValue, baseCurrency)}
-            detail="Cash + holdings"
+            detail={
+              portfolio.metrics.isPartial
+                ? `Known subtotal · ${portfolio.metrics.unpricedAssetCount} unpriced`
+                : "Cash + holdings"
+            }
           />
           <SummaryCard
             label="Cost basis"

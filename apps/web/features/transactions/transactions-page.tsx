@@ -132,7 +132,10 @@ export function TransactionsPage() {
       readonly transactionId?: string
     }) => {
       if (mode === "create") {
-        return createTransaction(getToken, payload)
+        return createTransaction(getToken, {
+          ...payload,
+          idempotencyKey: crypto.randomUUID(),
+        })
       }
 
       if (!transactionId) {
@@ -766,4 +769,3 @@ function formatDate(value: string): string {
     year: "numeric",
   }).format(new Date(value))
 }
-

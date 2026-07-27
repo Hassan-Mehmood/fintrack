@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Ready for end-to-end verification and deployment preparation.
+- Market-data integration implemented; ready for migration deployment and authenticated provider verification.
 
 ## Current Goal
 
-- Add Clerk environment variables and run end-to-end manual verification of the authenticated flows.
+- Configure provider credentials, deploy the market-data migration, and run authenticated live-provider verification.
 
 ## Completed
 
@@ -152,15 +152,26 @@ change.
 - Verified the API build, Jest tests, web lint, and web build after the Phase 6 changes.
 - Fixed stale data on page switches and tables not refreshing by setting the React Query default `staleTime` to `0` and enabling `refetchOnWindowFocus` in `apps/web/components/query-provider.tsx`.
 - Verified the web lint and web build after the stale-data fix.
+- Added provider metadata and identity constraints for Finnhub stocks and CoinGecko cryptocurrencies, transaction idempotency keys, and non-cash investment deposit/withdrawal transaction types.
+- Added the provider-independent NestJS market-data module with authenticated search and batch-price endpoints, normalized provider errors, bounded retries/timeouts, Finnhub concurrency limiting, CoinGecko batching, and Redis-backed request budgets.
+- Added 60-second fresh quote caching with 24-hour stale fallback, provider-backed asset creation with backend metadata revalidation, and locked provider identity/price fields.
+- Integrated provider quotes into assets, holdings, investment summaries, and portfolio metrics with stale/unavailable states, nullable price-dependent calculations, and known-subtotal partial metadata.
+- Replaced the add-asset flow with market-search and manual tabs, including 350 ms debouncing, request cancellation, provider metadata, explicit result selection, and manual refresh actions.
+- Added investment deposit/withdrawal form behavior and per-submission UUID idempotency keys.
+- Added Redis and provider environment configuration to Docker Compose and `.env.example`.
+- Added provider adapter, holdings, and market-search tests plus a Vitest/Testing Library setup for the web app.
+- Verified the integration with Prisma validation, API build, 75 Jest tests, API e2e, scoped API lint, web type-check, web lint, 2 Vitest tests, and the Next.js production build.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
 ## In Progress
 
+- No implementation work currently in progress.
 
 ## Next Up
 
 - Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
+- Configure `FINNHUB_API_KEY`, `COINGECKO_API_KEY`, and `REDIS_URL` before live-provider verification.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Run end-to-end manual verification of the `/assets`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
@@ -187,6 +198,10 @@ change.
 - Investment assets are modeled as user-owned records linked to global `AssetCategory` and `RiskProfile` reference tables, matching the existing per-user ownership model.
 - Asset categories and risk profiles ship as seed data and are configurable by extending the reference tables; no admin UI is required for MVP.
 - Holdings, cost basis, and investment performance will be derived from transactions rather than stored independently, per `specs/api/004-adding-investments.md`.
+- Finnhub provides on-demand US-stock data and CoinGecko Demo provides cryptocurrency data through a provider-independent NestJS market-data module.
+- Redis caches normalized quotes for 60 seconds, retains stale fallbacks for 24 hours, and coordinates provider request budgets.
+- Existing accounts are the wallet boundary for investment transactions; deposits and withdrawals move asset quantity without changing cash balances.
+- Provider-backed asset identifiers and pricing modes are immutable, while manual assets retain manually editable prices.
 
 ## Session Notes
 

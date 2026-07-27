@@ -9,7 +9,12 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(10) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(10),
+        },
       ],
     });
 
@@ -27,8 +32,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(75000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(80000), fees: new Decimal(0) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(80000),
+          fees: new Decimal(0),
+        },
       ],
     });
 
@@ -44,8 +59,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(2), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'SELL', quantity: new Decimal(1), price: new Decimal(65000), fees: new Decimal(5) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(2),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'SELL',
+          quantity: new Decimal(1),
+          price: new Decimal(65000),
+          fees: new Decimal(5),
+        },
       ],
     });
 
@@ -62,8 +87,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'SELL', quantity: new Decimal(1), price: new Decimal(65000), fees: new Decimal(0) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'SELL',
+          quantity: new Decimal(1),
+          price: new Decimal(65000),
+          fees: new Decimal(0),
+        },
       ],
     });
 
@@ -96,8 +131,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(10) },
-        { type: 'REINVESTMENT', quantity: new Decimal(0.5), price: new Decimal(65000), fees: new Decimal(5) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(10),
+        },
+        {
+          type: 'REINVESTMENT',
+          quantity: new Decimal(0.5),
+          price: new Decimal(65000),
+          fees: new Decimal(5),
+        },
       ],
     });
 
@@ -110,8 +155,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(35000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'SPLIT', quantity: new Decimal(2), price: new Decimal(0), fees: new Decimal(0) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'SPLIT',
+          quantity: new Decimal(2),
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        },
       ],
     });
 
@@ -126,8 +181,18 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'BONUS', quantity: new Decimal(1), price: new Decimal(0), fees: new Decimal(0) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'BONUS',
+          quantity: new Decimal(1),
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        },
       ],
     });
 
@@ -141,13 +206,72 @@ describe('calculateHolding', () => {
       currentPrice: new Decimal(70000),
       priceCurrency: 'USD',
       transactions: [
-        { type: 'BUY', quantity: new Decimal(1), price: new Decimal(60000), fees: new Decimal(0) },
-        { type: 'DIVIDEND', quantity: new Decimal(0), price: new Decimal(0), fees: new Decimal(0) },
-        { type: 'INTEREST', quantity: new Decimal(0), price: new Decimal(0), fees: new Decimal(0) },
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(60000),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'DIVIDEND',
+          quantity: new Decimal(0),
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        },
+        {
+          type: 'INTEREST',
+          quantity: new Decimal(0),
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        },
       ],
     });
 
     expect(result.quantity.toString()).toBe('1');
     expect(result.costBasis.toString()).toBe('60000');
+  });
+
+  it('adds deposits to cost basis and removes withdrawals without sale proceeds', () => {
+    const result = calculateHolding({
+      currentPrice: new Decimal(120),
+      priceCurrency: 'USD',
+      transactions: [
+        {
+          type: 'DEPOSIT',
+          quantity: new Decimal(10),
+          price: new Decimal(100),
+          fees: new Decimal(5),
+        },
+        {
+          type: 'WITHDRAWAL',
+          quantity: new Decimal(2),
+          price: new Decimal(110),
+          fees: new Decimal(3),
+        },
+      ],
+    });
+
+    expect(result.quantity.toString()).toBe('8');
+    expect(result.costBasis.toString()).toBe('804');
+    expect(result.realizedGain.toString()).toBe('-3');
+    expect(result.currentValue?.toString()).toBe('960');
+  });
+
+  it('leaves price-dependent values unavailable when a held asset has no price', () => {
+    const result = calculateHolding({
+      currentPrice: null,
+      priceCurrency: 'USD',
+      transactions: [
+        {
+          type: 'BUY',
+          quantity: new Decimal(1),
+          price: new Decimal(100),
+          fees: new Decimal(0),
+        },
+      ],
+    });
+
+    expect(result.currentValue).toBeNull();
+    expect(result.unrealizedGain).toBeNull();
   });
 });

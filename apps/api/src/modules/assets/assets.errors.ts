@@ -1,4 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 
 interface ApiErrorDetails {
   readonly [key: string]: unknown;
@@ -48,6 +52,24 @@ export function createRiskProfileNotFoundException(
       'RISK_PROFILE_NOT_FOUND',
       'The requested risk profile was not found.',
       { riskProfileId },
+    ),
+  );
+}
+
+export function createDuplicateProviderAssetException(): ConflictException {
+  return new ConflictException(
+    buildApiError(
+      'DUPLICATE_PROVIDER_ASSET',
+      'This provider asset has already been added.',
+    ),
+  );
+}
+
+export function createProviderAssetLockedException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'PROVIDER_ASSET_LOCKED',
+      'Provider identity and current price cannot be edited manually.',
     ),
   );
 }

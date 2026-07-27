@@ -18,6 +18,8 @@ export interface PortfolioMetrics {
   readonly totalRealizedGain: string;
   readonly weightedRiskScore: number | null;
   readonly baseCurrency: string;
+  readonly isPartial: boolean;
+  readonly unpricedAssetCount: number;
 }
 
 export interface PortfolioResponse {

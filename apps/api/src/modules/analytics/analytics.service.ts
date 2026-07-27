@@ -9,7 +9,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CurrencyConverter } from '../../common/financial/currency-converter';
 import {
   calculateAccountBalance,
-  hasDestinationBalanceEffect,
   getSourceAccountEffect,
 } from '../../common/financial/transaction-effects';
 import { InvestmentsService } from '../investments/investments.service';
@@ -209,9 +208,9 @@ export class AnalyticsService {
     transactions: readonly RawTransaction[],
     holdings: ReadonlyArray<{
       readonly costBasis: string;
-      readonly currentValue: string;
+      readonly currentValue: string | null;
       readonly realizedGain: string;
-      readonly unrealizedGain: string;
+      readonly unrealizedGain: string | null;
     }>,
     converter: CurrencyConverter,
   ): DashboardMetrics {
@@ -270,7 +269,8 @@ export class AnalyticsService {
     );
 
     const totalInvestmentValue = holdings.reduce(
-      (sum, holding) => sum.add(new Decimal(holding.currentValue)),
+      (sum, holding) =>
+        holding.currentValue ? sum.add(new Decimal(holding.currentValue)) : sum,
       new Decimal(0),
     );
     const totalInvestmentCostBasis = holdings.reduce(
@@ -278,7 +278,10 @@ export class AnalyticsService {
       new Decimal(0),
     );
     const totalUnrealizedGain = holdings.reduce(
-      (sum, holding) => sum.add(new Decimal(holding.unrealizedGain)),
+      (sum, holding) =>
+        holding.unrealizedGain
+          ? sum.add(new Decimal(holding.unrealizedGain))
+          : sum,
       new Decimal(0),
     );
     const totalRealizedGain = holdings.reduce(
@@ -527,7 +530,7 @@ export class AnalyticsService {
   private buildInvestmentAllocation(
     holdings: ReadonlyArray<{
       readonly categoryName: string;
-      readonly currentValue: string;
+      readonly currentValue: string | null;
     }>,
   ): readonly InvestmentAllocationItem[] {
     if (holdings.length === 0) {
@@ -535,14 +538,19 @@ export class AnalyticsService {
     }
 
     const totalValue = holdings.reduce(
-      (sum, holding) => sum.add(new Decimal(holding.currentValue)),
+      (sum, holding) =>
+        holding.currentValue ? sum.add(new Decimal(holding.currentValue)) : sum,
       new Decimal(0),
     );
 
     const categoryValues = new Map<string, Decimal>();
 
     for (const holding of holdings) {
-      const current = categoryValues.get(holding.categoryName) ?? new Decimal(0);
+      if (!holding.currentValue) {
+        continue;
+      }
+      const current =
+        categoryValues.get(holding.categoryName) ?? new Decimal(0);
       categoryValues.set(
         holding.categoryName,
         current.add(new Decimal(holding.currentValue)),

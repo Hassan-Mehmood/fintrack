@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { formatAmount } from "@/lib/formatting"
+import { formatAmount, formatDate } from "@/lib/formatting"
 
 import type { Holding } from "./investment-types"
 
@@ -71,15 +71,29 @@ export function HoldingsTable({ baseCurrency, holdings }: HoldingsTableProps) {
                 : "—"}
             </TableCell>
             <TableCell className="text-right font-mono">
-              {holding.currentPrice
-                ? formatAmount(holding.currentPrice, baseCurrency)
-                : "—"}
+              <div className="flex flex-col items-end gap-1">
+                <span>
+                  {holding.currentPrice
+                    ? formatAmount(holding.currentPrice, baseCurrency)
+                    : "Unavailable"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {holding.priceStatus === "STALE"
+                    ? "Stale"
+                    : holding.priceProvider ?? "Manual"}
+                  {holding.priceUpdatedAt
+                    ? ` · ${formatDate(holding.priceUpdatedAt)}`
+                    : ""}
+                </span>
+              </div>
             </TableCell>
             <TableCell className="text-right font-mono">
               {formatAmount(holding.costBasis, baseCurrency)}
             </TableCell>
             <TableCell className="text-right font-mono">
-              {formatAmount(holding.currentValue, baseCurrency)}
+              {holding.currentValue
+                ? formatAmount(holding.currentValue, baseCurrency)
+                : "Unavailable"}
             </TableCell>
             <TableCell className="text-right">
               <div className="flex flex-col items-end gap-0.5">
@@ -89,7 +103,9 @@ export function HoldingsTable({ baseCurrency, holdings }: HoldingsTableProps) {
                     getGainColor(holding.unrealizedGain)
                   )}
                 >
-                  {formatSignedAmount(holding.unrealizedGain, baseCurrency)}
+                  {holding.unrealizedGain
+                    ? formatSignedAmount(holding.unrealizedGain, baseCurrency)
+                    : "Unavailable"}
                 </span>
                 {holding.unrealizedGainPercent !== null ? (
                   <span className="flex items-center gap-1 text-xs">
@@ -118,7 +134,10 @@ export function HoldingsTable({ baseCurrency, holdings }: HoldingsTableProps) {
   )
 }
 
-function getGainColor(amount: string): string {
+function getGainColor(amount: string | null): string {
+  if (amount === null) {
+    return "text-muted-foreground"
+  }
   const value = Number(amount)
 
   if (value > 0) {

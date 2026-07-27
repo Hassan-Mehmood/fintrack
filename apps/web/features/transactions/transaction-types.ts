@@ -13,6 +13,8 @@ export const transactionTypeOptions = [
   { value: "INVESTMENT_SPLIT", label: "Stock split" },
   { value: "INVESTMENT_BONUS", label: "Bonus shares" },
   { value: "INVESTMENT_REINVESTMENT", label: "Reinvestment" },
+  { value: "INVESTMENT_DEPOSIT", label: "Asset deposit" },
+  { value: "INVESTMENT_WITHDRAWAL", label: "Asset withdrawal" },
   { value: "ADJUSTMENT", label: "Adjustment" },
 ] as const
 
@@ -35,6 +37,8 @@ export interface InvestmentTransactionDetail {
     | "SPLIT"
     | "BONUS"
     | "REINVESTMENT"
+    | "DEPOSIT"
+    | "WITHDRAWAL"
   readonly quantity: string
   readonly price: string
   readonly fees: string
@@ -63,6 +67,7 @@ export interface Transaction {
 }
 
 export interface TransactionPayload {
+  readonly idempotencyKey?: string
   readonly type: TransactionType
   readonly accountId: string
   readonly destinationAccountId?: string
@@ -82,6 +87,8 @@ export interface TransactionPayload {
       | "SPLIT"
       | "BONUS"
       | "REINVESTMENT"
+      | "DEPOSIT"
+      | "WITHDRAWAL"
     readonly quantity: string
     readonly price: string
     readonly fees?: string
@@ -107,7 +114,9 @@ export function isInvestmentType(type: TransactionType): boolean {
     type === "INTEREST" ||
     type === "INVESTMENT_SPLIT" ||
     type === "INVESTMENT_BONUS" ||
-    type === "INVESTMENT_REINVESTMENT"
+    type === "INVESTMENT_REINVESTMENT" ||
+    type === "INVESTMENT_DEPOSIT" ||
+    type === "INVESTMENT_WITHDRAWAL"
   )
 }
 
@@ -136,6 +145,8 @@ export function getTransactionSign(type: TransactionType): 1 | -1 | 0 {
       return -1
     case "INVESTMENT_SPLIT":
     case "INVESTMENT_BONUS":
+    case "INVESTMENT_DEPOSIT":
+    case "INVESTMENT_WITHDRAWAL":
       return 0
     case "ADJUSTMENT":
       return 1
@@ -152,6 +163,8 @@ export function getInvestmentTradeType(
   | "SPLIT"
   | "BONUS"
   | "REINVESTMENT"
+  | "DEPOSIT"
+  | "WITHDRAWAL"
   | null {
   switch (type) {
     case "INVESTMENT_BUY":
@@ -168,6 +181,10 @@ export function getInvestmentTradeType(
       return "BONUS"
     case "INVESTMENT_REINVESTMENT":
       return "REINVESTMENT"
+    case "INVESTMENT_DEPOSIT":
+      return "DEPOSIT"
+    case "INVESTMENT_WITHDRAWAL":
+      return "WITHDRAWAL"
     default:
       return null
   }

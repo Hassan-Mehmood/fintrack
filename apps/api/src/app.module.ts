@@ -6,6 +6,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { InvestmentsModule } from './modules/investments/investments.module';
 import { PortfoliosModule } from './modules/portfolios/portfolios.module';
+import { MarketDataModule } from './modules/market-data/market-data.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -16,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     AccountsModule,
     AssetsModule,
+    MarketDataModule,
     TransactionsModule,
     InvestmentsModule,
     AnalyticsModule,

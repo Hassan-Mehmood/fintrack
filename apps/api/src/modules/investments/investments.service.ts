@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import { CurrencyConverter } from '../../common/financial/currency-converter';
 import {
@@ -7,18 +7,24 @@ import {
 } from '../../common/financial/holdings';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { HoldingResponse, InvestmentSummaryResponse } from './investments.types';
+import { MarketDataService } from '../market-data/market-data.service';
+import type { AssetPrice } from '../market-data/market-data.types';
+import type {
+  HoldingResponse,
+  InvestmentSummaryResponse,
+} from './investments.types';
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
 
 @Injectable()
 export class InvestmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly marketData?: MarketDataService,
+  ) {}
 
-  async getHoldingsForUser(
-    user: AuthenticatedUser,
-  ): Promise<{
+  async getHoldingsForUser(user: AuthenticatedUser): Promise<{
     readonly holdings: readonly HoldingResponse[];
     readonly baseCurrency: string;
   }> {
@@ -28,6 +34,12 @@ export class InvestmentsService {
     ]);
 
     const detailsByAsset = this.groupDetailsByAsset(details);
+    const prices = this.marketData
+      ? await this.marketData.getPricesForSources(assets)
+      : [];
+    const pricesByAsset = new Map(
+      prices.map((price) => [price.assetId, price]),
+    );
     const converter = new CurrencyConverter(
       user.baseCurrency,
       user.exchangeRate,
@@ -43,8 +55,11 @@ export class InvestmentsService {
       }
 
       const currency = this.resolveHoldingCurrency(asset, assetDetails);
+      const marketPrice = pricesByAsset.get(asset.id);
       const calculation = calculateHolding({
-        currentPrice: asset.currentPrice,
+        currentPrice: marketPrice?.price
+          ? new Decimal(marketPrice.price)
+          : asset.currentPrice,
         priceCurrency: currency,
         transactions: assetDetails.map((detail) => ({
           type: detail.tradeType as InvestmentTransactionInput['type'],
@@ -55,7 +70,13 @@ export class InvestmentsService {
       });
 
       holdings.push(
-        this.toHoldingResponse(asset, calculation, currency, converter),
+        this.toHoldingResponse(
+          asset,
+          calculation,
+          marketPrice,
+          currency,
+          converter,
+        ),
       );
     }
 
@@ -74,9 +95,14 @@ export class InvestmentsService {
     let totalCurrentValue = new Decimal(0);
     let totalRealizedGain = new Decimal(0);
     let totalUnrealizedGain = new Decimal(0);
+    let unpricedAssetCount = 0;
 
     for (const holding of holdings) {
       totalCostBasis = totalCostBasis.add(holding.costBasis);
+      if (holding.currentValue === null || holding.unrealizedGain === null) {
+        unpricedAssetCount += 1;
+        continue;
+      }
       totalCurrentValue = totalCurrentValue.add(holding.currentValue);
       totalRealizedGain = totalRealizedGain.add(holding.realizedGain);
       totalUnrealizedGain = totalUnrealizedGain.add(holding.unrealizedGain);
@@ -89,19 +115,21 @@ export class InvestmentsService {
         totalRealizedGain: totalRealizedGain.toFixed(2),
         totalUnrealizedGain: totalUnrealizedGain.toFixed(2),
         baseCurrency: user.baseCurrency,
+        isPartial: unpricedAssetCount > 0,
+        unpricedAssetCount,
       },
     };
   }
 
-  private async fetchAssets(
-    userId: string,
-  ): Promise<
+  private async fetchAssets(userId: string): Promise<
     ReadonlyArray<{
       readonly id: string;
       readonly name: string;
       readonly symbol: string | null;
       readonly currentPrice: Decimal | null;
       readonly priceCurrency: string | null;
+      readonly provider: 'FINNHUB' | 'COINGECKO' | null;
+      readonly providerAssetId: string | null;
       readonly category: { readonly name: string };
       readonly riskProfile: { readonly name: string } | null;
     }>
@@ -116,6 +144,8 @@ export class InvestmentsService {
         symbol: true,
         currentPrice: true,
         priceCurrency: true,
+        provider: true,
+        providerAssetId: true,
         category: {
           select: {
             name: true,
@@ -130,9 +160,7 @@ export class InvestmentsService {
     });
   }
 
-  private async fetchInvestmentDetails(
-    userId: string,
-  ): Promise<
+  private async fetchInvestmentDetails(userId: string): Promise<
     ReadonlyArray<{
       readonly id: string;
       readonly assetId: string;
@@ -219,24 +247,29 @@ export class InvestmentsService {
       readonly riskProfile: { readonly name: string } | null;
     },
     calculation: ReturnType<typeof calculateHolding>,
+    marketPrice: AssetPrice | undefined,
     currency: string,
     converter: CurrencyConverter,
   ): HoldingResponse {
-    const convertedCostBasis = converter.convert(calculation.costBasis, currency);
-    const convertedCurrentValue = converter.convert(
-      calculation.currentValue,
+    const convertedCostBasis = converter.convert(
+      calculation.costBasis,
       currency,
     );
+    const convertedCurrentValue = calculation.currentValue
+      ? converter.convert(calculation.currentValue, currency)
+      : null;
     const convertedRealizedGain = converter.convert(
       calculation.realizedGain,
       currency,
     );
-    const convertedUnrealizedGain = converter.convert(
-      calculation.unrealizedGain,
-      currency,
-    );
-    const convertedCurrentPrice = asset.currentPrice
-      ? converter.convert(asset.currentPrice, currency)
+    const convertedUnrealizedGain = calculation.unrealizedGain
+      ? converter.convert(calculation.unrealizedGain, currency)
+      : null;
+    const effectivePrice = marketPrice?.price
+      ? new Decimal(marketPrice.price)
+      : asset.currentPrice;
+    const convertedCurrentPrice = effectivePrice
+      ? converter.convert(effectivePrice, currency)
       : null;
 
     return {
@@ -253,11 +286,19 @@ export class InvestmentsService {
         ? stripTrailingZeros(convertedCurrentPrice.toFixed(8))
         : null,
       priceCurrency: converter.baseCurrency,
+      priceProvider: marketPrice?.provider ?? null,
+      priceStatus:
+        marketPrice?.status ??
+        (asset.currentPrice ? 'AVAILABLE' : 'UNAVAILABLE'),
+      priceUpdatedAt: marketPrice?.fetchedAt ?? null,
+      providerMarketAt: marketPrice?.providerMarketAt ?? null,
+      priceChangePercent: marketPrice?.changePercent ?? null,
       costBasis: convertedCostBasis.toFixed(2),
-      currentValue: convertedCurrentValue.toFixed(2),
+      currentValue: convertedCurrentValue?.toFixed(2) ?? null,
       realizedGain: convertedRealizedGain.toFixed(2),
-      unrealizedGain: convertedUnrealizedGain.toFixed(2),
-      unrealizedGainPercent: calculation.unrealizedGainPercent?.toNumber() ?? null,
+      unrealizedGain: convertedUnrealizedGain?.toFixed(2) ?? null,
+      unrealizedGainPercent:
+        calculation.unrealizedGainPercent?.toNumber() ?? null,
     };
   }
 }
