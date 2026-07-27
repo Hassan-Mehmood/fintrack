@@ -161,6 +161,7 @@ change.
 - Added Redis and provider environment configuration to Docker Compose and `.env.example`.
 - Added provider adapter, holdings, and market-search tests plus a Vitest/Testing Library setup for the web app.
 - Verified the integration with Prisma validation, API build, 75 Jest tests, API e2e, scoped API lint, web type-check, web lint, 2 Vitest tests, and the Next.js production build.
+- Applied the `add_market_data_integration` migration to the Neon database, adding provider metadata columns to assets and transaction idempotency support.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
@@ -170,7 +171,6 @@ change.
 
 ## Next Up
 
-- Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
 - Configure `FINNHUB_API_KEY`, `COINGECKO_API_KEY`, and `REDIS_URL` before live-provider verification.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Run end-to-end manual verification of the `/assets`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
