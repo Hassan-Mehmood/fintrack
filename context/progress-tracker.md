@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Investment module Phase 2: investment transaction details for buy/sell events.
+- Ready for end-to-end verification and deployment preparation.
 
 ## Current Goal
 
-- Complete Phase 2 of `specs/api/004-adding-investments.md` and verify buy/sell transactions can record asset, quantity, price, and fees.
+- Add Clerk environment variables and run end-to-end manual verification of the authenticated flows.
 
 ## Completed
 
@@ -120,20 +120,48 @@ change.
 - Fetched assets in the transactions page and passed them to the form dialog.
 - Added investment detail summary (asset, quantity, price) to the transactions table.
 - Verified the API build, Jest tests, web lint, and web build after the Phase 2 changes.
+- Extracted `CurrencyConverter` from `AnalyticsService` into `apps/api/src/common/financial/currency-converter.ts` for reuse across modules.
+- Added a pure `calculateHolding` function in `apps/api/src/common/financial/holdings.ts` using average-cost basis.
+- Added Jest unit tests for `calculateHolding` covering single buys, multiple buys, partial sells, full sells, and empty transactions.
+- Added a NestJS `investments` module with `GET /api/v1/investments/holdings` and `GET /api/v1/investments/summary` endpoints.
+- Implemented `InvestmentsService` to derive per-asset holdings (quantity, average cost, cost basis, current value, realized/unrealized gain) from `InvestmentTransactionDetail` rows.
+- Converted holding values to the user's `baseCurrency` using the shared `CurrencyConverter`.
+- Added Jest service tests for holdings listing, summary totals, and currency conversion.
+- Added the `/investments` page under `apps/web/app/investments/page.tsx` and the `InvestmentsPage` feature component.
+- Added a `HoldingsTable` component with columns for quantity, average cost, current price, cost basis, current value, unrealized gain, and realized gain.
+- Added summary cards for total value, cost basis, unrealized gain, and realized gain on the investments page.
+- Wired the sidebar `Investments` item to `/investments` with active-state highlighting.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 3 changes.
+- Added investment summary metrics (`totalInvestmentValue`, `totalInvestmentCostBasis`, `totalUnrealizedGain`, `totalUnrealizedGainPercent`, `totalRealizedGain`) and category-level `investmentAllocation` to the dashboard API response.
+- Wired `InvestmentsModule` into `AnalyticsModule` so `AnalyticsService` can derive dashboard investment data from `InvestmentsService` holdings.
+- Updated the dashboard page to display investment summary cards and an investment allocation chart, and removed the "Investment performance" coming-soon card.
+- Updated dashboard Jest tests to mock `InvestmentsService` and assert the new investment metrics and allocation fields.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 4 changes.
+- Added advanced investment transaction types (`DIVIDEND`, `INTEREST`, `INVESTMENT_SPLIT`, `INVESTMENT_BONUS`, `INVESTMENT_REINVESTMENT`) to the `TransactionType` enum and generated/applied the `add_advanced_investment_transaction_types` migration.
+- Updated transaction cash-flow effects, holdings calculation, transaction validation, and dashboard analytics to handle dividends, interest, splits, bonus shares, and reinvestments.
+- Extended the transaction form schema and dialog with conditional investment fields for the new transaction types.
+- Added Jest tests for advanced investment transaction creation/validation and updated holdings tests for split, bonus, reinvestment, dividend, and interest scenarios.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 5 changes.
+- Added `Portfolio` and `PortfolioAccount` models to the Prisma schema and generated/applied the `add_portfolios` migration to the Neon database.
+- Created a NestJS `portfolios` module with `GET`, `POST`, `GET /:id`, `PATCH`, and `DELETE` endpoints under `/api/v1/portfolios`.
+- Implemented portfolio metrics (total value, cost basis, unrealized/realized gains, weighted risk score, category allocation) derived from grouped account balances and holdings.
+- Added Jest service tests for portfolio CRUD, account ownership validation, and metric calculations.
+- Created the `/portfolios` page with portfolio cards, create/edit/delete dialogs, and account selection.
+- Added a `Portfolios` item to the sidebar navigation.
+- Verified the API build, Jest tests, web lint, and web build after the Phase 6 changes.
+- Fixed stale data on page switches and tables not refreshing by setting the React Query default `staleTime` to `0` and enabling `refetchOnWindowFocus` in `apps/web/components/query-provider.tsx`.
+- Verified the web lint and web build after the stale-data fix.
 
-- Ready to apply the generated Prisma migration to the configured Neon database.
-- Ready for end-to-end manual verification of the dashboard, `/accounts`, and `/transactions` flows once the API and web apps are pointed at a migrated database with Clerk environment variables.
+- Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
 ## In Progress
 
 
 ## Next Up
 
-- Investment module Phase 3: derive holdings, cost basis, and realized P&L from transactions.
-- Investment module Phase 4: add investment summary metrics to the dashboard and remove the "Investment performance" coming-soon card.
 - Apply migrations with `pnpm prisma migrate deploy` from `apps/api` when ready.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
-- Run end-to-end manual verification of the `/assets` and `/transactions` investment flows once Clerk environment variables are configured.
+- Run end-to-end manual verification of the `/assets`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
 ## Open Questions
 

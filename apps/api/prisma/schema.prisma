@@ -25,6 +25,11 @@ enum TransactionType {
   FEE
   INVESTMENT_BUY
   INVESTMENT_SELL
+  DIVIDEND
+  INTEREST
+  INVESTMENT_SPLIT
+  INVESTMENT_BONUS
+  INVESTMENT_REINVESTMENT
   ADJUSTMENT
 }
 
@@ -53,6 +58,7 @@ model User {
   accounts     Account[]
   transactions Transaction[]
   assets       Asset[]
+  portfolios   Portfolio[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -71,12 +77,39 @@ model Account {
   archivedAt     DateTime?     @map("archived_at")
   transactions   Transaction[] @relation("TransactionAccount")
   transfersIn    Transaction[] @relation("TransactionDestinationAccount")
+  portfolios     PortfolioAccount[]
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([userId, type])
   @@map("accounts")
+}
+
+model Portfolio {
+  id          String            @id @default(uuid()) @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  accounts    PortfolioAccount[]
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("portfolios")
+}
+
+model PortfolioAccount {
+  portfolioId String    @map("portfolio_id") @db.Uuid
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  accountId   String    @map("account_id") @db.Uuid
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([portfolioId, accountId])
+  @@index([portfolioId])
+  @@index([accountId])
+  @@map("portfolio_accounts")
 }
 
 model Transaction {

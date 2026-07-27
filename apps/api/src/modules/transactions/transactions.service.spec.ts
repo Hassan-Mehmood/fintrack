@@ -498,6 +498,150 @@ describe('TransactionsService', () => {
 
     expect(prisma.transaction.delete).not.toHaveBeenCalled();
   });
+
+  it('creates a dividend transaction with asset details', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'DIVIDEND',
+        amount: '100',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'DIVIDEND',
+          quantity: '0',
+          price: '0',
+          fees: '0',
+        }),
+      }),
+    );
+
+    const result = await service.createTransactionForUser(authenticatedUser, {
+      type: 'DIVIDEND',
+      accountId: 'account-1',
+      amount: '100',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'AAPL dividend',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'DIVIDEND',
+        quantity: '0',
+        price: '0',
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        type: 'DIVIDEND',
+        investmentDetail: expect.objectContaining({
+          assetId: 'asset-1',
+          tradeType: 'DIVIDEND',
+        }),
+      }),
+    );
+  });
+
+  it('creates a stock split transaction', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_SPLIT',
+        amount: '0',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'SPLIT',
+          quantity: '2',
+          price: '0',
+          fees: '0',
+        }),
+      }),
+    );
+
+    const result = await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_SPLIT',
+      accountId: 'account-1',
+      amount: '0',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: '2-for-1 stock split',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'SPLIT',
+        quantity: '2',
+        price: '0',
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        type: 'INVESTMENT_SPLIT',
+        investmentDetail: expect.objectContaining({
+          tradeType: 'SPLIT',
+          quantity: '2',
+        }),
+      }),
+    );
+  });
+
+  it('rejects a split transaction with a non-positive ratio', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_SPLIT',
+        accountId: 'account-1',
+        amount: '0',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Invalid split',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'SPLIT',
+          quantity: '0',
+          price: '0',
+        },
+      }),
+    ).rejects.toEqual(
+      createInvalidInvestmentAmountException('Quantity must be greater than zero.'),
+    );
+  });
+
+  it('rejects a dividend transaction with a non-zero quantity', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'DIVIDEND',
+        accountId: 'account-1',
+        amount: '100',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Invalid dividend',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'DIVIDEND',
+          quantity: '1',
+          price: '0',
+        },
+      }),
+    ).rejects.toEqual(
+      createInvalidInvestmentAmountException(
+        'Quantity must be zero for dividend and interest transactions.',
+      ),
+    );
+  });
 });
 
 function createTransactionRecord({

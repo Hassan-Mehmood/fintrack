@@ -10,6 +10,11 @@ export interface DashboardMetrics {
   readonly totalNetWorthChangePercent: number | null;
   readonly liquidCashPercent: number;
   readonly investedCashThisMonth: string | null;
+  readonly totalInvestmentValue: string;
+  readonly totalInvestmentCostBasis: string;
+  readonly totalUnrealizedGain: string;
+  readonly totalUnrealizedGainPercent: number | null;
+  readonly totalRealizedGain: string;
 }
 
 export interface DashboardAccountItem {
@@ -46,6 +51,11 @@ export interface AssetAllocationItem {
   readonly value: number;
 }
 
+export interface InvestmentAllocationItem {
+  readonly category: string;
+  readonly value: number;
+}
+
 export interface DashboardUnavailableSection {
   readonly section: string;
   readonly reason: string;
@@ -58,6 +68,7 @@ export interface DashboardData {
   readonly monthlySummary: readonly MonthlySummaryItem[];
   readonly recentActivity: readonly RecentActivityItem[];
   readonly assetAllocation: readonly AssetAllocationItem[];
+  readonly investmentAllocation: readonly InvestmentAllocationItem[];
   readonly unavailable: readonly DashboardUnavailableSection[];
 }
 

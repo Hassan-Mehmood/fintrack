@@ -95,8 +95,22 @@ export function TransactionFormDialog({
 
   const watchedType = useWatch({ control, name: "type" })
   const watchedAccountId = useWatch({ control, name: "accountId" })
+  const watchedInvestmentTradeType = useWatch({
+    control,
+    name: "investment.tradeType",
+  })
   const showDestination = isTransferType(watchedType)
   const showInvestment = isInvestmentType(watchedType)
+  const showInvestmentQuantity =
+    watchedInvestmentTradeType === "BUY" ||
+    watchedInvestmentTradeType === "SELL" ||
+    watchedInvestmentTradeType === "REINVESTMENT" ||
+    watchedInvestmentTradeType === "SPLIT" ||
+    watchedInvestmentTradeType === "BONUS"
+  const showInvestmentPrice =
+    watchedInvestmentTradeType === "BUY" ||
+    watchedInvestmentTradeType === "SELL" ||
+    watchedInvestmentTradeType === "REINVESTMENT"
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === watchedAccountId),
@@ -123,6 +137,16 @@ export function TransactionFormDialog({
 
     if (tradeType) {
       setValue("investment.tradeType", tradeType)
+
+      if (
+        tradeType === "DIVIDEND" ||
+        tradeType === "INTEREST" ||
+        tradeType === "SPLIT" ||
+        tradeType === "BONUS"
+      ) {
+        setValue("investment.quantity", "0")
+        setValue("investment.price", "0")
+      }
     }
   }, [watchedType, setValue])
 
@@ -393,59 +417,71 @@ export function TransactionFormDialog({
                   <FieldError errors={[errors.investment?.assetId]} />
                 </Field>
 
-                <Field
-                  data-invalid={
-                    Boolean(errors.investment?.quantity) || undefined
-                  }
-                >
-                  <FieldLabel htmlFor="transaction-investment-quantity">
-                    Quantity
-                  </FieldLabel>
-                  <Input
-                    id="transaction-investment-quantity"
-                    aria-invalid={
+                {showInvestmentQuantity ? (
+                  <Field
+                    data-invalid={
                       Boolean(errors.investment?.quantity) || undefined
                     }
-                    inputMode="decimal"
-                    placeholder="0.015"
-                    {...register("investment.quantity")}
-                  />
-                  <FieldError errors={[errors.investment?.quantity]} />
-                </Field>
+                  >
+                    <FieldLabel htmlFor="transaction-investment-quantity">
+                      {watchedInvestmentTradeType === "SPLIT"
+                        ? "Split ratio"
+                        : watchedInvestmentTradeType === "BONUS"
+                          ? "Bonus shares"
+                          : "Quantity"}
+                    </FieldLabel>
+                    <Input
+                      id="transaction-investment-quantity"
+                      aria-invalid={
+                        Boolean(errors.investment?.quantity) || undefined
+                      }
+                      inputMode="decimal"
+                      placeholder={
+                        watchedInvestmentTradeType === "SPLIT" ? "2" : "0.015"
+                      }
+                      {...register("investment.quantity")}
+                    />
+                    <FieldError errors={[errors.investment?.quantity]} />
+                  </Field>
+                ) : null}
 
-                <Field
-                  data-invalid={Boolean(errors.investment?.price) || undefined}
-                >
-                  <FieldLabel htmlFor="transaction-investment-price">
-                    Price per unit
-                  </FieldLabel>
-                  <Input
-                    id="transaction-investment-price"
-                    aria-invalid={
-                      Boolean(errors.investment?.price) || undefined
-                    }
-                    inputMode="decimal"
-                    placeholder="67000"
-                    {...register("investment.price")}
-                  />
-                  <FieldError errors={[errors.investment?.price]} />
-                </Field>
+                {showInvestmentPrice ? (
+                  <Field
+                    data-invalid={Boolean(errors.investment?.price) || undefined}
+                  >
+                    <FieldLabel htmlFor="transaction-investment-price">
+                      Price per unit
+                    </FieldLabel>
+                    <Input
+                      id="transaction-investment-price"
+                      aria-invalid={
+                        Boolean(errors.investment?.price) || undefined
+                      }
+                      inputMode="decimal"
+                      placeholder="67000"
+                      {...register("investment.price")}
+                    />
+                    <FieldError errors={[errors.investment?.price]} />
+                  </Field>
+                ) : null}
 
-                <Field
-                  data-invalid={Boolean(errors.investment?.fees) || undefined}
-                >
-                  <FieldLabel htmlFor="transaction-investment-fees">
-                    Fees
-                  </FieldLabel>
-                  <Input
-                    id="transaction-investment-fees"
-                    aria-invalid={Boolean(errors.investment?.fees) || undefined}
-                    inputMode="decimal"
-                    placeholder="0"
-                    {...register("investment.fees")}
+                {showInvestmentPrice ? (
+                  <Field
+                    data-invalid={Boolean(errors.investment?.fees) || undefined}
+                  >
+                    <FieldLabel htmlFor="transaction-investment-fees">
+                      Fees
+                    </FieldLabel>
+                    <Input
+                      id="transaction-investment-fees"
+                      aria-invalid={Boolean(errors.investment?.fees) || undefined}
+                      inputMode="decimal"
+                      placeholder="0"
+                      {...register("investment.fees")}
                   />
                   <FieldError errors={[errors.investment?.fees]} />
                 </Field>
+                ) : null}
 
                 <Field
                   data-invalid={Boolean(errors.investment?.notes) || undefined}
@@ -544,6 +580,14 @@ function getDefaultValues(
       description: "",
       merchant: "",
       notes: "",
+      investment: {
+        assetId: "",
+        tradeType: "BUY",
+        quantity: "",
+        price: "",
+        fees: "",
+        notes: "",
+      },
     }
   }
 

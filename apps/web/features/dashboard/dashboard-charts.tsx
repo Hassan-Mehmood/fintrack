@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/chart"
 import type {
   AssetAllocationItem,
+  InvestmentAllocationItem,
   MonthlySummaryItem,
 } from "./dashboard-types"
 
@@ -134,6 +135,57 @@ export function AssetAllocationChart({ data }: AssetAllocationChartProps) {
         >
           {data.map((item) => (
             <Cell key={item.name} fill={allocationFills[item.name]} />
+          ))}
+        </Pie>
+      </PieChart>
+    </ChartContainer>
+  )
+}
+
+const investmentAllocationPalette = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+]
+
+interface InvestmentAllocationChartProps {
+  readonly data: readonly InvestmentAllocationItem[]
+}
+
+export function InvestmentAllocationChart({
+  data,
+}: InvestmentAllocationChartProps) {
+  const chartConfig = data.reduce<ChartConfig>((config, item, index) => {
+    config[item.category] = {
+      label: item.category,
+      color: investmentAllocationPalette[index % investmentAllocationPalette.length],
+    }
+    return config
+  }, {})
+
+  return (
+    <ChartContainer
+      config={chartConfig}
+      className="mx-auto aspect-square h-[260px]"
+      initialDimension={{ width: 260, height: 260 }}
+    >
+      <PieChart accessibilityLayer>
+        <ChartTooltip
+          cursor={false}
+          content={<ChartTooltipContent hideLabel indicator="dot" />}
+        />
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="category"
+          innerRadius={58}
+          outerRadius={96}
+          strokeWidth={3}
+        >
+          {data.map((item) => (
+            <Cell key={item.category} fill={`var(--color-${item.category})`} />
           ))}
         </Pie>
       </PieChart>

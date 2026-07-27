@@ -8,6 +8,11 @@ export const transactionTypeOptions = [
   { value: "FEE", label: "Fee" },
   { value: "INVESTMENT_BUY", label: "Investment buy" },
   { value: "INVESTMENT_SELL", label: "Investment sell" },
+  { value: "DIVIDEND", label: "Dividend" },
+  { value: "INTEREST", label: "Interest" },
+  { value: "INVESTMENT_SPLIT", label: "Stock split" },
+  { value: "INVESTMENT_BONUS", label: "Bonus shares" },
+  { value: "INVESTMENT_REINVESTMENT", label: "Reinvestment" },
   { value: "ADJUSTMENT", label: "Adjustment" },
 ] as const
 
@@ -22,7 +27,14 @@ export interface InvestmentTransactionDetail {
   readonly assetId: string
   readonly assetName: string
   readonly assetSymbol: string | null
-  readonly tradeType: "BUY" | "SELL"
+  readonly tradeType:
+    | "BUY"
+    | "SELL"
+    | "DIVIDEND"
+    | "INTEREST"
+    | "SPLIT"
+    | "BONUS"
+    | "REINVESTMENT"
   readonly quantity: string
   readonly price: string
   readonly fees: string
@@ -62,7 +74,14 @@ export interface TransactionPayload {
   readonly notes?: string
   readonly investment?: {
     readonly assetId: string
-    readonly tradeType: "BUY" | "SELL"
+    readonly tradeType:
+      | "BUY"
+      | "SELL"
+      | "DIVIDEND"
+      | "INTEREST"
+      | "SPLIT"
+      | "BONUS"
+      | "REINVESTMENT"
     readonly quantity: string
     readonly price: string
     readonly fees?: string
@@ -81,24 +100,43 @@ export function isTransferType(type: TransactionType): boolean {
 }
 
 export function isInvestmentType(type: TransactionType): boolean {
-  return type === "INVESTMENT_BUY" || type === "INVESTMENT_SELL"
+  return (
+    type === "INVESTMENT_BUY" ||
+    type === "INVESTMENT_SELL" ||
+    type === "DIVIDEND" ||
+    type === "INTEREST" ||
+    type === "INVESTMENT_SPLIT" ||
+    type === "INVESTMENT_BONUS" ||
+    type === "INVESTMENT_REINVESTMENT"
+  )
 }
 
 export function isReversibleType(type: TransactionType): boolean {
-  return type !== "TRANSFER" && type !== "ADJUSTMENT"
+  return (
+    type !== "TRANSFER" &&
+    type !== "ADJUSTMENT" &&
+    type !== "INVESTMENT_SPLIT" &&
+    type !== "INVESTMENT_BONUS"
+  )
 }
 
-export function getTransactionSign(type: TransactionType): 1 | -1 {
+export function getTransactionSign(type: TransactionType): 1 | -1 | 0 {
   switch (type) {
     case "INCOME":
     case "REFUND":
     case "INVESTMENT_SELL":
+    case "DIVIDEND":
+    case "INTEREST":
       return 1
     case "EXPENSE":
     case "FEE":
     case "INVESTMENT_BUY":
+    case "INVESTMENT_REINVESTMENT":
     case "TRANSFER":
       return -1
+    case "INVESTMENT_SPLIT":
+    case "INVESTMENT_BONUS":
+      return 0
     case "ADJUSTMENT":
       return 1
   }
@@ -106,14 +144,31 @@ export function getTransactionSign(type: TransactionType): 1 | -1 {
 
 export function getInvestmentTradeType(
   type: TransactionType
-): "BUY" | "SELL" | null {
-  if (type === "INVESTMENT_BUY") {
-    return "BUY"
+):
+  | "BUY"
+  | "SELL"
+  | "DIVIDEND"
+  | "INTEREST"
+  | "SPLIT"
+  | "BONUS"
+  | "REINVESTMENT"
+  | null {
+  switch (type) {
+    case "INVESTMENT_BUY":
+      return "BUY"
+    case "INVESTMENT_SELL":
+      return "SELL"
+    case "DIVIDEND":
+      return "DIVIDEND"
+    case "INTEREST":
+      return "INTEREST"
+    case "INVESTMENT_SPLIT":
+      return "SPLIT"
+    case "INVESTMENT_BONUS":
+      return "BONUS"
+    case "INVESTMENT_REINVESTMENT":
+      return "REINVESTMENT"
+    default:
+      return null
   }
-
-  if (type === "INVESTMENT_SELL") {
-    return "SELL"
-  }
-
-  return null
 }

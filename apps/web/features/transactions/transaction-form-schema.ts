@@ -1,6 +1,10 @@
 import { z } from "zod/v4"
 
-import { transactionTypeValues } from "./transaction-types"
+import {
+  getInvestmentTradeType,
+  isInvestmentType,
+  transactionTypeValues,
+} from "./transaction-types"
 
 const amountPattern = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
 const positiveDecimalPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
@@ -9,7 +13,15 @@ export const currencyValues = ["USD", "PKR"] as const
 
 const investmentSchema = z.object({
   assetId: z.string().uuid("Select an asset."),
-  tradeType: z.enum(["BUY", "SELL"]),
+  tradeType: z.enum([
+    "BUY",
+    "SELL",
+    "DIVIDEND",
+    "INTEREST",
+    "SPLIT",
+    "BONUS",
+    "REINVESTMENT",
+  ]),
   quantity: z
     .string()
     .trim()
@@ -77,33 +89,98 @@ export const transactionFormSchema = z
   )
   .refine(
     (data) => {
-      if (data.type === "INVESTMENT_BUY" || data.type === "INVESTMENT_SELL") {
+      if (isInvestmentType(data.type)) {
         return Boolean(data.investment)
       }
 
       return true
     },
     {
-      message: "Enter investment details for buy and sell transactions.",
+      message: "Enter investment details for investment transactions.",
       path: ["investment"],
     }
   )
   .refine(
     (data) => {
-      if (
-        data.investment &&
-        (data.type === "INVESTMENT_BUY" || data.type === "INVESTMENT_SELL")
-      ) {
-        const expectedTradeType =
-          data.type === "INVESTMENT_BUY" ? "BUY" : "SELL"
-        return data.investment.tradeType === expectedTradeType
+      if (!data.investment || !isInvestmentType(data.type)) {
+        return true
+      }
+
+      return data.investment.tradeType === getInvestmentTradeType(data.type)
+    },
+    {
+      message: "Trade type does not match the transaction type.",
+      path: ["investment", "tradeType"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (!data.investment || !isInvestmentType(data.type)) {
+        return true
+      }
+
+      const needsPositiveQuantity =
+        data.type === "INVESTMENT_BUY" ||
+        data.type === "INVESTMENT_SELL" ||
+        data.type === "INVESTMENT_REINVESTMENT" ||
+        data.type === "INVESTMENT_SPLIT" ||
+        data.type === "INVESTMENT_BONUS"
+
+      if (needsPositiveQuantity && Number(data.investment.quantity) <= 0) {
+        return false
       }
 
       return true
     },
     {
-      message: "Trade type does not match the transaction type.",
-      path: ["investment", "tradeType"],
+      message: "Quantity must be greater than zero.",
+      path: ["investment", "quantity"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (!data.investment || !isInvestmentType(data.type)) {
+        return true
+      }
+
+      const needsPositivePrice =
+        data.type === "INVESTMENT_BUY" ||
+        data.type === "INVESTMENT_SELL" ||
+        data.type === "INVESTMENT_REINVESTMENT"
+
+      if (needsPositivePrice && Number(data.investment.price) <= 0) {
+        return false
+      }
+
+      return true
+    },
+    {
+      message: "Price must be greater than zero.",
+      path: ["investment", "price"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (!data.investment || !isInvestmentType(data.type)) {
+        return true
+      }
+
+      const needsZeroPriceAndQuantity =
+        data.type === "DIVIDEND" || data.type === "INTEREST"
+
+      if (
+        needsZeroPriceAndQuantity &&
+        (Number(data.investment.quantity) !== 0 ||
+          Number(data.investment.price) !== 0)
+      ) {
+        return false
+      }
+
+      return true
+    },
+    {
+      message: "Quantity and price must be zero for dividend and interest.",
+      path: ["investment", "quantity"],
     }
   )
 

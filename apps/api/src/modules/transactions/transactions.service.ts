@@ -77,7 +77,15 @@ type TransactionRecord = Prisma.TransactionGetPayload<{
   select: typeof transactionSelect;
 }>;
 
-const investmentTypes = new Set<string>(['INVESTMENT_BUY', 'INVESTMENT_SELL']);
+const investmentTypes = new Set<string>([
+  'INVESTMENT_BUY',
+  'INVESTMENT_SELL',
+  'DIVIDEND',
+  'INTEREST',
+  'INVESTMENT_SPLIT',
+  'INVESTMENT_BONUS',
+  'INVESTMENT_REINVESTMENT',
+]);
 
 const reversibleTypes = new Set<string>([
   'INCOME',
@@ -86,6 +94,9 @@ const reversibleTypes = new Set<string>([
   'FEE',
   'INVESTMENT_BUY',
   'INVESTMENT_SELL',
+  'DIVIDEND',
+  'INTEREST',
+  'INVESTMENT_REINVESTMENT',
 ]);
 
 @Injectable()
@@ -407,7 +418,7 @@ export class TransactionsService {
       throw createInvestmentDetailRequiredException(type);
     }
 
-    const expectedTradeType = type === 'INVESTMENT_BUY' ? 'BUY' : 'SELL';
+    const expectedTradeType = this.getExpectedTradeType(type);
     if (investment.tradeType !== expectedTradeType) {
       throw createInvalidInvestmentTradeTypeException(
         expectedTradeType,
@@ -416,17 +427,48 @@ export class TransactionsService {
     }
 
     const quantity = new Prisma.Decimal(investment.quantity);
-    if (quantity.isZero() || quantity.isNegative()) {
-      throw createInvalidInvestmentAmountException(
-        'Quantity must be greater than zero.',
-      );
+    const price = new Prisma.Decimal(investment.price);
+
+    if (type === 'INVESTMENT_BUY' || type === 'INVESTMENT_SELL' || type === 'INVESTMENT_REINVESTMENT') {
+      if (quantity.isZero() || quantity.isNegative()) {
+        throw createInvalidInvestmentAmountException(
+          'Quantity must be greater than zero.',
+        );
+      }
+
+      if (price.isZero() || price.isNegative()) {
+        throw createInvalidInvestmentAmountException(
+          'Price must be greater than zero.',
+        );
+      }
     }
 
-    const price = new Prisma.Decimal(investment.price);
-    if (price.isZero() || price.isNegative()) {
-      throw createInvalidInvestmentAmountException(
-        'Price must be greater than zero.',
-      );
+    if (type === 'INVESTMENT_BONUS' || type === 'INVESTMENT_SPLIT') {
+      if (quantity.isZero() || quantity.isNegative()) {
+        throw createInvalidInvestmentAmountException(
+          'Quantity must be greater than zero.',
+        );
+      }
+
+      if (!price.isZero()) {
+        throw createInvalidInvestmentAmountException(
+          'Price must be zero for bonus and split transactions.',
+        );
+      }
+    }
+
+    if (type === 'DIVIDEND' || type === 'INTEREST') {
+      if (!quantity.isZero()) {
+        throw createInvalidInvestmentAmountException(
+          'Quantity must be zero for dividend and interest transactions.',
+        );
+      }
+
+      if (!price.isZero()) {
+        throw createInvalidInvestmentAmountException(
+          'Price must be zero for dividend and interest transactions.',
+        );
+      }
     }
 
     if (investment.fees !== undefined) {
@@ -436,6 +478,27 @@ export class TransactionsService {
           'Fees cannot be negative.',
         );
       }
+    }
+  }
+
+  private getExpectedTradeType(type: string): string {
+    switch (type) {
+      case 'INVESTMENT_BUY':
+        return 'BUY';
+      case 'INVESTMENT_SELL':
+        return 'SELL';
+      case 'DIVIDEND':
+        return 'DIVIDEND';
+      case 'INTEREST':
+        return 'INTEREST';
+      case 'INVESTMENT_SPLIT':
+        return 'SPLIT';
+      case 'INVESTMENT_BONUS':
+        return 'BONUS';
+      case 'INVESTMENT_REINVESTMENT':
+        return 'REINVESTMENT';
+      default:
+        return type;
     }
   }
 

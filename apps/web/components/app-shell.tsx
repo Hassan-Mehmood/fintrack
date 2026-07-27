@@ -3,6 +3,7 @@
 import Link from "next/link"
 import {
   BarChart3Icon,
+  FolderIcon,
   GaugeIcon,
   GemIcon,
   LandmarkIcon,
@@ -35,7 +36,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-type AppSection = "dashboard" | "accounts" | "assets" | "transactions" | "settings"
+type AppSection = "dashboard" | "accounts" | "assets" | "transactions" | "investments" | "portfolios" | "settings"
 
 const navigationItems = [
   {
@@ -63,7 +64,18 @@ const navigationItems = [
     icon: GemIcon,
     section: "assets" as const,
   },
-  { label: "Investments", icon: BarChart3Icon },
+  {
+    label: "Investments",
+    href: "/investments",
+    icon: BarChart3Icon,
+    section: "investments" as const,
+  },
+  {
+    label: "Portfolios",
+    href: "/portfolios",
+    icon: FolderIcon,
+    section: "portfolios" as const,
+  },
   { label: "Goals", icon: TargetIcon },
   {
     label: "Settings",

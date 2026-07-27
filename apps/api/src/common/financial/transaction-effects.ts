@@ -11,12 +11,18 @@ export function getSourceAccountEffect(
     case 'INCOME':
     case 'REFUND':
     case 'INVESTMENT_SELL':
+    case 'DIVIDEND':
+    case 'INTEREST':
       return amount;
     case 'EXPENSE':
     case 'FEE':
     case 'INVESTMENT_BUY':
+    case 'INVESTMENT_REINVESTMENT':
     case 'TRANSFER':
       return amount.neg();
+    case 'INVESTMENT_SPLIT':
+    case 'INVESTMENT_BONUS':
+      return new Decimal(0);
     case 'ADJUSTMENT':
       return amount;
   }

@@ -6,17 +6,20 @@ import type {
 } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CurrencyConverter } from '../../common/financial/currency-converter';
 import {
   calculateAccountBalance,
   hasDestinationBalanceEffect,
   getSourceAccountEffect,
 } from '../../common/financial/transaction-effects';
+import { InvestmentsService } from '../investments/investments.service';
 import type {
   AssetAllocationItem,
   DashboardAccountItem,
   DashboardData,
   DashboardMetrics,
   DashboardUnavailableSection,
+  InvestmentAllocationItem,
   MonthlySummaryItem,
   RecentActivityItem,
 } from './analytics.types';
@@ -82,12 +85,16 @@ interface RawTransaction {
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly investmentsService: InvestmentsService,
+  ) {}
 
   async getDashboardForUser(user: AuthenticatedUser): Promise<DashboardData> {
-    const [accounts, transactions] = await Promise.all([
+    const [accounts, transactions, holdingsResult] = await Promise.all([
       this.fetchAccounts(user.id),
       this.fetchTransactions(user.id),
+      this.investmentsService.getHoldingsForUser(user),
     ]);
 
     const converter = new CurrencyConverter(
@@ -104,6 +111,7 @@ export class AnalyticsService {
       accounts,
       convertedBalances,
       transactions,
+      holdingsResult.holdings,
       converter,
     );
     const accountItems = this.buildAccountItems(
@@ -118,6 +126,9 @@ export class AnalyticsService {
       accounts,
       convertedBalances,
     );
+    const investmentAllocation = this.buildInvestmentAllocation(
+      holdingsResult.holdings,
+    );
 
     return {
       baseCurrency: user.baseCurrency,
@@ -126,6 +137,7 @@ export class AnalyticsService {
       monthlySummary,
       recentActivity,
       assetAllocation,
+      investmentAllocation,
       unavailable: this.buildUnavailableSections(),
     };
   }
@@ -195,6 +207,12 @@ export class AnalyticsService {
     accounts: readonly RawAccount[],
     balances: ReadonlyMap<string, Decimal>,
     transactions: readonly RawTransaction[],
+    holdings: ReadonlyArray<{
+      readonly costBasis: string;
+      readonly currentValue: string;
+      readonly realizedGain: string;
+      readonly unrealizedGain: string;
+    }>,
     converter: CurrencyConverter,
   ): DashboardMetrics {
     const totalNetWorth = accounts.reduce(
@@ -246,10 +264,34 @@ export class AnalyticsService {
 
     const investedCashThisMonth = this.sumByTypeAndPeriod(
       transactions,
-      ['INVESTMENT_BUY'],
+      ['INVESTMENT_BUY', 'INVESTMENT_REINVESTMENT'],
       currentMonthStart,
       converter,
     );
+
+    const totalInvestmentValue = holdings.reduce(
+      (sum, holding) => sum.add(new Decimal(holding.currentValue)),
+      new Decimal(0),
+    );
+    const totalInvestmentCostBasis = holdings.reduce(
+      (sum, holding) => sum.add(new Decimal(holding.costBasis)),
+      new Decimal(0),
+    );
+    const totalUnrealizedGain = holdings.reduce(
+      (sum, holding) => sum.add(new Decimal(holding.unrealizedGain)),
+      new Decimal(0),
+    );
+    const totalRealizedGain = holdings.reduce(
+      (sum, holding) => sum.add(new Decimal(holding.realizedGain)),
+      new Decimal(0),
+    );
+    const totalUnrealizedGainPercent = totalInvestmentCostBasis.isZero()
+      ? null
+      : totalUnrealizedGain
+          .dividedBy(totalInvestmentCostBasis)
+          .times(100)
+          .toDecimalPlaces(2)
+          .toNumber();
 
     return {
       totalNetWorth: totalNetWorth.toFixed(2),
@@ -260,6 +302,11 @@ export class AnalyticsService {
       investedCashThisMonth: investedCashThisMonth.isZero()
         ? null
         : investedCashThisMonth.toFixed(2),
+      totalInvestmentValue: totalInvestmentValue.toFixed(2),
+      totalInvestmentCostBasis: totalInvestmentCostBasis.toFixed(2),
+      totalUnrealizedGain: totalUnrealizedGain.toFixed(2),
+      totalUnrealizedGainPercent,
+      totalRealizedGain: totalRealizedGain.toFixed(2),
     };
   }
 
@@ -282,6 +329,8 @@ export class AnalyticsService {
         );
         switch (transaction.type) {
           case 'INCOME':
+          case 'DIVIDEND':
+          case 'INTEREST':
             return sum.add(convertedAmount);
           case 'EXPENSE':
           case 'FEE':
@@ -292,7 +341,10 @@ export class AnalyticsService {
           case 'INVESTMENT_SELL':
             return sum.add(convertedAmount);
           case 'INVESTMENT_BUY':
+          case 'INVESTMENT_REINVESTMENT':
           case 'TRANSFER':
+          case 'INVESTMENT_SPLIT':
+          case 'INVESTMENT_BONUS':
             return sum;
           default:
             return sum;
@@ -372,7 +424,7 @@ export class AnalyticsService {
 
       const income = this.sumByTypeAndPeriod(
         transactions,
-        ['INCOME'],
+        ['INCOME', 'DIVIDEND', 'INTEREST'],
         monthStart,
         converter,
         monthEnd,
@@ -386,7 +438,7 @@ export class AnalyticsService {
       );
       const investments = this.sumByTypeAndPeriod(
         transactions,
-        ['INVESTMENT_BUY'],
+        ['INVESTMENT_BUY', 'INVESTMENT_REINVESTMENT'],
         monthStart,
         converter,
         monthEnd,
@@ -472,15 +524,44 @@ export class AnalyticsService {
     });
   }
 
+  private buildInvestmentAllocation(
+    holdings: ReadonlyArray<{
+      readonly categoryName: string;
+      readonly currentValue: string;
+    }>,
+  ): readonly InvestmentAllocationItem[] {
+    if (holdings.length === 0) {
+      return [];
+    }
+
+    const totalValue = holdings.reduce(
+      (sum, holding) => sum.add(new Decimal(holding.currentValue)),
+      new Decimal(0),
+    );
+
+    const categoryValues = new Map<string, Decimal>();
+
+    for (const holding of holdings) {
+      const current = categoryValues.get(holding.categoryName) ?? new Decimal(0);
+      categoryValues.set(
+        holding.categoryName,
+        current.add(new Decimal(holding.currentValue)),
+      );
+    }
+
+    return Array.from(categoryValues.entries()).map(([category, value]) => ({
+      category,
+      value: totalValue.isZero()
+        ? 0
+        : value.dividedBy(totalValue).times(100).toDecimalPlaces(1).toNumber(),
+    }));
+  }
+
   private buildUnavailableSections(): readonly DashboardUnavailableSection[] {
     return [
       {
         section: 'Expense breakdown',
         reason: 'Categories are not available yet.',
-      },
-      {
-        section: 'Investment performance',
-        reason: 'Investment holdings are not available yet.',
       },
       {
         section: 'Goal progress',
@@ -494,43 +575,15 @@ export class AnalyticsService {
   }
 }
 
-class CurrencyConverter {
-  readonly baseCurrency: string;
-  private readonly rate: Decimal | null;
-
-  constructor(baseCurrency: string, exchangeRate: string | null) {
-    this.baseCurrency = baseCurrency;
-    this.rate = exchangeRate ? new Decimal(exchangeRate) : null;
-  }
-
-  convert(amount: Decimal, fromCurrency: string): Decimal {
-    if (fromCurrency === this.baseCurrency) {
-      return amount;
-    }
-
-    if (!this.rate || this.rate.isZero()) {
-      return amount;
-    }
-
-    // If base is USD and from is PKR: divide by rate (e.g., 280 PKR / 280 = 1 USD)
-    // If base is PKR and from is USD: multiply by rate (e.g., 1 USD * 280 = 280 PKR)
-    if (this.baseCurrency === 'USD' && fromCurrency === 'PKR') {
-      return amount.dividedBy(this.rate).toDecimalPlaces(8);
-    }
-
-    if (this.baseCurrency === 'PKR' && fromCurrency === 'USD') {
-      return amount.times(this.rate).toDecimalPlaces(8);
-    }
-
-    return amount;
-  }
-}
-
 function getActivityTone(
   type: TransactionType,
   effect: Decimal,
 ): RecentActivityItem['tone'] {
-  if (type === 'TRANSFER') {
+  if (
+    type === 'TRANSFER' ||
+    type === 'INVESTMENT_SPLIT' ||
+    type === 'INVESTMENT_BONUS'
+  ) {
     return 'neutral';
   }
 

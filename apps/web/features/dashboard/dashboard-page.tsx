@@ -22,6 +22,7 @@ import {
   WalletCardsIcon,
 } from "lucide-react"
 
+
 import Link from "next/link"
 
 import { AppShell } from "@/components/app-shell"
@@ -53,6 +54,7 @@ import { dashboardQueryKey, getDashboard } from "./dashboard-api"
 import {
   AssetAllocationChart,
   IncomeExpenseInvestmentChart,
+  InvestmentAllocationChart,
 } from "./dashboard-charts"
 import type {
   DashboardAccountItem,
@@ -92,11 +94,6 @@ const comingSoonSections = [
     section: "Expense breakdown",
     reason: "Categories are not available yet.",
     icon: ReceiptTextIcon,
-  },
-  {
-    section: "Investment performance",
-    reason: "Investment holdings are not available yet.",
-    icon: TrendingUpIcon,
   },
   {
     section: "Goal progress",
@@ -161,6 +158,55 @@ export function DashboardPage() {
           ))}
         </section>
 
+        {isLoading || !data ? null : (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <InvestmentMetricCard
+              label="Investment value"
+              value={data.metrics.totalInvestmentValue}
+              currency={data.baseCurrency}
+              detail="Current market value"
+              icon={TrendingUpIcon}
+            />
+            <InvestmentMetricCard
+              label="Cost basis"
+              value={data.metrics.totalInvestmentCostBasis}
+              currency={data.baseCurrency}
+              detail="Total invested"
+              icon={PiggyBankIcon}
+            />
+            <InvestmentMetricCard
+              label="Unrealized gain"
+              value={data.metrics.totalUnrealizedGain}
+              currency={data.baseCurrency}
+              detail={
+                data.metrics.totalUnrealizedGainPercent !== null
+                  ? `${data.metrics.totalUnrealizedGainPercent >= 0 ? "+" : ""}${data.metrics.totalUnrealizedGainPercent}% unrealized`
+                  : "Unrealized gain"
+              }
+              tone={
+                data.metrics.totalUnrealizedGainPercent === null
+                  ? "neutral"
+                  : data.metrics.totalUnrealizedGainPercent >= 0
+                    ? "success"
+                    : "error"
+              }
+              icon={ArrowUpRightIcon}
+            />
+            <InvestmentMetricCard
+              label="Realized gain"
+              value={data.metrics.totalRealizedGain}
+              currency={data.baseCurrency}
+              detail="Lifetime realized"
+              tone={
+                Number(data.metrics.totalRealizedGain) >= 0
+                  ? "success"
+                  : "error"
+              }
+              icon={ArrowDownLeftIcon}
+            />
+          </section>
+        )}
+
         {isLoading || !data ? (
           <DashboardSkeleton />
         ) : data.accounts.length === 0 ? (
@@ -213,6 +259,68 @@ export function DashboardPage() {
               </Card>
             </section>
 
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.9fr)]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Investment allocation</CardTitle>
+                  <CardDescription>
+                    Holdings grouped by asset category.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {data.investmentAllocation.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No investments recorded yet.
+                    </p>
+                  ) : (
+                    <>
+                      <InvestmentAllocationChart data={data.investmentAllocation} />
+                      <div className="grid gap-2">
+                        {data.investmentAllocation.map((item) => (
+                          <div
+                            key={item.category}
+                            className="flex items-center justify-between gap-3 text-sm"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="size-2.5 rounded-full"
+                                style={{
+                                  backgroundColor: `var(--color-${item.category})`,
+                                }}
+                                aria-hidden="true"
+                              />
+                              <span className="truncate">{item.category}</span>
+                            </div>
+                            <span className="font-mono text-sm">{item.value}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent activity</CardTitle>
+                  <CardDescription>
+                    Latest recorded account movements.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {data.recentActivity.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No recent activity. Record a transaction to see it here.
+                    </p>
+                  ) : (
+                    data.recentActivity.map((activity) => (
+                      <ActivityRow key={activity.id} activity={activity} />
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
               <Card>
                 <CardHeader>
@@ -246,26 +354,6 @@ export function DashboardPage() {
                   description="Spending by category for the current month."
                   icon={ReceiptTextIcon}
                 />
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent activity</CardTitle>
-                    <CardDescription>
-                      Latest recorded account movements.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    {data.recentActivity.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No recent activity. Record a transaction to see it here.
-                      </p>
-                    ) : (
-                      data.recentActivity.map((activity) => (
-                        <ActivityRow key={activity.id} activity={activity} />
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
               </div>
             </section>
 
@@ -337,6 +425,56 @@ function MetricCard({ label, value, currency, detail, icon: Icon }: MetricCardPr
         ) : (
           <Skeleton className="h-8 w-3/4" />
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+interface InvestmentMetricCardProps {
+  readonly label: string
+  readonly value: string
+  readonly currency: string
+  readonly detail: string
+  readonly icon: typeof CircleDollarSignIcon
+  readonly tone?: "success" | "error" | "neutral"
+}
+
+function InvestmentMetricCard({
+  label,
+  value,
+  currency,
+  detail,
+  icon: Icon,
+  tone = "neutral",
+}: InvestmentMetricCardProps) {
+  const isGainCard = label === "Unrealized gain" || label === "Realized gain"
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{label}</CardTitle>
+        <CardAction>
+          <div className="flex size-9 items-center justify-center rounded-md bg-muted">
+            <Icon className="size-4" aria-hidden="true" />
+          </div>
+        </CardAction>
+        <CardDescription>{detail}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <p
+          className={cn(
+            "font-mono text-2xl font-semibold tracking-normal",
+            tone === "success"
+              ? "text-[var(--state-success)]"
+              : tone === "error"
+                ? "text-[var(--state-error)]"
+                : "text-foreground"
+          )}
+        >
+          {isGainCard
+            ? formatSignedAmount(value, currency)
+            : formatAmount(value, currency)}
+        </p>
       </CardContent>
     </Card>
   )
@@ -467,6 +605,20 @@ function EmptyAccountsState() {
 function DashboardSkeleton() {
   return (
     <>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Card key={index}>
+            <CardHeader>
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-4 w-2/3" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-8 w-3/4" />
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.9fr)]">
         <Card>
           <CardHeader>
@@ -485,6 +637,28 @@ function DashboardSkeleton() {
           </CardHeader>
           <CardContent>
             <Skeleton className="mx-auto aspect-square h-[260px] rounded-full" />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.9fr)]">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-1/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="mx-auto aspect-square h-[260px] rounded-full" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-5 w-1/3" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-[200px] w-full rounded-lg" />
           </CardContent>
         </Card>
       </section>

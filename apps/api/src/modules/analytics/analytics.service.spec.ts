@@ -119,6 +119,10 @@ describe('AnalyticsService', () => {
     };
   };
 
+  let investmentsService: {
+    getHoldingsForUser: jest.Mock;
+  };
+
   beforeEach(() => {
     prisma = {
       account: {
@@ -129,7 +133,17 @@ describe('AnalyticsService', () => {
       },
     };
 
-    service = new AnalyticsService(prisma as never);
+    investmentsService = {
+      getHoldingsForUser: jest.fn().mockResolvedValue({
+        holdings: [],
+        baseCurrency: 'USD',
+      }),
+    };
+
+    service = new AnalyticsService(
+      prisma as never,
+      investmentsService as never,
+    );
   });
 
   it('returns zero metrics when the user has no accounts', async () => {
@@ -142,12 +156,18 @@ describe('AnalyticsService', () => {
     expect(dashboard.metrics.totalNetWorth).toBe('0.00');
     expect(dashboard.metrics.liquidCash).toBe('0.00');
     expect(dashboard.metrics.investedCash).toBe('0.00');
+    expect(dashboard.metrics.totalInvestmentValue).toBe('0.00');
+    expect(dashboard.metrics.totalInvestmentCostBasis).toBe('0.00');
+    expect(dashboard.metrics.totalUnrealizedGain).toBe('0.00');
+    expect(dashboard.metrics.totalUnrealizedGainPercent).toBeNull();
+    expect(dashboard.metrics.totalRealizedGain).toBe('0.00');
     expect(dashboard.accounts).toEqual([]);
     expect(dashboard.assetAllocation).toEqual([
       { name: 'cash', label: 'Cash & bank', value: 0 },
       { name: 'brokerage', label: 'Brokerage', value: 0 },
       { name: 'crypto', label: 'Crypto', value: 0 },
     ]);
+    expect(dashboard.investmentAllocation).toEqual([]);
   });
 
   it('calculates balances from opening balances and transactions', async () => {
@@ -374,7 +394,6 @@ describe('AnalyticsService', () => {
     expect(dashboard.unavailable).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ section: 'Expense breakdown' }),
-        expect.objectContaining({ section: 'Investment performance' }),
         expect.objectContaining({ section: 'Goal progress' }),
         expect.objectContaining({ section: 'Budget progress' }),
       ]),
