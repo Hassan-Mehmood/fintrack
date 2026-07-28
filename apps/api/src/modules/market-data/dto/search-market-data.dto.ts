@@ -1,10 +1,21 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { AssetMarketType } from '../../../generated/prisma/enums';
 
 export class SearchMarketDataDto {
   @IsEnum(AssetMarketType)
   type!: AssetMarketType;
+
+  @IsOptional()
+  @IsIn(['US', 'PSX'])
+  exchange?: 'US' | 'PSX';
 
   @IsString()
   @MinLength(2)

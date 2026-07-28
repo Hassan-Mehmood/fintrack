@@ -53,6 +53,7 @@ interface AddAssetDialogProps {
   readonly errorMessage?: string | null
   readonly getToken: () => Promise<string | null>
   readonly isPending: boolean
+  readonly initialMarketSelection?: "US_STOCK" | "PSX_STOCK" | "CRYPTO"
   readonly onAddProviderAsset: (asset: MarketSearchResult) => Promise<void>
   readonly onManualAsset: () => void
   readonly onOpenChange: (open: boolean) => void
@@ -63,12 +64,15 @@ export function AddAssetDialog({
   errorMessage,
   getToken,
   isPending,
+  initialMarketSelection = "US_STOCK",
   onAddProviderAsset,
   onManualAsset,
   onOpenChange,
   open,
 }: AddAssetDialogProps) {
-  const [marketType, setMarketType] = useState<"STOCK" | "CRYPTO">("STOCK")
+  const [marketSelection, setMarketSelection] = useState<
+    "US_STOCK" | "PSX_STOCK" | "CRYPTO"
+  >(initialMarketSelection)
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
 
@@ -79,10 +83,30 @@ export function AddAssetDialog({
     return () => window.clearTimeout(timer)
   }, [query])
 
+  const marketType = marketSelection === "CRYPTO" ? "CRYPTO" : "STOCK"
+  const exchange =
+    marketSelection === "PSX_STOCK"
+      ? "PSX"
+      : marketSelection === "US_STOCK"
+        ? "US"
+        : undefined
+
   const searchQuery = useQuery({
-    queryKey: ["market-data", "search", marketType, debouncedQuery],
+    queryKey: [
+      "market-data",
+      "search",
+      marketType,
+      exchange,
+      debouncedQuery,
+    ],
     queryFn: ({ signal }) =>
-      searchMarketAssets(getToken, marketType, debouncedQuery, signal),
+      searchMarketAssets(
+        getToken,
+        marketType,
+        debouncedQuery,
+        signal,
+        exchange
+      ),
     enabled: open && debouncedQuery.length >= 2,
     retry: false,
   })
@@ -119,9 +143,11 @@ export function AddAssetDialog({
               <Field>
                 <FieldLabel htmlFor="market-asset-type">Asset type</FieldLabel>
                 <Select
-                  value={marketType}
+                  value={marketSelection}
                   onValueChange={(value) => {
-                    setMarketType(value as "STOCK" | "CRYPTO")
+                    setMarketSelection(
+                      value as "US_STOCK" | "PSX_STOCK" | "CRYPTO"
+                    )
                   }}
                 >
                   <SelectTrigger id="market-asset-type" className="w-full">
@@ -129,7 +155,8 @@ export function AddAssetDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="STOCK">US stock</SelectItem>
+                      <SelectItem value="US_STOCK">US stock</SelectItem>
+                      <SelectItem value="PSX_STOCK">PSX stock</SelectItem>
                       <SelectItem value="CRYPTO">Cryptocurrency</SelectItem>
                     </SelectGroup>
                   </SelectContent>
@@ -150,7 +177,11 @@ export function AddAssetDialog({
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder={
-                      marketType === "STOCK" ? "Apple or AAPL" : "Bitcoin or BTC"
+                      marketSelection === "US_STOCK"
+                        ? "Apple or AAPL"
+                        : marketSelection === "PSX_STOCK"
+                          ? "Lucky Cement or LUCK"
+                          : "Bitcoin or BTC"
                     }
                   />
                 </div>
@@ -228,7 +259,6 @@ export function AddAssetDialog({
                       {result.exchange ? (
                         <Badge variant="outline">{result.exchange}</Badge>
                       ) : null}
-                      <Badge variant="secondary">{result.provider}</Badge>
                     </span>
                   </Button>
                 ))}

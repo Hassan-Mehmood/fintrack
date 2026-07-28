@@ -11,7 +11,7 @@ The system uses:
 * **PostgreSQL** for persistent data
 * **Prisma** for database access
 
-The first version uses a simple modular architecture. It does not include microservices, AI processing, background workers, or streaming market data. On-demand Finnhub and CoinGecko requests are normalized by the API and cached in Redis.
+The first version uses a simple modular architecture. It does not include microservices, AI processing, background workers, or streaming market data. On-demand Finnhub, EODHD, and CoinGecko requests are normalized by the API and cached in Redis.
 
 ---
 
@@ -33,7 +33,7 @@ The first version uses a simple modular architecture. It does not include micros
 | Database            | PostgreSQL                      | Stores financial and user data                    |
 | ORM                 | Prisma                          | Manages database queries, schema, and migrations  |
 | Authentication      | Clerk                           | Handles registration, login, and sessions         |
-| Market data         | Finnhub and CoinGecko           | Provides US stock and cryptocurrency search and quotes |
+| Market data         | Finnhub, EODHD, and CoinGecko | Provides US stock, PSX end-of-day, and cryptocurrency market data |
 | Cache               | Redis                            | Caches quotes and coordinates provider rate limits |
 | Package manager     | pnpm                            | Manages project dependencies                      |
 
@@ -344,7 +344,9 @@ owner user ID
 
 ### Cache
 
-Redis stores short-lived normalized market quotes, stale quote fallbacks, and provider request-budget counters. PostgreSQL remains authoritative for assets and transactions; Redis loss must not corrupt financial history.
+Redis stores normalized market quotes, EODHD historical ranges, provider symbol catalogs, stale fallbacks, and provider request-budget counters. Finnhub and CoinGecko quotes are fresh for 60 seconds and retained for 24-hour fallback. EODHD PSX quotes and history are fresh for 24 hours and retained for seven-day fallback; its `KAR` stock/ETF catalog is fresh for 24 hours and retained for 30-day fallback. EODHD requests share a configurable 20-call daily budget. PostgreSQL remains authoritative for assets and transactions; Redis loss must not corrupt financial history.
+
+The authenticated market-data API exposes PSX search and symbol listing using public exchange value `PSX`, while the provider adapter translates to EODHD exchange code `KAR` and immutable identifiers such as `LUCK.KAR`. Owned EODHD assets may request daily history for a maximum 366-day range. EODHD prices are explicitly marked as end-of-day and never presented as real-time quotes.
 
 ---
 
@@ -667,5 +669,5 @@ The first version does not require:
 5. Financial calculations use decimal arithmetic.
 6. Every user-owned operation is scoped to the authenticated user.
 7. The initial version does not include AI, background workers, streaming prices, or automatic transaction imports.
-8. Finnhub and CoinGecko credentials remain in the API environment; provider responses are normalized before reaching the web application.
+8. Finnhub, EODHD, and CoinGecko credentials remain in the API environment; provider responses are normalized before reaching the web application.
 9. Provider-backed assets use immutable provider identifiers, while historical transaction prices remain independent of current quotes.

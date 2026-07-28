@@ -8,10 +8,17 @@ export interface Holding {
   readonly averageCost: string | null
   readonly currentPrice: string | null
   readonly priceCurrency: string
-  readonly priceProvider: "FINNHUB" | "COINGECKO" | null
+  readonly priceProvider:
+    | "FINNHUB"
+    | "COINGECKO"
+    | "EODHD"
+    | null
   readonly priceStatus: "AVAILABLE" | "STALE" | "UNAVAILABLE"
+  readonly priceType: "CURRENT" | "EOD"
   readonly priceUpdatedAt: string | null
+  readonly providerDate: string | null
   readonly providerMarketAt: string | null
+  readonly priceChange: string | null
   readonly priceChangePercent: string | null
   readonly costBasis: string
   readonly currentValue: string | null

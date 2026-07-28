@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- Market-data integration implemented; ready for migration deployment and authenticated provider verification.
+- EODHD PSX market-data integration implemented; ready for migration deployment and authenticated provider verification.
 
 ## Current Goal
 
-- Configure provider credentials, deploy the market-data migration, and run authenticated live-provider verification.
+- Configure EODHD credentials, deploy the provider enum migration, and run authenticated live-provider verification.
 
 ## Completed
 
@@ -162,6 +162,15 @@ change.
 - Added provider adapter, holdings, and market-search tests plus a Vitest/Testing Library setup for the web app.
 - Verified the integration with Prisma validation, API build, 75 Jest tests, API e2e, scoped API lint, web type-check, web lint, 2 Vitest tests, and the Next.js production build.
 - Applied the `add_market_data_integration` migration to the Neon database, adding provider metadata columns to assets and transaction idempotency support.
+- Replaced the previous unapplied PSX provider decision in product and architecture documents with EODHD end-of-day data.
+- Added the `EODHD` enum migration and configured `EODHD_API_TOKEN`, `EODHD_BASE_URL`, and a 20-request daily budget.
+- Applied the `add_eodhd_provider` migration to the Neon database so the PostgreSQL `AssetProvider` enum accepts `EODHD`.
+- Added the EODHD adapter with cached `KAR` stock/ETF catalog search, canonical `.KAR` identifiers, bounded EOD quote retrieval, normalized OHLCV bars, and safe query-token authentication.
+- Added authenticated PSX symbol listing and owned-asset daily history endpoints, 24-hour EOD/history caches with stale fallback, and Redis-backed 20-call daily budgeting.
+- Extended asset and holding contracts and UI metadata with explicit current/EOD price type, provider date, OHLC fields, and EOD/stale labels.
+- Added EODHD adapter, service, controller, budgeting, caching, and web search tests without live provider calls.
+- Verified Prisma validation/generation, API build, 94 Jest tests, scoped API lint, API e2e, web type-check/lint, 3 Vitest tests, and the Next.js production build.
+- Removed provider-name badges from add-asset market search results and simplified the assets table so current price and daily change render in separate columns without provider metadata in the price cell.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
@@ -171,7 +180,7 @@ change.
 
 ## Next Up
 
-- Configure `FINNHUB_API_KEY`, `COINGECKO_API_KEY`, and `REDIS_URL` before live-provider verification.
+- Configure `FINNHUB_API_KEY`, `COINGECKO_API_KEY`, `EODHD_API_TOKEN`, and `REDIS_URL` before live-provider verification.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Run end-to-end manual verification of the `/assets`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
@@ -198,8 +207,9 @@ change.
 - Investment assets are modeled as user-owned records linked to global `AssetCategory` and `RiskProfile` reference tables, matching the existing per-user ownership model.
 - Asset categories and risk profiles ship as seed data and are configurable by extending the reference tables; no admin UI is required for MVP.
 - Holdings, cost basis, and investment performance will be derived from transactions rather than stored independently, per `specs/api/004-adding-investments.md`.
-- Finnhub provides on-demand US-stock data and CoinGecko Demo provides cryptocurrency data through a provider-independent NestJS market-data module.
-- Redis caches normalized quotes for 60 seconds, retains stale fallbacks for 24 hours, and coordinates provider request budgets.
+- Finnhub provides on-demand US-stock data, EODHD provides PSX stock and ETF end-of-day data, and CoinGecko Demo provides cryptocurrency data through a provider-independent NestJS market-data module.
+- `STOCK` remains the domain market type; the search API uses `exchange=US|PSX` to route stock searches without exposing provider selection.
+- Redis caches Finnhub and CoinGecko quotes for 60 seconds with 24-hour fallback, caches EODHD quotes/history for 24 hours with seven-day fallback, caches the EODHD catalog for 24 hours with 30-day fallback, and coordinates provider request budgets.
 - Existing accounts are the wallet boundary for investment transactions; deposits and withdrawals move asset quantity without changing cash balances.
 - Provider-backed asset identifiers and pricing modes are immutable, while manual assets retain manually editable prices.
 

@@ -112,9 +112,13 @@ export async function searchMarketAssets(
   getToken: GetToken,
   type: "STOCK" | "CRYPTO",
   query: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  exchange?: "US" | "PSX"
 ): Promise<readonly MarketSearchResult[]> {
   const params = new URLSearchParams({ type, query })
+  if (exchange) {
+    params.set("exchange", exchange)
+  }
   const response = await apiRequest<{
     readonly data: readonly MarketSearchResult[]
   }>(getToken, `/api/v1/market-data/search?${params}`, { signal })
@@ -124,7 +128,7 @@ export async function searchMarketAssets(
 export async function createProviderAsset(
   getToken: GetToken,
   payload: {
-    readonly provider: "FINNHUB" | "COINGECKO"
+    readonly provider: "FINNHUB" | "COINGECKO" | "EODHD"
     readonly type: "STOCK" | "CRYPTO"
     readonly providerAssetId: string
   }

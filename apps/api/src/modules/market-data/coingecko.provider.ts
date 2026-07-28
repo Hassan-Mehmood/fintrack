@@ -75,15 +75,26 @@ export class CoinGeckoProvider implements MarketDataProvider {
         providerAssetId,
         price: String(item.usd),
         currency: 'USD',
+        priceType: 'CURRENT',
+        providerDate: null,
         providerMarketAt:
           typeof item.last_updated_at === 'number' && item.last_updated_at > 0
             ? new Date(item.last_updated_at * 1000).toISOString()
             : null,
         fetchedAt,
+        open: null,
+        high: null,
+        low: null,
+        close: null,
+        adjustedClose: null,
+        change: null,
         changePercent:
           typeof item.usd_24h_change === 'number'
             ? String(item.usd_24h_change)
             : null,
+        volume: null,
+        bid: null,
+        ask: null,
       });
     }
 

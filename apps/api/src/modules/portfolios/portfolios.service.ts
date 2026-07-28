@@ -36,7 +36,7 @@ interface InvestmentDetailRecord {
     readonly name: string;
     readonly currentPrice: Decimal | null;
     readonly priceCurrency: string | null;
-    readonly provider: 'FINNHUB' | 'COINGECKO' | null;
+    readonly provider: 'FINNHUB' | 'COINGECKO' | 'EODHD' | null;
     readonly providerAssetId: string | null;
     readonly category: {
       readonly name: string;

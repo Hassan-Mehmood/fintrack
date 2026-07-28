@@ -78,11 +78,13 @@ export function HoldingsTable({ baseCurrency, holdings }: HoldingsTableProps) {
                     : "Unavailable"}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {holding.priceStatus === "STALE"
-                    ? "Stale"
-                    : holding.priceProvider ?? "Manual"}
-                  {holding.priceUpdatedAt
-                    ? ` · ${formatDate(holding.priceUpdatedAt)}`
+                  {holding.priceProvider ?? "Manual"}
+                  {holding.priceType === "EOD" ? " · End of day" : ""}
+                  {holding.priceStatus === "STALE" ? " · Stale" : ""}
+                  {holding.providerDate
+                    ? ` · ${formatDate(`${holding.providerDate}T00:00:00`)}`
+                    : holding.priceUpdatedAt
+                      ? ` · ${formatDate(holding.priceUpdatedAt)}`
                     : ""}
                 </span>
               </div>

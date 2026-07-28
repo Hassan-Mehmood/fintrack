@@ -38,6 +38,7 @@ enum TransactionType {
 enum AssetProvider {
   FINNHUB
   COINGECKO
+  EODHD
 }
 
 enum AssetMarketType {

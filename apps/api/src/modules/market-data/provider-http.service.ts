@@ -5,18 +5,20 @@ import {
 } from './market-data.errors';
 import { RedisCacheService } from './redis-cache.service';
 
+type MarketProvider = 'FINNHUB' | 'COINGECKO' | 'EODHD';
+
 @Injectable()
 export class ProviderHttpService {
   constructor(private readonly cache: RedisCacheService) {}
 
   async getJson(
-    provider: 'FINNHUB' | 'COINGECKO',
+    provider: MarketProvider,
     url: URL,
     headers: Readonly<Record<string, string>>,
+    options: { readonly notFoundAsNull?: boolean } = {},
   ): Promise<unknown> {
-    await this.consumeBudget(provider);
-
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      await this.consumeBudget(provider);
       let response: Response;
       try {
         response = await fetch(url, {
@@ -38,6 +40,10 @@ export class ProviderHttpService {
         }
       }
 
+      if (response.status === 404 && options.notFoundAsNull) {
+        return null;
+      }
+
       const retryable =
         response.status === 429 ||
         response.status === 502 ||
@@ -57,19 +63,21 @@ export class ProviderHttpService {
     throw marketProviderFailureException(provider);
   }
 
-  private async consumeBudget(
-    provider: 'FINNHUB' | 'COINGECKO',
-  ): Promise<void> {
-    const configuredLimit =
-      provider === 'FINNHUB'
+  private async consumeBudget(provider: MarketProvider): Promise<void> {
+    const isDailyBudget = provider === 'EODHD';
+    const configuredLimit = isDailyBudget
+      ? process.env.EODHD_REQUESTS_PER_DAY
+      : provider === 'FINNHUB'
         ? process.env.FINNHUB_REQUESTS_PER_MINUTE
         : process.env.COINGECKO_REQUESTS_PER_MINUTE;
     const defaultLimit = provider === 'FINNHUB' ? 50 : 20;
     const limit = Number(configuredLimit ?? defaultLimit);
-    const minute = Math.floor(Date.now() / 60_000);
+    const budgetWindow = isDailyBudget
+      ? new Date().toISOString().slice(0, 10)
+      : String(Math.floor(Date.now() / 60_000));
     const count = await this.cache.incrementWithExpiry(
-      `market-data:budget:${provider}:${minute}`,
-      120,
+      `market-data:budget:${provider}:${budgetWindow}`,
+      isDailyBudget ? 172_800 : 120,
     );
 
     if (count > limit) {

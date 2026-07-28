@@ -53,7 +53,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { formatAmount, formatDate } from "@/lib/formatting"
+import {
+  formatAmount,
+  formatDate,
+  formatDateTime,
+  formatSignedAmount,
+} from "@/lib/formatting"
 
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
 import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
@@ -281,6 +286,7 @@ export function AssetsPage() {
                     <TableHead>Category</TableHead>
                     <TableHead>Risk</TableHead>
                     <TableHead className="text-right">Current price</TableHead>
+                    <TableHead className="text-right">Change</TableHead>
                     <TableHead>Updated</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -313,37 +319,30 @@ export function AssetsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono font-medium">
-                        <div className="flex flex-col items-end gap-1">
-                          <span>
-                            {asset.currentPrice && asset.priceCurrency
-                              ? formatAmount(
-                                  asset.currentPrice,
-                                  asset.priceCurrency
-                                )
-                              : "Unavailable"}
-                          </span>
-                          {asset.provider ? (
-                            <Badge
-                              variant={
-                                asset.priceStatus === "STALE"
-                                  ? "outline"
-                                  : "secondary"
-                              }
-                            >
-                              {asset.priceStatus === "STALE"
-                                ? "Stale"
-                                : asset.provider}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Manual
-                            </span>
-                          )}
-                        </div>
+                        {asset.currentPrice && asset.priceCurrency
+                          ? formatAmount(
+                              asset.currentPrice,
+                              asset.priceCurrency
+                            )
+                          : "Unavailable"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-medium">
+                        {asset.priceChange && asset.priceCurrency
+                          ? formatSignedAmount(
+                              asset.priceChange,
+                              asset.priceCurrency
+                            )
+                          : "—"}
                       </TableCell>
                       <TableCell>
-                        {asset.priceUpdatedAt
-                          ? formatDate(asset.priceUpdatedAt)
+                        {asset.priceType === "EOD" && asset.providerDate
+                          ? `EOD for ${formatDate(`${asset.providerDate}T00:00:00`)}`
+                          : asset.providerMarketAt || asset.priceUpdatedAt
+                          ? formatDateTime(
+                              asset.providerMarketAt ??
+                                asset.priceUpdatedAt ??
+                                asset.updatedAt
+                            )
                           : formatDate(asset.updatedAt)}
                       </TableCell>
                       <TableCell className="text-right">
@@ -509,8 +508,9 @@ function AssetsTableSkeleton() {
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-3"
+          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-3"
         >
+          <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />

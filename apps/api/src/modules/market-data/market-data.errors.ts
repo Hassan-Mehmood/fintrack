@@ -59,3 +59,21 @@ export function marketProviderRateLimitException(
     HttpStatus.TOO_MANY_REQUESTS,
   );
 }
+
+export function invalidMarketHistoryException(): BadRequestException {
+  return new BadRequestException(
+    errorBody(
+      'INVALID_MARKET_HISTORY_RANGE',
+      'History dates must be valid, ordered, and span no more than 366 days.',
+    ),
+  );
+}
+
+export function unsupportedMarketHistoryException(): BadRequestException {
+  return new BadRequestException(
+    errorBody(
+      'MARKET_HISTORY_UNSUPPORTED',
+      'Historical prices are not supported for this asset provider.',
+    ),
+  );
+}

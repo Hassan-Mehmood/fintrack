@@ -128,7 +128,7 @@ export class InvestmentsService {
       readonly symbol: string | null;
       readonly currentPrice: Decimal | null;
       readonly priceCurrency: string | null;
-      readonly provider: 'FINNHUB' | 'COINGECKO' | null;
+      readonly provider: 'FINNHUB' | 'COINGECKO' | 'EODHD' | null;
       readonly providerAssetId: string | null;
       readonly category: { readonly name: string };
       readonly riskProfile: { readonly name: string } | null;
@@ -290,8 +290,11 @@ export class InvestmentsService {
       priceStatus:
         marketPrice?.status ??
         (asset.currentPrice ? 'AVAILABLE' : 'UNAVAILABLE'),
+      priceType: marketPrice?.priceType ?? 'CURRENT',
       priceUpdatedAt: marketPrice?.fetchedAt ?? null,
+      providerDate: marketPrice?.providerDate ?? null,
       providerMarketAt: marketPrice?.providerMarketAt ?? null,
+      priceChange: marketPrice?.change ?? null,
       priceChangePercent: marketPrice?.changePercent ?? null,
       costBasis: convertedCostBasis.toFixed(2),
       currentValue: convertedCurrentValue?.toFixed(2) ?? null,
