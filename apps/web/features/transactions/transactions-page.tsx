@@ -25,6 +25,10 @@ import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
 
 import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
+import {
+  formatAmount,
+  formatSignedAmount,
+} from "@/lib/formatting"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
@@ -442,7 +446,10 @@ export function TransactionsPage() {
                                   : null}
                                 {" · "}
                                 {transaction.investmentDetail.quantity} @{" "}
-                                {transaction.investmentDetail.price}
+                                {formatAmount(
+                                  transaction.investmentDetail.price,
+                                  transaction.currency
+                                )}
                               </span>
                             ) : null}
                           </div>
@@ -739,27 +746,11 @@ function formatTransactionAmount(transaction: Transaction): string {
   const effectiveAmount =
     transaction.type === "ADJUSTMENT" ? numericAmount : sign * numericAmount
 
-  return formatAmount(effectiveAmount, transaction.currency)
-}
-
-function formatAmount(amount: number, currency: string): string {
-  const isNegative = amount < 0
-  const absoluteAmount = Math.abs(amount)
-  const formatted = new Intl.NumberFormat("en", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 8,
-  }).format(absoluteAmount)
-
-  return `${isNegative ? "-" : "+"} ${currency} ${formatted}`
+  return formatSignedAmount(effectiveAmount.toString(), transaction.currency)
 }
 
 function formatVolume(amount: number, currency: string): string {
-  const formatted = new Intl.NumberFormat("en", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 8,
-  }).format(amount)
-
-  return `${currency} ${formatted}`
+  return formatAmount(amount.toString(), currency)
 }
 
 function formatDate(value: string): string {

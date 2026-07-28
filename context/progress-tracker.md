@@ -171,6 +171,9 @@ change.
 - Added EODHD adapter, service, controller, budgeting, caching, and web search tests without live provider calls.
 - Verified Prisma validation/generation, API build, 94 Jest tests, scoped API lint, API e2e, web type-check/lint, 3 Vitest tests, and the Next.js production build.
 - Removed provider-name badges from add-asset market search results and simplified the assets table so current price and daily change render in separate columns without provider metadata in the price cell.
+- Removed the assets table's updated-price column to keep the table focused on the current price and daily change.
+- Standardized frontend USD and PKR monetary displays to exactly two decimal places through the shared currency formatter, including transaction amounts and investment prices.
+- Prevented portaled select menus from dismissing any parent dialog when clicked within its visual bounds, while preserving backdrop-click dismissal, with transaction and asset-dialog regression coverage.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 

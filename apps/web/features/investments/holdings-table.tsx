@@ -10,7 +10,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import { formatAmount, formatDate } from "@/lib/formatting"
+import {
+  formatAmount,
+  formatDate,
+  formatSignedAmount,
+} from "@/lib/formatting"
 
 import type { Holding } from "./investment-types"
 
@@ -151,12 +155,4 @@ function getGainColor(amount: string | null): string {
   }
 
   return "text-foreground"
-}
-
-function formatSignedAmount(amount: string, currency: string): string {
-  const value = Number(amount)
-  const sign = value < 0 ? "-" : "+"
-  const absolute = formatAmount(Math.abs(value).toString(), currency)
-
-  return `${sign} ${absolute}`
 }

@@ -51,19 +51,48 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onPointerDownOutside,
+  ref,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const [contentElement, setContentElement] =
+    React.useState<HTMLDivElement | null>(null)
+  const composedRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setContentElement(node)
+
+      if (typeof ref === "function") {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    },
+    [ref]
+  )
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={composedRef}
         data-slot="dialog-content"
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
+        onPointerDownOutside={(event) => {
+          onPointerDownOutside?.(event)
+
+          if (
+            !event.defaultPrevented &&
+            contentElement &&
+            isPointerInsideElement(event.detail.originalEvent, contentElement)
+          ) {
+            event.preventDefault()
+          }
+        }}
         {...props}
       >
         {children}
@@ -82,6 +111,22 @@ function DialogContent({
         )}
       </DialogPrimitive.Content>
     </DialogPortal>
+  )
+}
+
+function isPointerInsideElement(
+  event: PointerEvent,
+  element: HTMLElement
+): boolean {
+  const bounds = element.getBoundingClientRect()
+
+  return (
+    bounds.width > 0 &&
+    bounds.height > 0 &&
+    event.clientX >= bounds.left &&
+    event.clientX <= bounds.right &&
+    event.clientY >= bounds.top &&
+    event.clientY <= bounds.bottom
   )
 }
 

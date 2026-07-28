@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AddAssetDialog } from "./add-asset-dialog";
@@ -19,6 +20,37 @@ afterEach(() => {
 });
 
 describe("AddAssetDialog", () => {
+  it("stays open when a select is dismissed inside the dialog", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+
+    renderDialog({ onOpenChange });
+
+    const dialog = screen.getByRole("dialog");
+    vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(
+      DOMRect.fromRect({ x: 50, y: 50, width: 500, height: 500 }),
+    );
+
+    await user.click(screen.getByLabelText("Asset type"));
+    expect(screen.getByRole("option", { name: "US stock" })).toBeInTheDocument();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.pointerDown(document.body, {
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.click(document.body, { clientX: 100, clientY: 100 });
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(dialog).toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "US stock" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("debounces market searches and preserves the provider identifier", async () => {
     mockedSearch.mockResolvedValue([
       {
@@ -116,9 +148,11 @@ describe("AddAssetDialog", () => {
 function renderDialog({
   initialMarketSelection,
   onAddProviderAsset = vi.fn().mockResolvedValue(undefined),
+  onOpenChange = vi.fn(),
 }: {
   readonly initialMarketSelection?: "US_STOCK" | "PSX_STOCK" | "CRYPTO";
   readonly onAddProviderAsset?: (asset: MarketSearchResult) => Promise<void>;
+  readonly onOpenChange?: (open: boolean) => void;
 } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -133,7 +167,7 @@ function renderDialog({
         isPending={false}
         onAddProviderAsset={onAddProviderAsset}
         onManualAsset={() => undefined}
-        onOpenChange={() => undefined}
+        onOpenChange={onOpenChange}
       />
     </QueryClientProvider>,
   );

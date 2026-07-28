@@ -29,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/lib/utils"
-import { formatAmount } from "@/lib/formatting"
+import { formatAmount, formatSignedAmount } from "@/lib/formatting"
 import Link from "next/link"
 
 import {
@@ -256,14 +256,6 @@ function HoldingsTableSkeleton() {
       ))}
     </div>
   )
-}
-
-function formatSignedAmount(amount: string, currency: string): string {
-  const value = Number(amount)
-  const sign = value < 0 ? "-" : "+"
-  const absolute = formatAmount(Math.abs(value).toString(), currency)
-
-  return `${sign} ${absolute}`
 }
 
 function getTone(amount: string | undefined): "positive" | "negative" | "neutral" {

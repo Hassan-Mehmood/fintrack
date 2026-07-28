@@ -55,8 +55,6 @@ import {
 
 import {
   formatAmount,
-  formatDate,
-  formatDateTime,
   formatSignedAmount,
 } from "@/lib/formatting"
 
@@ -287,7 +285,6 @@ export function AssetsPage() {
                     <TableHead>Risk</TableHead>
                     <TableHead className="text-right">Current price</TableHead>
                     <TableHead className="text-right">Change</TableHead>
-                    <TableHead>Updated</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -333,17 +330,6 @@ export function AssetsPage() {
                               asset.priceCurrency
                             )
                           : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {asset.priceType === "EOD" && asset.providerDate
-                          ? `EOD for ${formatDate(`${asset.providerDate}T00:00:00`)}`
-                          : asset.providerMarketAt || asset.priceUpdatedAt
-                          ? formatDateTime(
-                              asset.providerMarketAt ??
-                                asset.priceUpdatedAt ??
-                                asset.updatedAt
-                            )
-                          : formatDate(asset.updatedAt)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -508,9 +494,8 @@ function AssetsTableSkeleton() {
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)] gap-3"
+          className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3"
         >
-          <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />
           <Skeleton className="h-10 rounded-lg" />

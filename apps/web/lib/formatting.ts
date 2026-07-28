@@ -1,25 +1,44 @@
 export function formatAmount(amount: string, currency: string): string {
-  const [integerPart, decimalPart = ""] = amount.split(".")
-  const isNegative = integerPart.startsWith("-")
-  const unsignedInteger = isNegative ? integerPart.slice(1) : integerPart
-  const groupedInteger = unsignedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-  const trimmedDecimals = decimalPart.replace(/0+$/, "")
+  const formatted = formatCurrencyDecimal(amount)
 
-  return `${currency} ${isNegative ? "-" : ""}${groupedInteger}${
-    trimmedDecimals ? `.${trimmedDecimals}` : ""
-  }`
+  return `${currency} ${formatted.isNegative ? "-" : ""}${formatted.value}`
 }
 
 export function formatSignedAmount(amount: string, currency: string): string {
-  const [integerPart, decimalPart = ""] = amount.split(".")
-  const isNegative = integerPart.startsWith("-")
-  const unsignedInteger = isNegative ? integerPart.slice(1) : integerPart
-  const groupedInteger = unsignedInteger.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-  const trimmedDecimals = decimalPart.replace(/0+$/, "")
+  const formatted = formatCurrencyDecimal(amount)
 
-  return `${isNegative ? "-" : "+"} ${currency} ${groupedInteger}${
-    trimmedDecimals ? `.${trimmedDecimals}` : ""
-  }`
+  return `${formatted.isNegative ? "-" : "+"} ${currency} ${formatted.value}`
+}
+
+function formatCurrencyDecimal(amount: string): {
+  readonly isNegative: boolean
+  readonly value: string
+} {
+  const normalizedAmount = amount.trim()
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(normalizedAmount)
+
+  if (!match) {
+    throw new Error(`Cannot format invalid monetary amount: ${amount}`)
+  }
+
+  const [, sign, rawInteger, rawFraction = ""] = match
+  const fraction = rawFraction.padEnd(3, "0")
+  let cents =
+    BigInt(rawInteger) * BigInt(100) + BigInt(fraction.slice(0, 2))
+
+  if (fraction[2] >= "5") {
+    cents += BigInt(1)
+  }
+
+  const integerPart = (cents / BigInt(100))
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+  const decimalPart = (cents % BigInt(100)).toString().padStart(2, "0")
+
+  return {
+    isNegative: sign === "-" && cents !== BigInt(0),
+    value: `${integerPart}.${decimalPart}`,
+  }
 }
 
 export function formatDate(value: string): string {
