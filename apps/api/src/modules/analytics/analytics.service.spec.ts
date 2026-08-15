@@ -106,6 +106,8 @@ const authenticatedUser: AuthenticatedUser = {
   name: 'Test User',
   baseCurrency: 'USD',
   exchangeRate: null,
+  exchangeRateSource: 'MANUAL_SETTINGS',
+  exchangeRateUpdatedAt: null,
 };
 
 describe('AnalyticsService', () => {

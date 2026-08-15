@@ -19,6 +19,8 @@ const authenticatedUser: AuthenticatedUser = {
   name: 'Test User',
   baseCurrency: 'USD',
   exchangeRate: null,
+  exchangeRateSource: 'MANUAL_SETTINGS',
+  exchangeRateUpdatedAt: null,
 };
 
 describe('PortfoliosService', () => {
@@ -67,8 +69,16 @@ describe('PortfoliosService', () => {
 
   it('lists user portfolios with account counts', async () => {
     prisma.portfolio.findMany.mockResolvedValue([
-      createPortfolioRecord({ id: 'portfolio-1', name: 'Retirement', accounts: [] }),
-      createPortfolioRecord({ id: 'portfolio-2', name: 'Crypto', accounts: [] }),
+      createPortfolioRecord({
+        id: 'portfolio-1',
+        name: 'Retirement',
+        accounts: [],
+      }),
+      createPortfolioRecord({
+        id: 'portfolio-2',
+        name: 'Crypto',
+        accounts: [],
+      }),
     ]);
     prisma.account.findMany.mockResolvedValue([]);
     prisma.transaction.findMany.mockResolvedValue([]);
@@ -163,9 +173,7 @@ describe('PortfoliosService', () => {
     expect(portfolio.metrics.totalCostBasis).toBe('1005.00');
     expect(portfolio.metrics.totalUnrealizedGain).toBe('195.00');
     expect(portfolio.metrics.weightedRiskScore).toBe(10);
-    expect(portfolio.allocation).toEqual([
-      { category: 'Crypto', value: 100 },
-    ]);
+    expect(portfolio.allocation).toEqual([{ category: 'Crypto', value: 100 }]);
   });
 
   it('throws when requesting a portfolio not owned by the user', async () => {

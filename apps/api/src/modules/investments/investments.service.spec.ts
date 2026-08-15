@@ -15,6 +15,8 @@ const authenticatedUser: AuthenticatedUser = {
   name: 'Test User',
   baseCurrency: 'USD',
   exchangeRate: null,
+  exchangeRateSource: 'MANUAL_SETTINGS',
+  exchangeRateUpdatedAt: null,
 };
 
 describe('InvestmentsService', () => {
@@ -43,7 +45,11 @@ describe('InvestmentsService', () => {
 
   it('returns holdings grouped by asset with calculated values', async () => {
     prisma.asset.findMany.mockResolvedValue([
-      createAssetRecord({ id: 'asset-1', name: 'Bitcoin', currentPrice: '70000' }),
+      createAssetRecord({
+        id: 'asset-1',
+        name: 'Bitcoin',
+        currentPrice: '70000',
+      }),
     ]);
     prisma.investmentTransactionDetail.findMany.mockResolvedValue([
       createDetailRecord({
@@ -86,8 +92,16 @@ describe('InvestmentsService', () => {
 
   it('returns summary totals across all holdings', async () => {
     prisma.asset.findMany.mockResolvedValue([
-      createAssetRecord({ id: 'asset-1', name: 'Bitcoin', currentPrice: '70000' }),
-      createAssetRecord({ id: 'asset-2', name: 'Ethereum', currentPrice: '3500' }),
+      createAssetRecord({
+        id: 'asset-1',
+        name: 'Bitcoin',
+        currentPrice: '70000',
+      }),
+      createAssetRecord({
+        id: 'asset-2',
+        name: 'Ethereum',
+        currentPrice: '3500',
+      }),
     ]);
     prisma.investmentTransactionDetail.findMany.mockResolvedValue([
       createDetailRecord({
@@ -113,7 +127,7 @@ describe('InvestmentsService', () => {
         totalCostBasis: '66000.00',
         totalCurrentValue: '77000.00',
         totalUnrealizedGain: '11000.00',
-        baseCurrency: 'USD',
+        reportingCurrency: 'USD',
       }),
     );
   });
@@ -135,6 +149,7 @@ describe('InvestmentsService', () => {
         price: '60000',
         fees: '0',
         currency: 'USD',
+        fxRateUsdToPkr: '280',
       }),
     ]);
 
@@ -148,9 +163,91 @@ describe('InvestmentsService', () => {
 
     expect(holdings[0]).toEqual(
       expect.objectContaining({
-        priceCurrency: 'PKR',
+        reportingCurrency: 'PKR',
         currentValue: '19600000.00',
         costBasis: '16800000.00',
+      }),
+    );
+  });
+
+  it('uses historical FX for cost basis and the latest FX for market value', async () => {
+    prisma.asset.findMany.mockResolvedValue([
+      createAssetRecord({
+        currentPrice: '1200',
+        priceCurrency: 'USD',
+      }),
+    ]);
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      createDetailRecord({
+        price: '1000',
+        fxRateUsdToPkr: '250',
+      }),
+    ]);
+    const userWithLatestRate: AuthenticatedUser = {
+      ...authenticatedUser,
+      baseCurrency: 'PKR',
+      exchangeRate: '280',
+    };
+
+    const { holdings } = await service.getHoldingsForUser(userWithLatestRate);
+
+    expect(holdings[0]).toEqual(
+      expect.objectContaining({
+        accountId: 'account-1',
+        nativeCurrency: 'USD',
+        nativeCostBasis: '1000.00',
+        costBasis: '250000.00',
+        currentValue: '336000.00',
+        unrealizedGain: '86000.00',
+      }),
+    );
+  });
+
+  it('returns currency-grouped totals without a combined total in native mode', async () => {
+    prisma.asset.findMany.mockResolvedValue([
+      createAssetRecord({
+        id: 'asset-usd',
+        currentPrice: '120',
+        priceCurrency: 'USD',
+      }),
+      createAssetRecord({
+        id: 'asset-pkr',
+        currentPrice: '1200',
+        priceCurrency: 'PKR',
+      }),
+    ]);
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      createDetailRecord({
+        assetId: 'asset-usd',
+        price: '100',
+        currency: 'USD',
+      }),
+      createDetailRecord({
+        assetId: 'asset-pkr',
+        price: '1000',
+        currency: 'PKR',
+      }),
+    ]);
+
+    const summary = await service.getSummaryForUser(authenticatedUser, {
+      reportingCurrency: 'NATIVE',
+    });
+
+    expect(summary.data).toEqual(
+      expect.objectContaining({
+        reportingCurrency: 'NATIVE',
+        totalCostBasis: null,
+        totalCurrentValue: null,
+        totalsByCurrency: [
+          expect.objectContaining({
+            currency: 'PKR',
+            totalCurrentValue: '1200.00',
+          }),
+          expect.objectContaining({
+            currency: 'USD',
+            totalCurrentValue: '120.00',
+          }),
+        ],
       }),
     );
   });
@@ -173,6 +270,8 @@ function createAssetRecord({
     symbol: null,
     currentPrice: currentPrice ? new Decimal(currentPrice) : null,
     priceCurrency,
+    provider: null,
+    providerAssetId: null,
     category: { name: 'Crypto' },
     riskProfile: { name: 'Aggressive' },
   };
@@ -185,6 +284,7 @@ function createDetailRecord({
   price = '60000',
   fees = '0',
   currency = 'USD',
+  fxRateUsdToPkr = null,
 }: {
   readonly assetId?: string;
   readonly tradeType?: string;
@@ -192,6 +292,7 @@ function createDetailRecord({
   readonly price?: string;
   readonly fees?: string;
   readonly currency?: string;
+  readonly fxRateUsdToPkr?: string | null;
 } = {}) {
   return {
     id: `detail-${assetId}`,
@@ -199,7 +300,18 @@ function createDetailRecord({
     tradeType,
     quantity: new Decimal(quantity),
     price: new Decimal(price),
+    priceCurrency: currency,
     fees: new Decimal(fees),
-    transaction: { currency },
+    fxRateUsdToPkr: fxRateUsdToPkr ? new Decimal(fxRateUsdToPkr) : null,
+    transaction: {
+      currency,
+      occurredAt: new Date('2026-01-01T00:00:00.000Z'),
+      account: {
+        id: 'account-1',
+        name: 'Brokerage',
+        currency,
+        portfolios: [],
+      },
+    },
   };
 }

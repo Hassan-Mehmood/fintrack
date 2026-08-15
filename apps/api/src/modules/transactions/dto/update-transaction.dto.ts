@@ -79,5 +79,5 @@ export class UpdateTransactionDto {
   @IsOptional()
   @ValidateNested()
   @Type(() => InvestmentTransactionDetailDto)
-  investment?: InvestmentTransactionDetailDto;
+  investment?: InvestmentTransactionDetailDto | null;
 }

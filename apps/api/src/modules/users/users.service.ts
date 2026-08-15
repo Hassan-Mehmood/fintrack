@@ -1,8 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ClerkUserProfile } from '../auth/clerk-auth.service';
 import type { UpdateSettingsDto } from './dto/update-settings.dto';
+
+export interface CurrencySettings {
+  readonly baseCurrency: string;
+  readonly exchangeRate: string | null;
+  readonly exchangeRateSource: string;
+  readonly exchangeRateUpdatedAt: string | null;
+}
 
 @Injectable()
 export class UsersService {
@@ -31,23 +39,26 @@ export class UsersService {
         name: true,
         baseCurrency: true,
         exchangeRate: true,
+        exchangeRateSource: true,
+        exchangeRateUpdatedAt: true,
       },
     });
 
     return {
       ...user,
       exchangeRate: user.exchangeRate?.toFixed(8) ?? null,
+      exchangeRateUpdatedAt: user.exchangeRateUpdatedAt?.toISOString() ?? null,
     };
   }
 
-  async getSettings(
-    userId: string,
-  ): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
+  async getSettings(userId: string): Promise<CurrencySettings> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         baseCurrency: true,
         exchangeRate: true,
+        exchangeRateSource: true,
+        exchangeRateUpdatedAt: true,
       },
     });
 
@@ -58,14 +69,16 @@ export class UsersService {
     return {
       baseCurrency: user.baseCurrency,
       exchangeRate: user.exchangeRate?.toFixed(8) ?? null,
+      exchangeRateSource: user.exchangeRateSource,
+      exchangeRateUpdatedAt: user.exchangeRateUpdatedAt?.toISOString() ?? null,
     };
   }
 
   async updateSettings(
     userId: string,
     payload: UpdateSettingsDto,
-  ): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
-    const data: Record<string, unknown> = {};
+  ): Promise<CurrencySettings> {
+    const data: Prisma.UserUpdateInput = {};
 
     if (payload.baseCurrency !== undefined) {
       data.baseCurrency = payload.baseCurrency;
@@ -73,6 +86,8 @@ export class UsersService {
 
     if (payload.exchangeRate !== undefined) {
       data.exchangeRate = payload.exchangeRate;
+      data.exchangeRateSource = 'MANUAL_SETTINGS';
+      data.exchangeRateUpdatedAt = new Date();
     }
 
     const user = await this.prisma.user.update({
@@ -81,12 +96,16 @@ export class UsersService {
       select: {
         baseCurrency: true,
         exchangeRate: true,
+        exchangeRateSource: true,
+        exchangeRateUpdatedAt: true,
       },
     });
 
     return {
       baseCurrency: user.baseCurrency,
       exchangeRate: user.exchangeRate?.toFixed(8) ?? null,
+      exchangeRateSource: user.exchangeRateSource,
+      exchangeRateUpdatedAt: user.exchangeRateUpdatedAt?.toISOString() ?? null,
     };
   }
 }

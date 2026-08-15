@@ -1,7 +1,4 @@
-import type {
-  TradeType,
-  TransactionType,
-} from '../../generated/prisma/enums';
+import type { TradeType, TransactionType } from '../../generated/prisma/enums';
 
 export interface InvestmentTransactionDetailResponse {
   readonly id: string;
@@ -11,7 +8,12 @@ export interface InvestmentTransactionDetailResponse {
   readonly tradeType: TradeType;
   readonly quantity: string;
   readonly price: string;
+  readonly priceCurrency: string;
+  readonly grossAmount: string;
   readonly fees: string;
+  readonly fxRateUsdToPkr: string | null;
+  readonly fxRateSource: string | null;
+  readonly fxRateUpdatedAt: string | null;
   readonly notes: string | null;
 }
 

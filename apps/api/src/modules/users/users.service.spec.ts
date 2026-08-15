@@ -38,6 +38,8 @@ describe('UsersService', () => {
       name: 'Person Example',
       baseCurrency: 'USD',
       exchangeRate: null,
+      exchangeRateSource: 'MANUAL_SETTINGS',
+      exchangeRateUpdatedAt: null,
     };
 
     userUpsert.mockResolvedValue(localUser);
@@ -70,6 +72,8 @@ describe('UsersService', () => {
         name: true,
         baseCurrency: true,
         exchangeRate: true,
+        exchangeRateSource: true,
+        exchangeRateUpdatedAt: true,
       },
     });
   });

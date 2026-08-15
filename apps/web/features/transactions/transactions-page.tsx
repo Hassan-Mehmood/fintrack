@@ -22,6 +22,10 @@ import {
 import { assetsQueryKey, listAssets } from "@/features/assets/assets-api"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
 import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
+import {
+  holdingsQueryKey,
+  listHoldings,
+} from "@/features/investments/investments-api"
 
 import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
@@ -120,6 +124,11 @@ export function TransactionsPage() {
     queryFn: () => listTransactions(getToken),
   })
 
+  const holdingsQuery = useQuery({
+    queryKey: [...holdingsQueryKey, "NATIVE"],
+    queryFn: () => listHoldings(getToken, "NATIVE"),
+  })
+
   const settingsQuery = useQuery({
     queryKey: settingsQueryKey,
     queryFn: () => getSettings(getToken),
@@ -166,6 +175,7 @@ export function TransactionsPage() {
     () => transactionsQuery.data ?? [],
     [transactionsQuery.data]
   )
+  const holdings = holdingsQuery.data ?? []
 
   const filteredTransactions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -211,9 +221,15 @@ export function TransactionsPage() {
   )
 
   const hasError =
-    accountsQuery.isError || assetsQuery.isError || transactionsQuery.isError
+    accountsQuery.isError ||
+    assetsQuery.isError ||
+    transactionsQuery.isError ||
+    holdingsQuery.isError
   const isLoading =
-    accountsQuery.isLoading || assetsQuery.isLoading || transactionsQuery.isLoading
+    accountsQuery.isLoading ||
+    assetsQuery.isLoading ||
+    transactionsQuery.isLoading ||
+    holdingsQuery.isLoading
 
   async function handleSaveTransaction(
     payload: TransactionFormPayload
@@ -258,6 +274,7 @@ export function TransactionsPage() {
       queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
       queryClient.invalidateQueries({ queryKey: assetsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: holdingsQueryKey }),
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
     ])
   }
@@ -286,7 +303,8 @@ export function TransactionsPage() {
             <AlertDescription>
               {accountsQuery.error?.message ??
                 assetsQuery.error?.message ??
-                transactionsQuery.error?.message}
+                transactionsQuery.error?.message ??
+                holdingsQuery.error?.message}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -448,7 +466,7 @@ export function TransactionsPage() {
                                 {transaction.investmentDetail.quantity} @{" "}
                                 {formatAmount(
                                   transaction.investmentDetail.price,
-                                  transaction.currency
+                                  transaction.investmentDetail.priceCurrency
                                 )}
                               </span>
                             ) : null}
@@ -533,6 +551,8 @@ export function TransactionsPage() {
         }
         accounts={accounts}
         assets={assets}
+        holdings={holdings}
+        exchangeRate={settingsQuery.data?.exchangeRate}
         defaultCurrency={
           (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
             | "USD"

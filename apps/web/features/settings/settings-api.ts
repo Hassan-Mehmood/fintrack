@@ -6,6 +6,8 @@ interface SettingsResponse {
   readonly data: {
     readonly baseCurrency: string
     readonly exchangeRate: string | null
+    readonly exchangeRateSource: string
+    readonly exchangeRateUpdatedAt: string | null
   }
 }
 
@@ -13,7 +15,7 @@ export const settingsQueryKey = ["settings"] as const
 
 export async function getSettings(
   getToken: GetToken,
-): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
+): Promise<SettingsResponse["data"]> {
   const token = await getToken()
 
   if (!token) {
@@ -44,7 +46,7 @@ interface UpdateSettingsPayload {
 export async function updateSettings(
   getToken: GetToken,
   payload: UpdateSettingsPayload,
-): Promise<{ baseCurrency: string; exchangeRate: string | null }> {
+): Promise<SettingsResponse["data"]> {
   const token = await getToken()
 
   if (!token) {

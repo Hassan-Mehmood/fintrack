@@ -20,13 +20,15 @@ export class InvestmentTransactionDetailDto {
   @IsEnum(TradeType)
   tradeType!: TradeType;
 
+  @IsOptional()
   @IsString()
   @Matches(DECIMAL_PATTERN)
-  quantity!: string;
+  quantity?: string;
 
+  @IsOptional()
   @IsString()
   @Matches(DECIMAL_PATTERN)
-  price!: string;
+  price?: string;
 
   @IsOptional()
   @IsString()

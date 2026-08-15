@@ -1,13 +1,36 @@
+export type ReportingCurrency = 'USD' | 'PKR' | 'NATIVE';
+export type HoldingGroupBy =
+  'NONE' | 'ACCOUNT' | 'PORTFOLIO' | 'ASSET_TYPE' | 'CURRENCY';
+
 export interface HoldingResponse {
   readonly assetId: string;
   readonly assetName: string;
   readonly assetSymbol: string | null;
   readonly categoryName: string;
   readonly riskProfileName: string | null;
+  readonly accountId: string;
+  readonly accountName: string;
+  readonly accountCurrency: string;
+  readonly portfolios: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+  }>;
   readonly quantity: string;
+  readonly nativeCurrency: string;
+  readonly nativeAverageCost: string | null;
+  readonly nativeCurrentPrice: string | null;
+  readonly nativeCostBasis: string | null;
+  readonly nativeCurrentValue: string | null;
+  readonly nativeRealizedGain: string | null;
+  readonly nativeUnrealizedGain: string | null;
+  readonly reportingCurrency: string;
   readonly averageCost: string | null;
   readonly currentPrice: string | null;
-  readonly priceCurrency: string;
+  readonly costBasis: string | null;
+  readonly currentValue: string | null;
+  readonly realizedGain: string | null;
+  readonly unrealizedGain: string | null;
+  readonly unrealizedGainPercent: number | null;
   readonly priceProvider: 'FINNHUB' | 'COINGECKO' | 'EODHD' | null;
   readonly priceStatus: 'AVAILABLE' | 'STALE' | 'UNAVAILABLE';
   readonly priceType: 'CURRENT' | 'EOD';
@@ -16,29 +39,50 @@ export interface HoldingResponse {
   readonly providerMarketAt: string | null;
   readonly priceChange: string | null;
   readonly priceChangePercent: string | null;
-  readonly costBasis: string;
-  readonly currentValue: string | null;
-  readonly realizedGain: string;
-  readonly unrealizedGain: string | null;
-  readonly unrealizedGainPercent: number | null;
+  readonly hasMissingHistoricalFx: boolean;
+}
+
+export interface CurrencyTotal {
+  readonly currency: string;
+  readonly totalCostBasis: string;
+  readonly totalCurrentValue: string;
+  readonly totalRealizedGain: string;
+  readonly totalUnrealizedGain: string;
+}
+
+export interface InvestmentSummaryData {
+  readonly reportingCurrency: ReportingCurrency;
+  readonly totalCostBasis: string | null;
+  readonly totalCurrentValue: string | null;
+  readonly totalRealizedGain: string | null;
+  readonly totalUnrealizedGain: string | null;
+  readonly totalsByCurrency: readonly CurrencyTotal[];
+  readonly currencyExposure: ReadonlyArray<{
+    readonly currency: string;
+    readonly currentValue: string;
+    readonly sharePercent: number | null;
+  }>;
+  readonly isPartial: boolean;
+  readonly unpricedAssetCount: number;
+  readonly missingHistoricalFxCount: number;
+  readonly exchangeRate: {
+    readonly baseCurrency: 'USD';
+    readonly quoteCurrency: 'PKR';
+    readonly rate: string | null;
+    readonly source: string;
+    readonly updatedAt: string | null;
+  };
 }
 
 export interface HoldingsListResponse {
   readonly data: readonly HoldingResponse[];
   readonly meta: {
     readonly total: number;
-    readonly baseCurrency: string;
+    readonly reportingCurrency: ReportingCurrency;
+    readonly groupBy: HoldingGroupBy;
   };
 }
 
 export interface InvestmentSummaryResponse {
-  readonly data: {
-    readonly totalCostBasis: string;
-    readonly totalCurrentValue: string;
-    readonly totalRealizedGain: string;
-    readonly totalUnrealizedGain: string;
-    readonly baseCurrency: string;
-    readonly isPartial: boolean;
-    readonly unpricedAssetCount: number;
-  };
+  readonly data: InvestmentSummaryData;
 }

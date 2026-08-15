@@ -151,7 +151,8 @@ This application is a personal finance and investment management platform for in
 * Savings goals and contribution plans.
 * Rules-based financial health calculations.
 * Transaction filtering and searching.
-* A single base currency for consolidated reporting.
+* USD, PKR, and native-currency investment reporting, with historical FX
+  snapshots for cross-currency investment performance.
 * Secure storage of user financial records.
 * Audit history for important financial changes.
 

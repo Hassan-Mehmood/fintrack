@@ -6,6 +6,7 @@ import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react"
 
 import type { Account } from "@/features/accounts/account-types"
 import type { Asset } from "@/features/assets/asset-types"
+import type { Holding } from "@/features/investments/investment-types"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,6 +23,8 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -36,16 +39,29 @@ import { Spinner } from "@/components/ui/spinner"
 
 import {
   currencyValues,
+  requiresInvestmentDetail,
+  requiresManualAmount,
+  requiresPrice,
+  requiresQuantity,
+  supportsFees,
   transactionFormSchema,
+  type ParsedTransactionFormValues,
   type TransactionFormPayload,
   type TransactionFormValues,
 } from "./transaction-form-schema"
 import {
+  addQuantities,
+  calculateInvestmentTransactionAmounts,
+  compareDecimals,
+  divideQuantities,
+  multiplyQuantities,
+} from "./investment-transaction-calculations"
+import {
   getInvestmentTradeType,
-  isInvestmentType,
   isTransferType,
   transactionTypeOptions,
   type Transaction,
+  type TransactionType,
 } from "./transaction-types"
 
 interface TransactionFormDialogProps {
@@ -53,6 +69,8 @@ interface TransactionFormDialogProps {
   readonly assets: readonly Asset[]
   readonly defaultCurrency?: (typeof currencyValues)[number]
   readonly errorMessage?: string | null
+  readonly exchangeRate?: string | null
+  readonly holdings: readonly Holding[]
   readonly isPending?: boolean
   readonly mode: "create" | "edit"
   readonly onOpenChange: (open: boolean) => void
@@ -66,6 +84,8 @@ export function TransactionFormDialog({
   assets,
   defaultCurrency = "USD",
   errorMessage,
+  exchangeRate,
+  holdings,
   isPending = false,
   mode,
   onOpenChange,
@@ -95,30 +115,117 @@ export function TransactionFormDialog({
 
   const watchedType = useWatch({ control, name: "type" })
   const watchedAccountId = useWatch({ control, name: "accountId" })
-  const watchedInvestmentTradeType = useWatch({
+  const watchedAssetId = useWatch({
     control,
-    name: "investment.tradeType",
+    name: "investment.assetId",
+  })
+  const watchedQuantity = useWatch({
+    control,
+    name: "investment.quantity",
+  })
+  const watchedPrice = useWatch({
+    control,
+    name: "investment.price",
+  })
+  const watchedFees = useWatch({
+    control,
+    name: "investment.fees",
   })
   const showDestination = isTransferType(watchedType)
-  const showInvestment = isInvestmentType(watchedType)
-  const showInvestmentQuantity =
-    watchedInvestmentTradeType === "BUY" ||
-    watchedInvestmentTradeType === "SELL" ||
-    watchedInvestmentTradeType === "REINVESTMENT" ||
-    watchedInvestmentTradeType === "DEPOSIT" ||
-    watchedInvestmentTradeType === "WITHDRAWAL" ||
-    watchedInvestmentTradeType === "SPLIT" ||
-    watchedInvestmentTradeType === "BONUS"
-  const showInvestmentPrice =
-    watchedInvestmentTradeType === "BUY" ||
-    watchedInvestmentTradeType === "SELL" ||
-    watchedInvestmentTradeType === "REINVESTMENT" ||
-    watchedInvestmentTradeType === "DEPOSIT" ||
-    watchedInvestmentTradeType === "WITHDRAWAL"
+  const showInvestment =
+    requiresInvestmentDetail(watchedType) || watchedType === "DIVIDEND"
+  const showInvestmentQuantity = requiresQuantity(watchedType)
+  const showInvestmentPrice = requiresPrice(watchedType)
+  const showInvestmentFees = supportsFees(watchedType)
+  const showManualAmount = requiresManualAmount(watchedType)
+  const showCalculatedAmount =
+    watchedType === "INVESTMENT_BUY" ||
+    watchedType === "INVESTMENT_SELL" ||
+    watchedType === "INVESTMENT_REINVESTMENT"
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === watchedAccountId),
     [accounts, watchedAccountId]
+  )
+  const selectedAsset = useMemo(
+    () => assets.find((asset) => asset.id === watchedAssetId),
+    [assets, watchedAssetId]
+  )
+  const selectedHolding = useMemo(
+    () =>
+      holdings.find(
+        (holding) =>
+          holding.assetId === watchedAssetId &&
+          (!watchedAccountId || holding.accountId === watchedAccountId)
+      ),
+    [holdings, watchedAccountId, watchedAssetId]
+  )
+  const availableQuantity = useMemo(() => {
+    const currentQuantity = selectedHolding?.quantity ?? "0"
+    const editedDetail = transaction?.investmentDetail
+
+    if (
+      mode === "edit" &&
+      editedDetail &&
+      editedDetail.assetId === watchedAssetId &&
+      (transaction?.type === "INVESTMENT_SELL" ||
+        transaction?.type === "INVESTMENT_WITHDRAWAL")
+    ) {
+      return (
+        addQuantities(currentQuantity, editedDetail.quantity) ?? currentQuantity
+      )
+    }
+
+    return currentQuantity
+  }, [mode, selectedHolding, transaction, watchedAssetId])
+  const existingSplitQuantity = useMemo(() => {
+    const currentQuantity = selectedHolding?.quantity ?? "0"
+    const editedDetail = transaction?.investmentDetail
+
+    if (
+      mode === "edit" &&
+      transaction?.type === "INVESTMENT_SPLIT" &&
+      editedDetail &&
+      editedDetail.assetId === watchedAssetId
+    ) {
+      return (
+        divideQuantities(currentQuantity, editedDetail.quantity) ??
+        currentQuantity
+      )
+    }
+
+    return currentQuantity
+  }, [mode, selectedHolding, transaction, watchedAssetId])
+  const investmentCalculation = useMemo(
+    () =>
+      showCalculatedAmount
+        ? calculateInvestmentTransactionAmounts({
+            type: watchedType,
+            accountCurrency: selectedAccount?.currency,
+            exchangeRate,
+            quantity: watchedQuantity ?? "",
+            price: watchedPrice ?? "",
+            priceCurrency: selectedAsset?.priceCurrency ?? undefined,
+            fees: watchedFees || "0",
+          })
+        : null,
+    [
+      showCalculatedAmount,
+      exchangeRate,
+      selectedAccount,
+      selectedAsset,
+      watchedFees,
+      watchedPrice,
+      watchedQuantity,
+      watchedType,
+    ]
+  )
+  const resultingSplitQuantity = useMemo(
+    () =>
+      watchedType === "INVESTMENT_SPLIT"
+        ? multiplyQuantities(existingSplitQuantity, watchedQuantity ?? "")
+        : null,
+    [existingSplitQuantity, watchedQuantity, watchedType]
   )
 
   useEffect(() => {
@@ -137,53 +244,39 @@ export function TransactionFormDialog({
   }, [showDestination, setValue])
 
   useEffect(() => {
-    const tradeType = getInvestmentTradeType(watchedType)
-
-    if (tradeType) {
-      setValue("investment.tradeType", tradeType)
-
-      if (
-        tradeType === "DIVIDEND" ||
-        tradeType === "INTEREST" ||
-        tradeType === "SPLIT" ||
-        tradeType === "BONUS"
-      ) {
-        setValue("investment.quantity", "0")
-        setValue("investment.price", "0")
-      }
+    if (showCalculatedAmount) {
+      setValue("amount", investmentCalculation?.cashImpact ?? "")
+    } else if (!showManualAmount) {
+      setValue("amount", "")
     }
-  }, [watchedType, setValue])
-
-  useEffect(() => {
-    if (
-      watchedType === "INVESTMENT_DEPOSIT" ||
-      watchedType === "INVESTMENT_WITHDRAWAL"
-    ) {
-      setValue("amount", "0")
-    }
-  }, [watchedType, setValue])
+  }, [
+    investmentCalculation,
+    setValue,
+    showCalculatedAmount,
+    showManualAmount,
+  ])
 
   const availableAccounts = useMemo(
     () =>
-      showInvestment
+      showInvestment || watchedType === "INTEREST"
         ? accounts.filter(
             (account) =>
               account.type === "BROKER" || account.type === "CRYPTO_WALLET"
           )
         : accounts,
-    [accounts, showInvestment]
+    [accounts, showInvestment, watchedType]
   )
 
   useEffect(() => {
     if (
-      showInvestment &&
+      (showInvestment || watchedType === "INTEREST") &&
       selectedAccount &&
       selectedAccount.type !== "BROKER" &&
       selectedAccount.type !== "CRYPTO_WALLET"
     ) {
       setValue("accountId", "")
     }
-  }, [selectedAccount, setValue, showInvestment])
+  }, [selectedAccount, setValue, showInvestment, watchedType])
 
   const otherAccounts = useMemo(
     () => accounts.filter((account) => account.id !== watchedAccountId),
@@ -192,7 +285,7 @@ export function TransactionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Add transaction" : "Edit transaction"}
@@ -224,7 +317,21 @@ export function TransactionFormDialog({
               return
             }
 
-            await onSubmit(parsedValues.data)
+            if (
+              (parsedValues.data.type === "INVESTMENT_SELL" ||
+                parsedValues.data.type === "INVESTMENT_WITHDRAWAL") &&
+              compareDecimals(
+                parsedValues.data.investment?.quantity ?? "",
+                availableQuantity
+              ) === 1
+            ) {
+              setError("investment.quantity", {
+                message: `Quantity cannot exceed the current holding (${availableQuantity}).`,
+              })
+              return
+            }
+
+            await onSubmit(sanitizePayload(parsedValues.data))
           })}
           className="flex flex-col gap-4"
         >
@@ -243,7 +350,26 @@ export function TransactionFormDialog({
                 control={control}
                 name="type"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      const selectedType = transactionTypeOptions.find(
+                        (option) => option.value === value
+                      )?.value
+
+                      if (!selectedType) {
+                        return
+                      }
+
+                      field.onChange(selectedType)
+                      setValue(
+                        "investment",
+                        getEmptyInvestmentValues(selectedType),
+                        { shouldValidate: false }
+                      )
+                      setValue("amount", "", { shouldValidate: false })
+                    }}
+                  >
                     <SelectTrigger
                       id="transaction-type"
                       aria-invalid={Boolean(errors.type) || undefined}
@@ -349,36 +475,38 @@ export function TransactionFormDialog({
               </Field>
             ) : null}
 
-            <Field
-              data-disabled={
-                watchedType === "INVESTMENT_DEPOSIT" ||
-                watchedType === "INVESTMENT_WITHDRAWAL" ||
-                undefined
-              }
-              data-invalid={Boolean(errors.amount) || undefined}
-            >
-              <FieldLabel htmlFor="transaction-amount">Amount</FieldLabel>
-              <Input
-                id="transaction-amount"
-                aria-invalid={Boolean(errors.amount) || undefined}
-                inputMode="decimal"
-                placeholder="0.00"
-                disabled={
-                  watchedType === "INVESTMENT_DEPOSIT" ||
-                  watchedType === "INVESTMENT_WITHDRAWAL"
+            {showManualAmount ? (
+              <Field data-invalid={Boolean(errors.amount) || undefined}>
+                <FieldLabel htmlFor="transaction-amount">Amount</FieldLabel>
+                <Input
+                  id="transaction-amount"
+                  aria-invalid={Boolean(errors.amount) || undefined}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  {...register("amount")}
+                />
+                <FieldDescription>
+                  {watchedType === "ADJUSTMENT"
+                    ? `Use a negative value to reduce the account balance. ${selectedAccount?.currency ?? ""}`
+                    : `Enter the amount in ${selectedAccount?.currency ?? "the account currency"}.`}
+                </FieldDescription>
+                <FieldError errors={[errors.amount]} />
+              </Field>
+            ) : null}
+
+            {showCalculatedAmount ? (
+              <CalculatedAmountField
+                currency={selectedAccount?.currency}
+                label={
+                  watchedType === "INVESTMENT_SELL"
+                    ? "Net proceeds"
+                    : watchedType === "INVESTMENT_REINVESTMENT"
+                      ? "Total used"
+                      : "Total amount"
                 }
-                {...register("amount")}
+                value={investmentCalculation?.cashImpact ?? ""}
               />
-              <FieldDescription>
-                {watchedType === "INVESTMENT_DEPOSIT" ||
-                watchedType === "INVESTMENT_WITHDRAWAL"
-                  ? "Asset movements do not change the account cash balance."
-                  : watchedType === "ADJUSTMENT"
-                  ? "Use a negative value to reduce the account balance."
-                  : "Enter the absolute amount. The type determines whether it is added or deducted."}
-              </FieldDescription>
-              <FieldError errors={[errors.amount]} />
-            </Field>
+            ) : null}
 
             <Field data-invalid={Boolean(errors.currency) || undefined}>
               <FieldLabel htmlFor="transaction-currency">Currency</FieldLabel>
@@ -419,8 +547,8 @@ export function TransactionFormDialog({
           </FieldGroup>
 
           {showInvestment ? (
-            <div className="rounded-lg border bg-card p-4">
-              <p className="mb-4 text-sm font-medium">Investment details</p>
+            <FieldSet className="rounded-lg border bg-card p-4">
+              <FieldLegend>Investment details</FieldLegend>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
                 <Field
                   data-invalid={Boolean(errors.investment?.assetId) || undefined}
@@ -433,8 +561,14 @@ export function TransactionFormDialog({
                     name="investment.assetId"
                     render={({ field }) => (
                       <Select
-                        value={field.value ?? ""}
-                        onValueChange={field.onChange}
+                        value={
+                          watchedType === "DIVIDEND" && !field.value
+                            ? "none"
+                            : field.value ?? ""
+                        }
+                        onValueChange={(value) =>
+                          field.onChange(value === "none" ? "" : value)
+                        }
                       >
                         <SelectTrigger
                           id="transaction-investment-asset"
@@ -447,8 +581,13 @@ export function TransactionFormDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
+                            {watchedType === "DIVIDEND" ? (
+                              <SelectItem value="none">
+                                No related asset
+                              </SelectItem>
+                            ) : null}
                             {assets.length === 0 ? (
-                              <SelectItem value="" disabled>
+                              <SelectItem value="unavailable" disabled>
                                 No assets available
                               </SelectItem>
                             ) : null}
@@ -463,6 +602,11 @@ export function TransactionFormDialog({
                       </Select>
                     )}
                   />
+                  {watchedType === "DIVIDEND" ? (
+                    <FieldDescription>
+                      Optional. Link this dividend to a holding when applicable.
+                    </FieldDescription>
+                  ) : null}
                   <FieldError errors={[errors.investment?.assetId]} />
                 </Field>
 
@@ -473,10 +617,10 @@ export function TransactionFormDialog({
                     }
                   >
                     <FieldLabel htmlFor="transaction-investment-quantity">
-                      {watchedInvestmentTradeType === "SPLIT"
+                      {watchedType === "INVESTMENT_SPLIT"
                         ? "Split ratio"
-                        : watchedInvestmentTradeType === "BONUS"
-                          ? "Bonus shares"
+                        : watchedType === "INVESTMENT_BONUS"
+                          ? "Number of bonus shares"
                           : "Quantity"}
                     </FieldLabel>
                     <Input
@@ -486,10 +630,18 @@ export function TransactionFormDialog({
                       }
                       inputMode="decimal"
                       placeholder={
-                        watchedInvestmentTradeType === "SPLIT" ? "2" : "0.015"
+                        watchedType === "INVESTMENT_SPLIT" ? "2" : "0.015"
                       }
                       {...register("investment.quantity")}
                     />
+                    <FieldDescription>
+                      {watchedType === "INVESTMENT_SPLIT"
+                        ? "Enter the new-for-old multiplier, such as 2 for a 2-for-1 split."
+                        : watchedType === "INVESTMENT_SELL" ||
+                            watchedType === "INVESTMENT_WITHDRAWAL"
+                          ? `Currently available: ${availableQuantity}`
+                          : "Fractional shares and cryptocurrency quantities are supported."}
+                    </FieldDescription>
                     <FieldError errors={[errors.investment?.quantity]} />
                   </Field>
                 ) : null}
@@ -510,11 +662,15 @@ export function TransactionFormDialog({
                       placeholder="67000"
                       {...register("investment.price")}
                     />
+                    <FieldDescription>
+                      Price in{" "}
+                      {selectedAsset?.priceCurrency ?? "asset price currency"}.
+                    </FieldDescription>
                     <FieldError errors={[errors.investment?.price]} />
                   </Field>
                 ) : null}
 
-                {showInvestmentPrice ? (
+                {showInvestmentFees ? (
                   <Field
                     data-invalid={Boolean(errors.investment?.fees) || undefined}
                   >
@@ -527,29 +683,50 @@ export function TransactionFormDialog({
                       inputMode="decimal"
                       placeholder="0"
                       {...register("investment.fees")}
-                  />
-                  <FieldError errors={[errors.investment?.fees]} />
-                </Field>
+                    />
+                    <FieldDescription>
+                      Fees in {selectedAccount?.currency ?? "account currency"}.
+                    </FieldDescription>
+                    <FieldError errors={[errors.investment?.fees]} />
+                  </Field>
                 ) : null}
 
-                <Field
-                  data-invalid={Boolean(errors.investment?.notes) || undefined}
-                >
-                  <FieldLabel htmlFor="transaction-investment-notes">
-                    Investment notes
-                  </FieldLabel>
-                  <Input
-                    id="transaction-investment-notes"
-                    aria-invalid={
-                      Boolean(errors.investment?.notes) || undefined
+                {showCalculatedAmount ? (
+                  <CalculatedAmountField
+                    currency={selectedAsset?.priceCurrency ?? undefined}
+                    label={
+                      watchedType === "INVESTMENT_REINVESTMENT"
+                        ? "Reinvested amount"
+                        : "Gross amount"
                     }
-                    placeholder="Optional"
-                    {...register("investment.notes")}
+                    value={investmentCalculation?.grossAmount ?? ""}
                   />
-                  <FieldError errors={[errors.investment?.notes]} />
-                </Field>
+                ) : null}
+
+                {showCalculatedAmount &&
+                selectedAsset?.priceCurrency &&
+                selectedAccount?.currency !== selectedAsset.priceCurrency ? (
+                  <CalculatedAmountField
+                    currency={selectedAccount?.currency}
+                    label="Account cash impact"
+                    value={investmentCalculation?.cashImpact ?? ""}
+                  />
+                ) : null}
+
+                {watchedType === "INVESTMENT_SPLIT" ? (
+                  <>
+                    <CalculatedQuantityField
+                      label="Existing quantity"
+                      value={existingSplitQuantity}
+                    />
+                    <CalculatedQuantityField
+                      label="Resulting quantity"
+                      value={resultingSplitQuantity ?? ""}
+                    />
+                  </>
+                ) : null}
               </FieldGroup>
-            </div>
+            </FieldSet>
           ) : null}
 
           <Field data-invalid={Boolean(errors.description) || undefined}>
@@ -629,14 +806,7 @@ function getDefaultValues(
       description: "",
       merchant: "",
       notes: "",
-      investment: {
-        assetId: "",
-        tradeType: "BUY",
-        quantity: "",
-        price: "",
-        fees: "",
-        notes: "",
-      },
+      investment: undefined,
     }
   }
 
@@ -650,15 +820,141 @@ function getDefaultValues(
     description: transaction.description,
     merchant: transaction.merchant ?? "",
     notes: transaction.notes ?? "",
-    investment: transaction.investmentDetail
-      ? {
-          assetId: transaction.investmentDetail.assetId,
-          tradeType: transaction.investmentDetail.tradeType,
-          quantity: transaction.investmentDetail.quantity,
-          price: transaction.investmentDetail.price,
-          fees: transaction.investmentDetail.fees,
-          notes: transaction.investmentDetail.notes ?? "",
-        }
-      : undefined,
+    investment:
+      transaction.investmentDetail &&
+      (requiresInvestmentDetail(transaction.type) ||
+        transaction.type === "DIVIDEND")
+        ? {
+            assetId: transaction.investmentDetail.assetId,
+            tradeType: getInvestmentTradeType(transaction.type) ?? undefined,
+            quantity: requiresQuantity(transaction.type)
+              ? transaction.investmentDetail.quantity
+              : "",
+            price: requiresPrice(transaction.type)
+              ? transaction.investmentDetail.price
+              : "",
+            fees: supportsFees(transaction.type)
+              ? transaction.investmentDetail.fees
+              : "",
+            notes: "",
+          }
+        : getEmptyInvestmentValues(transaction.type),
   }
+}
+
+function getEmptyInvestmentValues(
+  type: TransactionType
+): TransactionFormValues["investment"] {
+  const tradeType = getInvestmentTradeType(type)
+
+  if (!tradeType || tradeType === "INTEREST") {
+    return undefined
+  }
+
+  return {
+    assetId: "",
+    tradeType,
+    quantity: "",
+    price: "",
+    fees: "",
+    notes: "",
+  }
+}
+
+function sanitizePayload(
+  values: ParsedTransactionFormValues
+): TransactionFormPayload {
+  const shouldIncludeInvestment =
+    requiresInvestmentDetail(values.type) ||
+    (values.type === "DIVIDEND" && Boolean(values.investment?.assetId))
+  const tradeType = getInvestmentTradeType(values.type)
+  const investment =
+    shouldIncludeInvestment &&
+    values.investment?.assetId &&
+    tradeType &&
+    tradeType !== "INTEREST"
+      ? {
+          assetId: values.investment.assetId,
+          tradeType,
+          quantity: requiresQuantity(values.type)
+            ? values.investment.quantity
+            : undefined,
+          price: requiresPrice(values.type)
+            ? values.investment.price
+            : undefined,
+          fees: supportsFees(values.type)
+            ? values.investment.fees || "0"
+            : undefined,
+          notes: undefined,
+        }
+      : values.type === "DIVIDEND"
+        ? null
+        : undefined
+
+  return {
+    ...values,
+    destinationAccountId: isTransferType(values.type)
+      ? values.destinationAccountId
+      : undefined,
+    amount:
+      requiresManualAmount(values.type) ||
+      values.type === "INVESTMENT_BUY" ||
+      values.type === "INVESTMENT_SELL" ||
+      values.type === "INVESTMENT_REINVESTMENT"
+        ? values.amount
+        : undefined,
+    investment,
+  }
+}
+
+function CalculatedAmountField({
+  currency,
+  label,
+  value,
+}: {
+  readonly currency?: string
+  readonly label: string
+  readonly value: string
+}) {
+  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`
+
+  return (
+    <Field data-disabled>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <Input
+        id={inputId}
+        readOnly
+        aria-readonly="true"
+        value={value}
+        placeholder="Calculated automatically"
+      />
+      <FieldDescription>
+        {currency
+          ? `${currency} · calculated automatically`
+          : "Calculated automatically after selecting an account."}
+      </FieldDescription>
+    </Field>
+  )
+}
+
+function CalculatedQuantityField({
+  label,
+  value,
+}: {
+  readonly label: string
+  readonly value: string
+}) {
+  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`
+
+  return (
+    <Field data-disabled>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <Input
+        id={inputId}
+        readOnly
+        aria-readonly="true"
+        value={value}
+      />
+    </Field>
+  )
 }

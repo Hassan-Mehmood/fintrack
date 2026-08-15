@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
-import type { TradeType } from '../../generated/prisma/enums';
+import type { TradeType, TransactionType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import {
   calculateHolding,
   type InvestmentTransactionInput,
 } from '../../common/financial/holdings';
+import { calculateInvestmentTransactionAmounts } from '../../common/financial/investment-transaction-calculations';
+import { convertUsdPkr } from '../../common/financial/fx-conversion';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   createAccountNotFoundForTransactionException,
@@ -14,6 +16,7 @@ import {
   createInvalidInvestmentAccountException,
   createInvalidInvestmentAmountException,
   createInvalidInvestmentTradeTypeException,
+  createInvalidTransactionAmountException,
   createInvalidTransferException,
   createInvestmentDetailRequiredException,
   createTransactionCurrencyMismatchException,
@@ -40,7 +43,12 @@ const investmentDetailSelect = {
   tradeType: true,
   quantity: true,
   price: true,
+  priceCurrency: true,
+  grossAmount: true,
   fees: true,
+  fxRateUsdToPkr: true,
+  fxRateSource: true,
+  fxRateUpdatedAt: true,
   notes: true,
 } satisfies Prisma.InvestmentTransactionDetailSelect;
 
@@ -95,6 +103,21 @@ const investmentTypes = new Set<string>([
   'INVESTMENT_WITHDRAWAL',
 ]);
 
+const investmentDetailRequiredTypes = new Set<string>([
+  'INVESTMENT_BUY',
+  'INVESTMENT_SELL',
+  'INVESTMENT_SPLIT',
+  'INVESTMENT_BONUS',
+  'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_DEPOSIT',
+  'INVESTMENT_WITHDRAWAL',
+]);
+
+const investmentDetailSupportedTypes = new Set<string>([
+  ...investmentDetailRequiredTypes,
+  'DIVIDEND',
+]);
+
 const reversibleTypes = new Set<string>([
   'INCOME',
   'EXPENSE',
@@ -106,6 +129,15 @@ const reversibleTypes = new Set<string>([
   'INTEREST',
   'INVESTMENT_REINVESTMENT',
 ]);
+
+interface InvestmentPayload {
+  readonly assetId: string;
+  readonly tradeType: string;
+  readonly quantity?: string;
+  readonly price?: string;
+  readonly fees?: string;
+  readonly notes?: string;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -161,17 +193,44 @@ export class TransactionsService {
       ...payload,
       currency: payload.currency,
     });
-    this.validateNonCashInvestmentAmount(payload.type, payload.amount);
 
-    if (investmentTypes.has(payload.type)) {
+    if (investmentDetailRequiredTypes.has(payload.type) || payload.investment) {
       this.validateInvestmentPayload(payload.type, payload.investment);
-      await this.validateInvestmentAsset(user.id, payload.investment!.assetId);
+    }
+
+    const investmentAsset = payload.investment
+      ? await this.validateInvestmentAsset(user.id, payload.investment.assetId)
+      : null;
+
+    if (payload.investment) {
       await this.assertSufficientHolding(
         user.id,
         payload.type,
-        payload.investment!,
+        {
+          assetId: payload.investment.assetId,
+          quantity: payload.investment.quantity ?? '0',
+        },
+        undefined,
+        payload.accountId,
       );
     }
+
+    const authoritativeAmount = this.resolveAuthoritativeAmount(
+      payload.type,
+      payload.amount,
+      payload.investment,
+      investmentAsset?.priceCurrency ?? payload.currency,
+      payload.currency,
+      user.exchangeRate,
+    );
+    const investmentDetailData = payload.investment
+      ? this.buildInvestmentDetailData(
+          payload.type,
+          payload.investment,
+          investmentAsset?.priceCurrency ?? payload.currency,
+          user,
+        )
+      : undefined;
 
     const transaction = await this.prisma.transaction.create({
       data: {
@@ -180,22 +239,15 @@ export class TransactionsService {
         type: payload.type,
         accountId: payload.accountId,
         destinationAccountId: payload.destinationAccountId,
-        amount: normalizeAmount(payload.amount, payload.type),
+        amount: authoritativeAmount,
         currency: payload.currency,
         occurredAt: new Date(payload.occurredAt),
         description: payload.description,
         merchant: payload.merchant,
         notes: payload.notes,
-        investmentDetail: payload.investment
+        investmentDetail: investmentDetailData
           ? {
-              create: {
-                assetId: payload.investment.assetId,
-                tradeType: payload.investment.tradeType,
-                quantity: payload.investment.quantity,
-                price: payload.investment.price,
-                fees: payload.investment.fees ?? '0',
-                notes: payload.investment.notes,
-              },
+              create: investmentDetailData,
             }
           : undefined,
       },
@@ -224,10 +276,12 @@ export class TransactionsService {
       payload.destinationAccountId ?? existingTransaction.destinationAccountId;
     const effectiveCurrency = payload.currency ?? existingTransaction.currency;
     const effectiveInvestment =
-      payload.investment ??
-      (existingTransaction.investmentDetail
-        ? this.recordToInvestmentPayload(existingTransaction.investmentDetail)
-        : undefined);
+      payload.investment !== undefined
+        ? (payload.investment ?? undefined)
+        : investmentDetailSupportedTypes.has(effectiveType) &&
+            existingTransaction.investmentDetail
+          ? this.recordToInvestmentPayload(existingTransaction.investmentDetail)
+          : undefined;
     const effectiveAmount =
       payload.amount ?? existingTransaction.amount.toString();
 
@@ -237,18 +291,39 @@ export class TransactionsService {
       destinationAccountId: effectiveDestinationAccountId ?? undefined,
       currency: effectiveCurrency,
     });
-    this.validateNonCashInvestmentAmount(effectiveType, effectiveAmount);
 
-    if (investmentTypes.has(effectiveType)) {
+    if (
+      investmentDetailRequiredTypes.has(effectiveType) ||
+      effectiveInvestment
+    ) {
       this.validateInvestmentPayload(effectiveType, effectiveInvestment);
-      await this.validateInvestmentAsset(user.id, effectiveInvestment!.assetId);
+    }
+
+    const investmentAsset = effectiveInvestment
+      ? await this.validateInvestmentAsset(user.id, effectiveInvestment.assetId)
+      : null;
+
+    if (effectiveInvestment) {
       await this.assertSufficientHolding(
         user.id,
         effectiveType,
-        effectiveInvestment!,
+        {
+          assetId: effectiveInvestment.assetId,
+          quantity: effectiveInvestment.quantity ?? '0',
+        },
         transactionId,
+        effectiveAccountId,
       );
     }
+
+    const authoritativeAmount = this.resolveAuthoritativeAmount(
+      effectiveType,
+      effectiveAmount,
+      effectiveInvestment,
+      investmentAsset?.priceCurrency ?? effectiveCurrency,
+      effectiveCurrency,
+      user.exchangeRate,
+    );
 
     const transaction = await this.prisma.transaction.update({
       where: {
@@ -258,10 +333,7 @@ export class TransactionsService {
         type: payload.type,
         accountId: payload.accountId,
         destinationAccountId: payload.destinationAccountId,
-        amount:
-          payload.amount !== undefined
-            ? normalizeAmount(payload.amount, effectiveType)
-            : undefined,
+        amount: authoritativeAmount,
         currency: payload.currency,
         occurredAt: payload.occurredAt
           ? new Date(payload.occurredAt)
@@ -273,6 +345,8 @@ export class TransactionsService {
           effectiveType,
           existingTransaction.investmentDetail,
           payload.investment,
+          investmentAsset?.priceCurrency ?? effectiveCurrency,
+          user,
         ),
       },
       select: transactionSelect,
@@ -320,7 +394,17 @@ export class TransactionsService {
                   quantity:
                     originalTransaction.investmentDetail.quantity.toString(),
                   price: originalTransaction.investmentDetail.price.toString(),
+                  priceCurrency:
+                    originalTransaction.investmentDetail.priceCurrency,
+                  grossAmount:
+                    originalTransaction.investmentDetail.grossAmount.toString(),
                   fees: originalTransaction.investmentDetail.fees.toString(),
+                  fxRateUsdToPkr:
+                    originalTransaction.investmentDetail.fxRateUsdToPkr,
+                  fxRateSource:
+                    originalTransaction.investmentDetail.fxRateSource,
+                  fxRateUpdatedAt:
+                    originalTransaction.investmentDetail.fxRateUpdatedAt,
                   notes: originalTransaction.investmentDetail.notes,
                 },
               }
@@ -452,19 +536,26 @@ export class TransactionsService {
   }
 
   private validateInvestmentPayload(
-    type: string,
+    type: TransactionType,
     investment:
       | {
           readonly assetId: string;
           readonly tradeType: string;
-          readonly quantity: string;
-          readonly price: string;
+          readonly quantity?: string;
+          readonly price?: string;
           readonly fees?: string;
         }
+      | null
       | undefined,
   ): void {
     if (!investment) {
       throw createInvestmentDetailRequiredException(type);
+    }
+
+    if (!investmentDetailSupportedTypes.has(type)) {
+      throw createInvalidInvestmentAmountException(
+        'Investment details are not supported for this transaction type.',
+      );
     }
 
     const expectedTradeType = this.getExpectedTradeType(type);
@@ -475,15 +566,13 @@ export class TransactionsService {
       );
     }
 
-    const quantity = new Prisma.Decimal(investment.quantity);
-    const price = new Prisma.Decimal(investment.price);
+    const quantity = new Prisma.Decimal(investment.quantity ?? '0');
+    const price = new Prisma.Decimal(investment.price ?? '0');
 
     if (
       type === 'INVESTMENT_BUY' ||
       type === 'INVESTMENT_SELL' ||
-      type === 'INVESTMENT_REINVESTMENT' ||
-      type === 'INVESTMENT_DEPOSIT' ||
-      type === 'INVESTMENT_WITHDRAWAL'
+      type === 'INVESTMENT_REINVESTMENT'
     ) {
       if (quantity.isZero() || quantity.isNegative()) {
         throw createInvalidInvestmentAmountException(
@@ -498,7 +587,12 @@ export class TransactionsService {
       }
     }
 
-    if (type === 'INVESTMENT_BONUS' || type === 'INVESTMENT_SPLIT') {
+    if (
+      type === 'INVESTMENT_BONUS' ||
+      type === 'INVESTMENT_SPLIT' ||
+      type === 'INVESTMENT_DEPOSIT' ||
+      type === 'INVESTMENT_WITHDRAWAL'
+    ) {
       if (quantity.isZero() || quantity.isNegative()) {
         throw createInvalidInvestmentAmountException(
           'Quantity must be greater than zero.',
@@ -507,21 +601,21 @@ export class TransactionsService {
 
       if (!price.isZero()) {
         throw createInvalidInvestmentAmountException(
-          'Price must be zero for bonus and split transactions.',
+          'Price must be zero for non-cash investment transactions.',
         );
       }
     }
 
-    if (type === 'DIVIDEND' || type === 'INTEREST') {
+    if (type === 'DIVIDEND') {
       if (!quantity.isZero()) {
         throw createInvalidInvestmentAmountException(
-          'Quantity must be zero for dividend and interest transactions.',
+          'Quantity must be zero for dividend transactions.',
         );
       }
 
       if (!price.isZero()) {
         throw createInvalidInvestmentAmountException(
-          'Price must be zero for dividend and interest transactions.',
+          'Price must be zero for dividend transactions.',
         );
       }
     }
@@ -533,21 +627,137 @@ export class TransactionsService {
           'Fees cannot be negative.',
         );
       }
+
+      if (
+        type !== 'INVESTMENT_BUY' &&
+        type !== 'INVESTMENT_SELL' &&
+        type !== 'INVESTMENT_REINVESTMENT' &&
+        !fees.isZero()
+      ) {
+        throw createInvalidInvestmentAmountException(
+          'Fees must be zero for this transaction type.',
+        );
+      }
     }
   }
 
-  private validateNonCashInvestmentAmount(type: string, amount: string): void {
+  private resolveAuthoritativeAmount(
+    type: TransactionType,
+    manualAmount: string | undefined,
+    investment: InvestmentPayload | undefined,
+    priceCurrency: string,
+    transactionCurrency: string,
+    exchangeRate: string | null,
+  ): Prisma.Decimal {
     if (
-      (type === 'INVESTMENT_DEPOSIT' || type === 'INVESTMENT_WITHDRAWAL') &&
-      !new Prisma.Decimal(amount).isZero()
+      type === 'INVESTMENT_BUY' ||
+      type === 'INVESTMENT_SELL' ||
+      type === 'INVESTMENT_REINVESTMENT'
     ) {
-      throw createInvalidInvestmentAmountException(
-        'Deposit and withdrawal account amounts must be zero.',
+      if (!investment) {
+        throw createInvestmentDetailRequiredException(type);
+      }
+
+      const calculation = calculateInvestmentTransactionAmounts({
+        type,
+        quantity: new Prisma.Decimal(investment.quantity ?? '0'),
+        price: new Prisma.Decimal(investment.price ?? '0'),
+        fees: new Prisma.Decimal(investment.fees ?? '0'),
+      });
+
+      const convertedGrossAmount = convertUsdPkr(
+        calculation.grossAmount,
+        priceCurrency,
+        transactionCurrency,
+        exchangeRate ? new Prisma.Decimal(exchangeRate) : null,
+      );
+
+      if (!convertedGrossAmount) {
+        throw createInvalidInvestmentAmountException(
+          `A USD-to-PKR exchange rate is required to convert ${priceCurrency} asset prices into ${transactionCurrency}.`,
+        );
+      }
+
+      const fees = new Prisma.Decimal(investment.fees ?? '0');
+      const cashImpact =
+        type === 'INVESTMENT_SELL'
+          ? convertedGrossAmount.sub(fees)
+          : convertedGrossAmount.add(fees);
+
+      if (cashImpact.isNegative()) {
+        throw createInvalidInvestmentAmountException(
+          'Fees cannot exceed gross sale proceeds.',
+        );
+      }
+
+      return cashImpact;
+    }
+
+    if (
+      type === 'INVESTMENT_SPLIT' ||
+      type === 'INVESTMENT_BONUS' ||
+      type === 'INVESTMENT_DEPOSIT' ||
+      type === 'INVESTMENT_WITHDRAWAL'
+    ) {
+      return new Prisma.Decimal(0);
+    }
+
+    if (manualAmount === undefined) {
+      throw createInvalidTransactionAmountException(
+        'An amount is required for this transaction type.',
       );
     }
+
+    return new Prisma.Decimal(normalizeAmount(manualAmount, type));
   }
 
-  private getExpectedTradeType(type: string): string {
+  private buildInvestmentDetailData(
+    type: TransactionType,
+    investment: InvestmentPayload,
+    priceCurrency: string,
+    user: AuthenticatedUser,
+  ): {
+    readonly assetId: string;
+    readonly tradeType: TradeType;
+    readonly quantity: string;
+    readonly price: string;
+    readonly priceCurrency: string;
+    readonly grossAmount: Prisma.Decimal;
+    readonly fees: string;
+    readonly fxRateUsdToPkr: string | undefined;
+    readonly fxRateSource: string | undefined;
+    readonly fxRateUpdatedAt: Date | undefined;
+    readonly notes: string | undefined;
+  } {
+    const quantity = investment.quantity ?? '0';
+    const price = investment.price ?? '0';
+    const fees = investment.fees ?? '0';
+    const calculation = calculateInvestmentTransactionAmounts({
+      type,
+      quantity: new Prisma.Decimal(quantity),
+      price: new Prisma.Decimal(price),
+      fees: new Prisma.Decimal(fees),
+    });
+
+    return {
+      assetId: investment.assetId,
+      tradeType: this.getExpectedTradeType(type),
+      quantity,
+      price,
+      priceCurrency,
+      grossAmount: calculation.grossAmount,
+      fees,
+      fxRateUsdToPkr: user.exchangeRate ?? undefined,
+      fxRateSource: user.exchangeRate ? user.exchangeRateSource : undefined,
+      fxRateUpdatedAt:
+        user.exchangeRate && user.exchangeRateUpdatedAt
+          ? new Date(user.exchangeRateUpdatedAt)
+          : undefined,
+      notes: investment.notes,
+    };
+  }
+
+  private getExpectedTradeType(type: TransactionType): TradeType {
     switch (type) {
       case 'INVESTMENT_BUY':
         return 'BUY';
@@ -568,14 +778,16 @@ export class TransactionsService {
       case 'INVESTMENT_WITHDRAWAL':
         return 'WITHDRAWAL';
       default:
-        return type;
+        throw createInvalidInvestmentAmountException(
+          'This transaction type does not support investment details.',
+        );
     }
   }
 
   private async validateInvestmentAsset(
     userId: string,
     assetId: string,
-  ): Promise<void> {
+  ): Promise<{ readonly id: string; readonly priceCurrency: string | null }> {
     const asset = await this.prisma.asset.findFirst({
       where: {
         id: assetId,
@@ -583,12 +795,15 @@ export class TransactionsService {
       },
       select: {
         id: true,
+        priceCurrency: true,
       },
     });
 
     if (!asset) {
       throw createAssetNotFoundForTransactionException(assetId);
     }
+
+    return asset;
   }
 
   private async assertSufficientHolding(
@@ -599,6 +814,7 @@ export class TransactionsService {
       readonly quantity: string;
     },
     excludedTransactionId?: string,
+    accountId?: string,
   ): Promise<void> {
     if (type !== 'INVESTMENT_SELL' && type !== 'INVESTMENT_WITHDRAWAL') {
       return;
@@ -611,6 +827,7 @@ export class TransactionsService {
         transactionId: excludedTransactionId
           ? { not: excludedTransactionId }
           : undefined,
+        transaction: accountId ? { accountId } : undefined,
       },
       select: {
         tradeType: true,
@@ -636,18 +853,21 @@ export class TransactionsService {
   }
 
   private buildInvestmentDetailUpdatePayload(
-    effectiveType: string,
+    effectiveType: TransactionType,
     existingDetail: TransactionRecord['investmentDetail'],
     payloadInvestment:
       | {
           readonly assetId: string;
           readonly tradeType: string;
-          readonly quantity: string;
-          readonly price: string;
+          readonly quantity?: string;
+          readonly price?: string;
           readonly fees?: string;
           readonly notes?: string;
         }
+      | null
       | undefined,
+    priceCurrency: string,
+    user: AuthenticatedUser,
   ):
     | {
         create?: Prisma.InvestmentTransactionDetailCreateWithoutTransactionInput;
@@ -655,7 +875,7 @@ export class TransactionsService {
         delete?: true;
       }
     | undefined {
-    if (!investmentTypes.has(effectiveType)) {
+    if (!investmentDetailSupportedTypes.has(effectiveType)) {
       if (existingDetail) {
         return { delete: true };
       }
@@ -663,20 +883,35 @@ export class TransactionsService {
       return undefined;
     }
 
+    if (payloadInvestment === null) {
+      return existingDetail ? { delete: true } : undefined;
+    }
+
     if (!payloadInvestment) {
       return undefined;
     }
 
+    const calculatedDetail = this.buildInvestmentDetailData(
+      effectiveType,
+      payloadInvestment,
+      priceCurrency,
+      user,
+    );
     const detailData = {
       asset: {
         connect: {
           id: payloadInvestment.assetId,
         },
       },
-      tradeType: payloadInvestment.tradeType as TradeType,
-      quantity: payloadInvestment.quantity,
-      price: payloadInvestment.price,
-      fees: payloadInvestment.fees ?? '0',
+      tradeType: this.getExpectedTradeType(effectiveType),
+      quantity: calculatedDetail.quantity,
+      price: calculatedDetail.price,
+      priceCurrency: calculatedDetail.priceCurrency,
+      grossAmount: calculatedDetail.grossAmount,
+      fees: calculatedDetail.fees,
+      fxRateUsdToPkr: calculatedDetail.fxRateUsdToPkr,
+      fxRateSource: calculatedDetail.fxRateSource,
+      fxRateUpdatedAt: calculatedDetail.fxRateUpdatedAt,
       notes: payloadInvestment.notes,
     };
 
@@ -693,8 +928,8 @@ export class TransactionsService {
     | {
         readonly assetId: string;
         readonly tradeType: string;
-        readonly quantity: string;
-        readonly price: string;
+        readonly quantity?: string;
+        readonly price?: string;
         readonly fees?: string;
         readonly notes?: string;
       }
@@ -753,7 +988,12 @@ export class TransactionsService {
       tradeType: detail.tradeType,
       quantity: detail.quantity.toString(),
       price: detail.price.toString(),
+      priceCurrency: detail.priceCurrency,
+      grossAmount: detail.grossAmount.toString(),
       fees: detail.fees.toString(),
+      fxRateUsdToPkr: detail.fxRateUsdToPkr?.toString() ?? null,
+      fxRateSource: detail.fxRateSource,
+      fxRateUpdatedAt: detail.fxRateUpdatedAt?.toISOString() ?? null,
       notes: detail.notes,
     };
   }

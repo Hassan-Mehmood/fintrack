@@ -207,9 +207,9 @@ export class AnalyticsService {
     balances: ReadonlyMap<string, Decimal>,
     transactions: readonly RawTransaction[],
     holdings: ReadonlyArray<{
-      readonly costBasis: string;
+      readonly costBasis: string | null;
       readonly currentValue: string | null;
-      readonly realizedGain: string;
+      readonly realizedGain: string | null;
       readonly unrealizedGain: string | null;
     }>,
     converter: CurrencyConverter,
@@ -274,7 +274,8 @@ export class AnalyticsService {
       new Decimal(0),
     );
     const totalInvestmentCostBasis = holdings.reduce(
-      (sum, holding) => sum.add(new Decimal(holding.costBasis)),
+      (sum, holding) =>
+        holding.costBasis ? sum.add(new Decimal(holding.costBasis)) : sum,
       new Decimal(0),
     );
     const totalUnrealizedGain = holdings.reduce(
@@ -285,7 +286,8 @@ export class AnalyticsService {
       new Decimal(0),
     );
     const totalRealizedGain = holdings.reduce(
-      (sum, holding) => sum.add(new Decimal(holding.realizedGain)),
+      (sum, holding) =>
+        holding.realizedGain ? sum.add(new Decimal(holding.realizedGain)) : sum,
       new Decimal(0),
     );
     const totalUnrealizedGainPercent = totalInvestmentCostBasis.isZero()

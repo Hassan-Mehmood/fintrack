@@ -1,4 +1,5 @@
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { Prisma } from '../../generated/prisma/client';
 import { TransactionsService } from './transactions.service';
 import {
   createAssetNotFoundForTransactionException,
@@ -23,6 +24,8 @@ const authenticatedUser: AuthenticatedUser = {
   name: 'Test User',
   baseCurrency: 'USD',
   exchangeRate: null,
+  exchangeRateSource: 'MANUAL_SETTINGS',
+  exchangeRateUpdatedAt: null,
 };
 
 const mockDate = new Date('2026-07-07T10:00:00.000Z');
@@ -35,6 +38,9 @@ describe('TransactionsService', () => {
     };
     asset: {
       findFirst: jest.Mock;
+    };
+    investmentTransactionDetail: {
+      findMany: jest.Mock;
     };
     transaction: {
       create: jest.Mock;
@@ -53,6 +59,9 @@ describe('TransactionsService', () => {
       },
       asset: {
         findFirst: jest.fn(),
+      },
+      investmentTransactionDetail: {
+        findMany: jest.fn(),
       },
       transaction: {
         create: jest.fn(),
@@ -217,7 +226,7 @@ describe('TransactionsService', () => {
     prisma.transaction.create.mockResolvedValue(
       createTransactionRecord({
         type: 'INVESTMENT_BUY',
-        amount: '1005',
+        amount: '1010',
         investmentDetail: createInvestmentDetailRecord(),
       }),
     );
@@ -225,7 +234,7 @@ describe('TransactionsService', () => {
     const result = await service.createTransactionForUser(authenticatedUser, {
       type: 'INVESTMENT_BUY',
       accountId: 'account-1',
-      amount: '1005',
+      amount: '1',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
       description: 'Buy BTC',
@@ -249,6 +258,166 @@ describe('TransactionsService', () => {
       }),
     );
     expect(prisma.transaction.create).toHaveBeenCalledTimes(1);
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        amount: new Prisma.Decimal('1010'),
+        investmentDetail: {
+          create: {
+            grossAmount: new Prisma.Decimal('1005'),
+          },
+        },
+      },
+    });
+  });
+
+  it('converts a native USD purchase into a PKR account and stores the FX snapshot', async () => {
+    const userWithRate: AuthenticatedUser = {
+      ...authenticatedUser,
+      baseCurrency: 'PKR',
+      exchangeRate: '280',
+      exchangeRateUpdatedAt: '2026-07-01T08:00:00.000Z',
+    };
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'PKR',
+    });
+    prisma.asset.findFirst.mockResolvedValue({
+      id: 'asset-1',
+      priceCurrency: 'USD',
+    });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_BUY',
+        amount: '280010',
+        investmentDetail: createInvestmentDetailRecord(),
+      }),
+    );
+
+    await service.createTransactionForUser(userWithRate, {
+      type: 'INVESTMENT_BUY',
+      accountId: 'account-1',
+      currency: 'PKR',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'Cross-currency purchase',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'BUY',
+        quantity: '1',
+        price: '1000',
+        fees: '10',
+      },
+    });
+
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        amount: new Prisma.Decimal('280010'),
+        investmentDetail: {
+          create: {
+            priceCurrency: 'USD',
+            grossAmount: new Prisma.Decimal('1000'),
+            fxRateUsdToPkr: '280',
+            fxRateSource: 'MANUAL_SETTINGS',
+            fxRateUpdatedAt: new Date('2026-07-01T08:00:00.000Z'),
+          },
+        },
+      },
+    });
+  });
+
+  it('calculates net sale proceeds and rejects client-provided totals', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      {
+        tradeType: 'BUY',
+        quantity: new Prisma.Decimal('10'),
+        price: new Prisma.Decimal('20'),
+        fees: new Prisma.Decimal('0'),
+      },
+    ]);
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_SELL',
+        amount: '58',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'SELL',
+          quantity: '3',
+          price: '20',
+          fees: '2',
+          grossAmount: '60',
+        }),
+      }),
+    );
+
+    await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_SELL',
+      accountId: 'account-1',
+      amount: '9999',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'Partial sale',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'SELL',
+        quantity: '3',
+        price: '20',
+        fees: '2',
+      },
+    });
+
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        amount: new Prisma.Decimal('58'),
+        investmentDetail: {
+          create: {
+            grossAmount: new Prisma.Decimal('60'),
+          },
+        },
+      },
+    });
+  });
+
+  it('rejects a sale when fees exceed gross proceeds', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      {
+        tradeType: 'BUY',
+        quantity: new Prisma.Decimal('10'),
+        price: new Prisma.Decimal('20'),
+        fees: new Prisma.Decimal('0'),
+      },
+    ]);
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_SELL',
+        accountId: 'account-1',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        description: 'Invalid sale',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'SELL',
+          quantity: '1',
+          price: '1',
+          fees: '2',
+        },
+      }),
+    ).rejects.toEqual(
+      createInvalidInvestmentAmountException(
+        'Fees cannot exceed gross sale proceeds.',
+      ),
+    );
   });
 
   it('rejects an investment buy without investment details', async () => {
@@ -344,7 +513,9 @@ describe('TransactionsService', () => {
         },
       }),
     ).rejects.toEqual(
-      createInvalidInvestmentAmountException('Quantity must be greater than zero.'),
+      createInvalidInvestmentAmountException(
+        'Quantity must be greater than zero.',
+      ),
     );
   });
 
@@ -371,6 +542,44 @@ describe('TransactionsService', () => {
         description: 'Updated description',
       }),
     );
+  });
+
+  it('removes an optional dividend asset link when it is cleared', async () => {
+    prisma.transaction.findFirst.mockResolvedValue(
+      createTransactionRecord({
+        type: 'DIVIDEND',
+        amount: '25',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'DIVIDEND',
+          quantity: '0',
+          price: '0',
+          fees: '0',
+          grossAmount: '0',
+        }),
+      }),
+    );
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.transaction.update.mockResolvedValue(
+      createTransactionRecord({
+        type: 'DIVIDEND',
+        amount: '25',
+        investmentDetail: null,
+      }),
+    );
+
+    await service.updateTransactionForUser(authenticatedUser, 'transaction-1', {
+      investment: null,
+    });
+
+    const updateCall: unknown = prisma.transaction.update.mock.lastCall?.[0];
+    expect(updateCall).toMatchObject({
+      data: {
+        investmentDetail: { delete: true },
+      },
+    });
   });
 
   it('prevents updating a reversed transaction', async () => {
@@ -544,6 +753,36 @@ describe('TransactionsService', () => {
     );
   });
 
+  it('creates a dividend without a related asset', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'DIVIDEND',
+        amount: '25',
+      }),
+    );
+
+    await service.createTransactionForUser(authenticatedUser, {
+      type: 'DIVIDEND',
+      accountId: 'account-1',
+      amount: '25',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'Fund distribution',
+    });
+
+    expect(prisma.asset.findFirst).not.toHaveBeenCalled();
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        investmentDetail: undefined,
+      },
+    });
+  });
+
   it('creates a stock split transaction', async () => {
     prisma.account.findFirst.mockResolvedValue({
       id: 'account-1',
@@ -589,6 +828,53 @@ describe('TransactionsService', () => {
     );
   });
 
+  it('creates a non-cash asset deposit without amount or price inputs', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_DEPOSIT',
+        amount: '0',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'DEPOSIT',
+          quantity: '0.125',
+          price: '0',
+          fees: '0',
+          grossAmount: '0',
+        }),
+      }),
+    );
+
+    await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_DEPOSIT',
+      accountId: 'account-1',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      description: 'Transfer shares in',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'DEPOSIT',
+        quantity: '0.125',
+      },
+    });
+
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        amount: new Prisma.Decimal(0),
+        investmentDetail: {
+          create: {
+            grossAmount: new Prisma.Decimal(0),
+            price: '0',
+          },
+        },
+      },
+    });
+  });
+
   it('rejects a split transaction with a non-positive ratio', async () => {
     prisma.account.findFirst.mockResolvedValue({
       id: 'account-1',
@@ -611,7 +897,9 @@ describe('TransactionsService', () => {
         },
       }),
     ).rejects.toEqual(
-      createInvalidInvestmentAmountException('Quantity must be greater than zero.'),
+      createInvalidInvestmentAmountException(
+        'Quantity must be greater than zero.',
+      ),
     );
   });
 
@@ -662,7 +950,9 @@ function createTransactionRecord({
   readonly destinationAccountId?: string | null;
   readonly destinationAccountName?: string | null;
   readonly id?: string;
-  readonly investmentDetail?: ReturnType<typeof createInvestmentDetailRecord> | null;
+  readonly investmentDetail?: ReturnType<
+    typeof createInvestmentDetailRecord
+  > | null;
   readonly reversalOfId?: string | null;
   readonly reversedById?: string | null;
   readonly type?: string;
@@ -700,17 +990,21 @@ function createInvestmentDetailRecord({
   assetName = 'Bitcoin',
   assetSymbol = 'BTC',
   fees = '5',
+  grossAmount = '1005',
   price = '67000',
   quantity = '0.015',
   tradeType = 'BUY',
+  priceCurrency = 'USD',
 }: {
   readonly assetId?: string;
   readonly assetName?: string;
   readonly assetSymbol?: string;
   readonly fees?: string;
+  readonly grossAmount?: string;
   readonly price?: string;
   readonly quantity?: string;
   readonly tradeType?: string;
+  readonly priceCurrency?: string;
 } = {}) {
   return {
     id: 'detail-1',
@@ -726,9 +1020,16 @@ function createInvestmentDetailRecord({
     price: {
       toString: () => price,
     },
+    priceCurrency,
+    grossAmount: {
+      toString: () => grossAmount,
+    },
     fees: {
       toString: () => fees,
     },
+    fxRateUsdToPkr: null,
+    fxRateSource: null,
+    fxRateUpdatedAt: null,
     notes: null,
   };
 }

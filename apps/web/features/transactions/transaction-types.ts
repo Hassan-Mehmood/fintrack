@@ -41,7 +41,12 @@ export interface InvestmentTransactionDetail {
     | "WITHDRAWAL"
   readonly quantity: string
   readonly price: string
+  readonly priceCurrency: string
+  readonly grossAmount: string
   readonly fees: string
+  readonly fxRateUsdToPkr: string | null
+  readonly fxRateSource: string | null
+  readonly fxRateUpdatedAt: string | null
   readonly notes: string | null
 }
 
@@ -71,7 +76,7 @@ export interface TransactionPayload {
   readonly type: TransactionType
   readonly accountId: string
   readonly destinationAccountId?: string
-  readonly amount: string
+  readonly amount?: string
   readonly currency: string
   readonly occurredAt: string
   readonly description: string
@@ -89,11 +94,11 @@ export interface TransactionPayload {
       | "REINVESTMENT"
       | "DEPOSIT"
       | "WITHDRAWAL"
-    readonly quantity: string
-    readonly price: string
+    readonly quantity?: string
+    readonly price?: string
     readonly fees?: string
     readonly notes?: string
-  }
+  } | null
 }
 
 export function getTransactionTypeLabel(type: TransactionType): string {

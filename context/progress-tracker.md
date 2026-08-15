@@ -5,11 +5,13 @@ change.
 
 ## Current Phase
 
-- EODHD PSX market-data integration implemented; ready for migration deployment and authenticated provider verification.
+- Multi-currency investment reporting implemented and migrated; ready for
+  authenticated flow verification.
 
 ## Current Goal
 
-- Configure EODHD credentials, deploy the provider enum migration, and run authenticated live-provider verification.
+- Manually verify the multi-currency Investments page and cross-currency
+  transaction flows with authenticated data.
 
 ## Completed
 
@@ -174,6 +176,44 @@ change.
 - Removed the assets table's updated-price column to keep the table focused on the current price and daily change.
 - Standardized frontend USD and PKR monetary displays to exactly two decimal places through the shared currency formatter, including transaction amounts and investment prices.
 - Prevented portaled select menus from dismissing any parent dialog when clicked within its visual bounds, while preserving backdrop-click dismissal, with transaction and asset-dialog regression coverage.
+- Updated the transaction modal so buy, sell, reinvestment, dividend, interest,
+  split, bonus-share, deposit, and withdrawal flows show only their relevant
+  inputs; calculated amounts and split quantities are read-only and update
+  immediately with decimal-safe arithmetic.
+- Added current-holding context and client/server validation that prevents
+  investment sales and withdrawals from exceeding the available quantity.
+- Made the API authoritative for investment gross amounts and final cash
+  impacts, added persisted `gross_amount` values, and stopped requiring price
+  or cash inputs for non-cash asset movements.
+- Added backend and frontend regression coverage for investment calculations,
+  conflicting client totals, optional dividend assets, stock splits, non-cash
+  deposits, and overselling.
+- Applied `20260729120000_add_investment_gross_amount` to the configured Neon
+  database and confirmed all nine Prisma migrations are up to date.
+- Added investment price-currency fields and USD-to-PKR FX rate snapshots with
+  source and observation timestamps to investment transaction details.
+- Added dedicated current-rate provenance fields to user currency settings and
+  snapshot the configured manual rate when investment transactions are created
+  or materially edited.
+- Made cross-currency investment cash impacts authoritative in the API by
+  converting native gross amounts into the selected account currency before
+  applying account-currency fees.
+- Reworked investment holdings to be scoped by asset and account, including
+  account currency and portfolio membership on every API row.
+- Added USD, PKR, and Native Currencies investment reporting modes. Historical
+  cost basis and realized gains use transaction FX snapshots; current values
+  use the latest configured rate.
+- Added native-currency grouped totals without a combined total, server-side
+  account/portfolio/asset-type/currency filters, grouping controls, and an
+  optional currency-exposure breakdown.
+- Updated the Investments table to show reporting values with correctly labeled
+  native values as secondary information, and corrected transaction price
+  labels to use the asset price currency.
+- Applied `20260729170000_add_investment_fx_reporting` to the configured Neon
+  database; all ten Prisma migrations are up to date.
+- Verified Prisma validation/generation, the API build and 109 Jest tests,
+  scoped API lint, web type-check/lint, 17 Vitest tests, and the Next.js
+  production build.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
@@ -183,6 +223,12 @@ change.
 
 ## Next Up
 
+- Manually verify USD, PKR, and Native Currencies modes with holdings spread
+  across multiple accounts and portfolios.
+- Verify a USD-priced investment purchase from a PKR account and confirm the
+  transaction snapshot, cash impact, and Investments-page basis.
+- Manually verify create/edit flows for every investment transaction type with
+  authenticated accounts and holdings.
 - Configure `FINNHUB_API_KEY`, `COINGECKO_API_KEY`, `EODHD_API_TOKEN`, and `REDIS_URL` before live-provider verification.
 - Add `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` before running authenticated flows locally or in deployment.
 - Run end-to-end manual verification of the `/assets`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
@@ -215,6 +261,12 @@ change.
 - Redis caches Finnhub and CoinGecko quotes for 60 seconds with 24-hour fallback, caches EODHD quotes/history for 24 hours with seven-day fallback, caches the EODHD catalog for 24 hours with 30-day fallback, and coordinates provider request budgets.
 - Existing accounts are the wallet boundary for investment transactions; deposits and withdrawals move asset quantity without changing cash balances.
 - Provider-backed asset identifiers and pricing modes are immutable, while manual assets retain manually editable prices.
+- Investment detail `grossAmount` is derived from quantity and price, fees are
+  stored separately, and `Transaction.amount` is the authoritative final cash
+  impact. Calculated and non-cash totals sent by clients are ignored.
+- The existing `ADJUSTMENT` flow remains a cash-amount adjustment; an
+  investment quantity-adjustment mode needs an explicit domain model and was
+  not inferred from the modal specification.
 
 ## Session Notes
 

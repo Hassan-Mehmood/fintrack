@@ -36,9 +36,13 @@ export class CreateTransactionDto {
   )
   destinationAccountId?: string;
 
+  @ValidateIf(
+    (dto: CreateTransactionDto) =>
+      dto.amount !== undefined || requiresManualAmount(dto.type),
+  )
   @IsString()
   @Matches(SIGNED_DECIMAL_PATTERN)
-  amount!: string;
+  amount?: string;
 
   @IsIn(CURRENCY_VALUES)
   @Transform(({ value }: { value: unknown }): string =>
@@ -77,4 +81,17 @@ export class CreateTransactionDto {
   @ValidateNested()
   @Type(() => InvestmentTransactionDetailDto)
   investment?: InvestmentTransactionDetailDto;
+}
+
+function requiresManualAmount(type: TransactionType): boolean {
+  return (
+    type === 'INCOME' ||
+    type === 'EXPENSE' ||
+    type === 'TRANSFER' ||
+    type === 'REFUND' ||
+    type === 'FEE' ||
+    type === 'DIVIDEND' ||
+    type === 'INTEREST' ||
+    type === 'ADJUSTMENT'
+  );
 }

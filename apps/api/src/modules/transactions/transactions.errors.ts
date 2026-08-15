@@ -136,6 +136,14 @@ export function createInvalidInvestmentAmountException(
   );
 }
 
+export function createInvalidTransactionAmountException(
+  reason: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError('INVALID_TRANSACTION_AMOUNT', reason, {}),
+  );
+}
+
 export function createInvalidInvestmentAccountException(): UnprocessableEntityException {
   return new UnprocessableEntityException(
     buildApiError(

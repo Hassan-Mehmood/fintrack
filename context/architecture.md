@@ -307,12 +307,31 @@ Store the following in PostgreSQL:
 * Budgets
 * Investment assets
 * Investment trades
+* Authoritative investment gross amounts, fees, and final cash impacts
 * Current manually entered asset prices
 * Stable provider identifiers and metadata for provider-backed assets
 * Financial goals
 * Goal contributions
 
 Financial values must use PostgreSQL `NUMERIC` fields.
+
+For investment transactions, `InvestmentTransactionDetail.grossAmount` stores
+the decimal-safe quantity-times-price result, `fees` stores the recorded
+charges, and `Transaction.amount` stores the authoritative final cash impact.
+The API derives these values from the transaction type and investment inputs;
+client-submitted calculated totals are never authoritative.
+
+Investment transactions also preserve their native asset-price currency and a
+USD-to-PKR FX snapshot when conversion is required. The snapshot records the
+rate, source, and observation timestamp used for historical reporting. The
+initial FX source is the manually configured USD-to-PKR rate in user settings;
+no external FX provider is introduced by the investment reporting feature.
+
+The Investments API owns reporting-currency calculations. It supports `USD`,
+`PKR`, and `NATIVE` display modes. USD and PKR mode convert each transaction's
+cost basis and realized result with its historical FX snapshot, while current
+market value uses the latest configured FX rate. Native mode returns
+currency-grouped totals and never combines unlike currencies.
 
 Example Prisma field:
 
@@ -631,6 +650,16 @@ Frontend restrictions alone are not sufficient. Ownership must be enforced by th
 Confirmed financial transactions should not be silently deleted.
 
 Corrections should update the transaction with a recorded change or create a reversing transaction.
+
+---
+
+### 9. Investment currencies must remain explicit
+
+An asset price, investment transaction, holding value, or gain must always
+carry its currency. Reporting conversion must not overwrite or relabel the
+native value. Historical investment cost and realized-gain calculations use
+the stored transaction FX snapshot; current market values use the latest
+configured FX rate.
 
 ---
 

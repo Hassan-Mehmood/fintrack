@@ -1,4 +1,9 @@
-import type { Holding, InvestmentSummary } from "./investment-types"
+import type {
+  Holding,
+  InvestmentFilters,
+  InvestmentSummary,
+  ReportingCurrency,
+} from "./investment-types"
 
 interface GetToken {
   (): Promise<string | null>
@@ -38,10 +43,6 @@ export class ApiClientError extends Error {
 
 interface HoldingsListResponse {
   readonly data: readonly Holding[]
-  readonly meta: {
-    readonly total: number
-    readonly baseCurrency: string
-  }
 }
 
 interface InvestmentSummaryResponse {
@@ -52,25 +53,45 @@ export const holdingsQueryKey = ["investments", "holdings"] as const
 export const investmentSummaryQueryKey = ["investments", "summary"] as const
 
 export async function listHoldings(
-  getToken: GetToken
+  getToken: GetToken,
+  reportingCurrency: ReportingCurrency
 ): Promise<readonly Holding[]> {
+  const query = new URLSearchParams({ reportingCurrency })
   const response = await apiRequest<HoldingsListResponse>(
     getToken,
-    "/api/v1/investments/holdings"
+    `/api/v1/investments/holdings?${query.toString()}`
   )
 
   return response.data
 }
 
 export async function getInvestmentSummary(
-  getToken: GetToken
+  getToken: GetToken,
+  reportingCurrency: ReportingCurrency,
+  filters: InvestmentFilters
 ): Promise<InvestmentSummary> {
+  const query = new URLSearchParams({ reportingCurrency })
+  appendFilter(query, "accountId", filters.accountId)
+  appendFilter(query, "portfolioId", filters.portfolioId)
+  appendFilter(query, "assetType", filters.assetType)
+  appendFilter(query, "currency", filters.currency)
+
   const response = await apiRequest<InvestmentSummaryResponse>(
     getToken,
-    "/api/v1/investments/summary"
+    `/api/v1/investments/summary?${query.toString()}`
   )
 
   return response.data
+}
+
+function appendFilter(
+  query: URLSearchParams,
+  key: string,
+  value: string | undefined
+): void {
+  if (value) {
+    query.set(key, value)
+  }
 }
 
 async function apiRequest<T>(
