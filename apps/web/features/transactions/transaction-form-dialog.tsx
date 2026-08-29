@@ -1,14 +1,14 @@
-"use client"
+"use client";
 
-import { Controller, useForm, useWatch } from "react-hook-form"
-import { useEffect, useMemo } from "react"
-import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react"
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { useEffect, useMemo } from "react";
+import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react";
 
-import type { Account } from "@/features/accounts/account-types"
-import type { Asset } from "@/features/assets/asset-types"
-import type { Holding } from "@/features/investments/investment-types"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import type { Account } from "@/features/accounts/account-types";
+import type { Asset } from "@/features/assets/asset-types";
+import type { Holding } from "@/features/investments/investment-types";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
@@ -25,8 +25,8 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -34,8 +34,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Spinner } from "@/components/ui/spinner"
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 
 import {
   currencyValues,
@@ -48,35 +49,36 @@ import {
   type ParsedTransactionFormValues,
   type TransactionFormPayload,
   type TransactionFormValues,
-} from "./transaction-form-schema"
+} from "./transaction-form-schema";
 import {
   addQuantities,
   calculateInvestmentTransactionAmounts,
   compareDecimals,
   divideQuantities,
   multiplyQuantities,
-} from "./investment-transaction-calculations"
+} from "./investment-transaction-calculations";
 import {
   getInvestmentTradeType,
   isTransferType,
+  transactionStatusOptions,
   transactionTypeOptions,
   type Transaction,
   type TransactionType,
-} from "./transaction-types"
+} from "./transaction-types";
 
 interface TransactionFormDialogProps {
-  readonly accounts: readonly Account[]
-  readonly assets: readonly Asset[]
-  readonly defaultCurrency?: (typeof currencyValues)[number]
-  readonly errorMessage?: string | null
-  readonly exchangeRate?: string | null
-  readonly holdings: readonly Holding[]
-  readonly isPending?: boolean
-  readonly mode: "create" | "edit"
-  readonly onOpenChange: (open: boolean) => void
-  readonly onSubmit: (payload: TransactionFormPayload) => Promise<void>
-  readonly open: boolean
-  readonly transaction?: Transaction | null
+  readonly accounts: readonly Account[];
+  readonly assets: readonly Asset[];
+  readonly defaultCurrency?: (typeof currencyValues)[number];
+  readonly errorMessage?: string | null;
+  readonly exchangeRate?: string | null;
+  readonly holdings: readonly Holding[];
+  readonly isPending?: boolean;
+  readonly mode: "create" | "edit";
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onSubmit: (payload: TransactionFormPayload) => Promise<void>;
+  readonly open: boolean;
+  readonly transaction?: Transaction | null;
 }
 
 export function TransactionFormDialog({
@@ -95,13 +97,13 @@ export function TransactionFormDialog({
 }: TransactionFormDialogProps) {
   const form = useForm<TransactionFormValues>({
     defaultValues: getDefaultValues(transaction, defaultCurrency),
-  })
+  });
 
   useEffect(() => {
     if (open) {
-      form.reset(getDefaultValues(transaction, defaultCurrency))
+      form.reset(getDefaultValues(transaction, defaultCurrency));
     }
-  }, [defaultCurrency, form, open, transaction])
+  }, [defaultCurrency, form, open, transaction]);
 
   const {
     control,
@@ -111,58 +113,58 @@ export function TransactionFormDialog({
     register,
     setError,
     setValue,
-  } = form
+  } = form;
 
-  const watchedType = useWatch({ control, name: "type" })
-  const watchedAccountId = useWatch({ control, name: "accountId" })
+  const watchedType = useWatch({ control, name: "type" });
+  const watchedAccountId = useWatch({ control, name: "accountId" });
   const watchedAssetId = useWatch({
     control,
     name: "investment.assetId",
-  })
+  });
   const watchedQuantity = useWatch({
     control,
     name: "investment.quantity",
-  })
+  });
   const watchedPrice = useWatch({
     control,
     name: "investment.price",
-  })
+  });
   const watchedFees = useWatch({
     control,
     name: "investment.fees",
-  })
-  const showDestination = isTransferType(watchedType)
+  });
+  const showDestination = isTransferType(watchedType);
   const showInvestment =
-    requiresInvestmentDetail(watchedType) || watchedType === "DIVIDEND"
-  const showInvestmentQuantity = requiresQuantity(watchedType)
-  const showInvestmentPrice = requiresPrice(watchedType)
-  const showInvestmentFees = supportsFees(watchedType)
-  const showManualAmount = requiresManualAmount(watchedType)
+    requiresInvestmentDetail(watchedType) || watchedType === "DIVIDEND";
+  const showInvestmentQuantity = requiresQuantity(watchedType);
+  const showInvestmentPrice = requiresPrice(watchedType);
+  const showInvestmentFees = supportsFees(watchedType);
+  const showManualAmount = requiresManualAmount(watchedType);
   const showCalculatedAmount =
     watchedType === "INVESTMENT_BUY" ||
     watchedType === "INVESTMENT_SELL" ||
-    watchedType === "INVESTMENT_REINVESTMENT"
+    watchedType === "INVESTMENT_REINVESTMENT";
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === watchedAccountId),
-    [accounts, watchedAccountId]
-  )
+    [accounts, watchedAccountId],
+  );
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === watchedAssetId),
-    [assets, watchedAssetId]
-  )
+    [assets, watchedAssetId],
+  );
   const selectedHolding = useMemo(
     () =>
       holdings.find(
         (holding) =>
           holding.assetId === watchedAssetId &&
-          (!watchedAccountId || holding.accountId === watchedAccountId)
+          (!watchedAccountId || holding.accountId === watchedAccountId),
       ),
-    [holdings, watchedAccountId, watchedAssetId]
-  )
+    [holdings, watchedAccountId, watchedAssetId],
+  );
   const availableQuantity = useMemo(() => {
-    const currentQuantity = selectedHolding?.quantity ?? "0"
-    const editedDetail = transaction?.investmentDetail
+    const currentQuantity = selectedHolding?.quantity ?? "0";
+    const editedDetail = transaction?.investmentDetail;
 
     if (
       mode === "edit" &&
@@ -173,14 +175,14 @@ export function TransactionFormDialog({
     ) {
       return (
         addQuantities(currentQuantity, editedDetail.quantity) ?? currentQuantity
-      )
+      );
     }
 
-    return currentQuantity
-  }, [mode, selectedHolding, transaction, watchedAssetId])
+    return currentQuantity;
+  }, [mode, selectedHolding, transaction, watchedAssetId]);
   const existingSplitQuantity = useMemo(() => {
-    const currentQuantity = selectedHolding?.quantity ?? "0"
-    const editedDetail = transaction?.investmentDetail
+    const currentQuantity = selectedHolding?.quantity ?? "0";
+    const editedDetail = transaction?.investmentDetail;
 
     if (
       mode === "edit" &&
@@ -191,11 +193,11 @@ export function TransactionFormDialog({
       return (
         divideQuantities(currentQuantity, editedDetail.quantity) ??
         currentQuantity
-      )
+      );
     }
 
-    return currentQuantity
-  }, [mode, selectedHolding, transaction, watchedAssetId])
+    return currentQuantity;
+  }, [mode, selectedHolding, transaction, watchedAssetId]);
   const investmentCalculation = useMemo(
     () =>
       showCalculatedAmount
@@ -218,54 +220,49 @@ export function TransactionFormDialog({
       watchedPrice,
       watchedQuantity,
       watchedType,
-    ]
-  )
+    ],
+  );
   const resultingSplitQuantity = useMemo(
     () =>
       watchedType === "INVESTMENT_SPLIT"
         ? multiplyQuantities(existingSplitQuantity, watchedQuantity ?? "")
         : null,
-    [existingSplitQuantity, watchedQuantity, watchedType]
-  )
+    [existingSplitQuantity, watchedQuantity, watchedType],
+  );
 
   useEffect(() => {
     if (selectedAccount) {
       setValue(
         "currency",
-        selectedAccount.currency as (typeof currencyValues)[number]
-      )
+        selectedAccount.currency as (typeof currencyValues)[number],
+      );
     }
-  }, [selectedAccount, setValue])
+  }, [selectedAccount, setValue]);
 
   useEffect(() => {
     if (!showDestination) {
-      setValue("destinationAccountId", "")
+      setValue("destinationAccountId", "");
     }
-  }, [showDestination, setValue])
+  }, [showDestination, setValue]);
 
   useEffect(() => {
     if (showCalculatedAmount) {
-      setValue("amount", investmentCalculation?.cashImpact ?? "")
+      setValue("amount", investmentCalculation?.cashImpact ?? "");
     } else if (!showManualAmount) {
-      setValue("amount", "")
+      setValue("amount", "");
     }
-  }, [
-    investmentCalculation,
-    setValue,
-    showCalculatedAmount,
-    showManualAmount,
-  ])
+  }, [investmentCalculation, setValue, showCalculatedAmount, showManualAmount]);
 
   const availableAccounts = useMemo(
     () =>
       showInvestment || watchedType === "INTEREST"
         ? accounts.filter(
             (account) =>
-              account.type === "BROKER" || account.type === "CRYPTO_WALLET"
+              account.type === "BROKER" || account.type === "CRYPTO_WALLET",
           )
         : accounts,
-    [accounts, showInvestment, watchedType]
-  )
+    [accounts, showInvestment, watchedType],
+  );
 
   useEffect(() => {
     if (
@@ -274,14 +271,14 @@ export function TransactionFormDialog({
       selectedAccount.type !== "BROKER" &&
       selectedAccount.type !== "CRYPTO_WALLET"
     ) {
-      setValue("accountId", "")
+      setValue("accountId", "");
     }
-  }, [selectedAccount, setValue, showInvestment, watchedType])
+  }, [selectedAccount, setValue, showInvestment, watchedType]);
 
   const otherAccounts = useMemo(
     () => accounts.filter((account) => account.id !== watchedAccountId),
-    [accounts, watchedAccountId]
-  )
+    [accounts, watchedAccountId],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -299,22 +296,22 @@ export function TransactionFormDialog({
 
         <form
           onSubmit={handleSubmit(async (values) => {
-            clearErrors()
+            clearErrors();
 
-            const parsedValues = transactionFormSchema.safeParse(values)
+            const parsedValues = transactionFormSchema.safeParse(values);
 
             if (!parsedValues.success) {
               parsedValues.error.issues.forEach((issue) => {
-                const fieldName = issue.path[0]
+                const fieldName = issue.path[0];
 
                 if (typeof fieldName === "string") {
                   setError(fieldName as keyof TransactionFormValues, {
                     message: issue.message,
-                  })
+                  });
                 }
-              })
+              });
 
-              return
+              return;
             }
 
             if (
@@ -322,16 +319,16 @@ export function TransactionFormDialog({
                 parsedValues.data.type === "INVESTMENT_WITHDRAWAL") &&
               compareDecimals(
                 parsedValues.data.investment?.quantity ?? "",
-                availableQuantity
+                availableQuantity,
               ) === 1
             ) {
               setError("investment.quantity", {
                 message: `Quantity cannot exceed the current holding (${availableQuantity}).`,
-              })
-              return
+              });
+              return;
             }
 
-            await onSubmit(sanitizePayload(parsedValues.data))
+            await onSubmit(sanitizePayload(parsedValues.data));
           })}
           className="flex flex-col gap-4"
         >
@@ -354,20 +351,20 @@ export function TransactionFormDialog({
                     value={field.value}
                     onValueChange={(value) => {
                       const selectedType = transactionTypeOptions.find(
-                        (option) => option.value === value
-                      )?.value
+                        (option) => option.value === value,
+                      )?.value;
 
                       if (!selectedType) {
-                        return
+                        return;
                       }
 
-                      field.onChange(selectedType)
+                      field.onChange(selectedType);
                       setValue(
                         "investment",
                         getEmptyInvestmentValues(selectedType),
-                        { shouldValidate: false }
-                      )
-                      setValue("amount", "", { shouldValidate: false })
+                        { shouldValidate: false },
+                      );
+                      setValue("amount", "", { shouldValidate: false });
                     }}
                   >
                     <SelectTrigger
@@ -427,6 +424,38 @@ export function TransactionFormDialog({
               ) : null}
             </Field>
 
+            <Field data-invalid={Boolean(errors.status) || undefined}>
+              <FieldLabel htmlFor="transaction-status">Status</FieldLabel>
+              <Controller
+                control={control}
+                name="status"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="transaction-status"
+                      aria-invalid={Boolean(errors.status) || undefined}
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {transactionStatusOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FieldDescription>
+                Only cleared transactions affect balances and summaries.
+              </FieldDescription>
+              <FieldError errors={[errors.status]} />
+            </Field>
+
             {showDestination ? (
               <Field
                 data-invalid={Boolean(errors.destinationAccountId) || undefined}
@@ -438,10 +467,7 @@ export function TransactionFormDialog({
                   control={control}
                   name="destinationAccountId"
                   render={({ field }) => (
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger
                         id="transaction-destination"
                         aria-invalid={
@@ -551,7 +577,9 @@ export function TransactionFormDialog({
               <FieldLegend>Investment details</FieldLegend>
               <FieldGroup className="grid gap-5 md:grid-cols-2">
                 <Field
-                  data-invalid={Boolean(errors.investment?.assetId) || undefined}
+                  data-invalid={
+                    Boolean(errors.investment?.assetId) || undefined
+                  }
                 >
                   <FieldLabel htmlFor="transaction-investment-asset">
                     Asset
@@ -564,7 +592,7 @@ export function TransactionFormDialog({
                         value={
                           watchedType === "DIVIDEND" && !field.value
                             ? "none"
-                            : field.value ?? ""
+                            : (field.value ?? "")
                         }
                         onValueChange={(value) =>
                           field.onChange(value === "none" ? "" : value)
@@ -648,7 +676,9 @@ export function TransactionFormDialog({
 
                 {showInvestmentPrice ? (
                   <Field
-                    data-invalid={Boolean(errors.investment?.price) || undefined}
+                    data-invalid={
+                      Boolean(errors.investment?.price) || undefined
+                    }
                   >
                     <FieldLabel htmlFor="transaction-investment-price">
                       Price per unit
@@ -679,7 +709,9 @@ export function TransactionFormDialog({
                     </FieldLabel>
                     <Input
                       id="transaction-investment-fees"
-                      aria-invalid={Boolean(errors.investment?.fees) || undefined}
+                      aria-invalid={
+                        Boolean(errors.investment?.fees) || undefined
+                      }
                       inputMode="decimal"
                       placeholder="0"
                       {...register("investment.fees")}
@@ -729,18 +761,31 @@ export function TransactionFormDialog({
             </FieldSet>
           ) : null}
 
-          <Field data-invalid={Boolean(errors.description) || undefined}>
-            <FieldLabel htmlFor="transaction-description">
-              Description
-            </FieldLabel>
-            <Input
-              id="transaction-description"
-              aria-invalid={Boolean(errors.description) || undefined}
-              placeholder="Grocery shopping, salary, transfer to savings..."
-              {...register("description")}
-            />
-            <FieldError errors={[errors.description]} />
-          </Field>
+          <FieldGroup className="grid gap-5 md:grid-cols-2">
+            <Field data-invalid={Boolean(errors.category) || undefined}>
+              <FieldLabel htmlFor="transaction-category">Category</FieldLabel>
+              <Input
+                id="transaction-category"
+                aria-invalid={Boolean(errors.category) || undefined}
+                placeholder="Food, Salary, Transfer..."
+                {...register("category")}
+              />
+              <FieldError errors={[errors.category]} />
+            </Field>
+
+            <Field data-invalid={Boolean(errors.description) || undefined}>
+              <FieldLabel htmlFor="transaction-description">
+                Description
+              </FieldLabel>
+              <Input
+                id="transaction-description"
+                aria-invalid={Boolean(errors.description) || undefined}
+                placeholder="Grocery shopping, monthly salary..."
+                {...register("description")}
+              />
+              <FieldError errors={[errors.description]} />
+            </Field>
+          </FieldGroup>
 
           <FieldGroup className="grid gap-5 md:grid-cols-2">
             <Field data-invalid={Boolean(errors.merchant) || undefined}>
@@ -756,13 +801,38 @@ export function TransactionFormDialog({
 
             <Field data-invalid={Boolean(errors.notes) || undefined}>
               <FieldLabel htmlFor="transaction-notes">Notes</FieldLabel>
-              <Input
+              <Textarea
                 id="transaction-notes"
                 aria-invalid={Boolean(errors.notes) || undefined}
                 placeholder="Optional"
                 {...register("notes")}
               />
               <FieldError errors={[errors.notes]} />
+            </Field>
+
+            <Field data-invalid={Boolean(errors.reference) || undefined}>
+              <FieldLabel htmlFor="transaction-reference">Reference</FieldLabel>
+              <Input
+                id="transaction-reference"
+                aria-invalid={Boolean(errors.reference) || undefined}
+                placeholder="Optional bank or broker reference"
+                {...register("reference")}
+              />
+              <FieldError errors={[errors.reference]} />
+            </Field>
+
+            <Field data-invalid={Boolean(errors.labels) || undefined}>
+              <FieldLabel htmlFor="transaction-labels">Labels</FieldLabel>
+              <Input
+                id="transaction-labels"
+                aria-invalid={Boolean(errors.labels) || undefined}
+                placeholder="work, recurring, reimbursable"
+                {...register("labels")}
+              />
+              <FieldDescription>
+                Separate labels with commas. Up to 20 labels are stored.
+              </FieldDescription>
+              <FieldError errors={[errors.labels]} />
             </Field>
           </FieldGroup>
 
@@ -788,38 +858,46 @@ export function TransactionFormDialog({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 function getDefaultValues(
   transaction: Transaction | null | undefined,
-  defaultCurrency: (typeof currencyValues)[number]
+  defaultCurrency: (typeof currencyValues)[number],
 ): TransactionFormValues {
   if (!transaction) {
     return {
       type: "EXPENSE",
+      status: "CLEARED",
       accountId: "",
       destinationAccountId: "",
       amount: "",
       currency: defaultCurrency,
       occurredAt: new Date().toISOString().slice(0, 10),
+      category: "",
       description: "",
       merchant: "",
       notes: "",
+      reference: "",
+      labels: "",
       investment: undefined,
-    }
+    };
   }
 
   return {
     type: transaction.type,
+    status: transaction.status,
     accountId: transaction.accountId,
     destinationAccountId: transaction.destinationAccountId ?? "",
     amount: transaction.amount,
     currency: transaction.currency as (typeof currencyValues)[number],
     occurredAt: transaction.occurredAt.slice(0, 10),
+    category: transaction.category,
     description: transaction.description,
     merchant: transaction.merchant ?? "",
     notes: transaction.notes ?? "",
+    reference: transaction.reference ?? "",
+    labels: transaction.labels.join(", "),
     investment:
       transaction.investmentDetail &&
       (requiresInvestmentDetail(transaction.type) ||
@@ -839,16 +917,16 @@ function getDefaultValues(
             notes: "",
           }
         : getEmptyInvestmentValues(transaction.type),
-  }
+  };
 }
 
 function getEmptyInvestmentValues(
-  type: TransactionType
+  type: TransactionType,
 ): TransactionFormValues["investment"] {
-  const tradeType = getInvestmentTradeType(type)
+  const tradeType = getInvestmentTradeType(type);
 
   if (!tradeType || tradeType === "INTEREST") {
-    return undefined
+    return undefined;
   }
 
   return {
@@ -858,16 +936,16 @@ function getEmptyInvestmentValues(
     price: "",
     fees: "",
     notes: "",
-  }
+  };
 }
 
 function sanitizePayload(
-  values: ParsedTransactionFormValues
+  values: ParsedTransactionFormValues,
 ): TransactionFormPayload {
   const shouldIncludeInvestment =
     requiresInvestmentDetail(values.type) ||
-    (values.type === "DIVIDEND" && Boolean(values.investment?.assetId))
-  const tradeType = getInvestmentTradeType(values.type)
+    (values.type === "DIVIDEND" && Boolean(values.investment?.assetId));
+  const tradeType = getInvestmentTradeType(values.type);
   const investment =
     shouldIncludeInvestment &&
     values.investment?.assetId &&
@@ -889,10 +967,15 @@ function sanitizePayload(
         }
       : values.type === "DIVIDEND"
         ? null
-        : undefined
+        : undefined;
 
   return {
     ...values,
+    labels: values.labels
+      ? [...new Set(values.labels.split(",").map((label) => label.trim()))]
+          .filter(Boolean)
+          .slice(0, 20)
+      : [],
     destinationAccountId: isTransferType(values.type)
       ? values.destinationAccountId
       : undefined,
@@ -904,7 +987,7 @@ function sanitizePayload(
         ? values.amount
         : undefined,
     investment,
-  }
+  };
 }
 
 function CalculatedAmountField({
@@ -912,11 +995,11 @@ function CalculatedAmountField({
   label,
   value,
 }: {
-  readonly currency?: string
-  readonly label: string
-  readonly value: string
+  readonly currency?: string;
+  readonly label: string;
+  readonly value: string;
 }) {
-  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`
+  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`;
 
   return (
     <Field data-disabled>
@@ -934,27 +1017,22 @@ function CalculatedAmountField({
           : "Calculated automatically after selecting an account."}
       </FieldDescription>
     </Field>
-  )
+  );
 }
 
 function CalculatedQuantityField({
   label,
   value,
 }: {
-  readonly label: string
-  readonly value: string
+  readonly label: string;
+  readonly value: string;
 }) {
-  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`
+  const inputId = `transaction-${label.toLowerCase().replaceAll(" ", "-")}`;
 
   return (
     <Field data-disabled>
       <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
-      <Input
-        id={inputId}
-        readOnly
-        aria-readonly="true"
-        value={value}
-      />
+      <Input id={inputId} readOnly aria-readonly="true" value={value} />
     </Field>
-  )
+  );
 }

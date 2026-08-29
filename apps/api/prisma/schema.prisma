@@ -35,6 +35,13 @@ enum TransactionType {
   ADJUSTMENT
 }
 
+enum TransactionStatus {
+  PENDING
+  CLEARED
+  FAILED
+  VOIDED
+}
+
 enum AssetProvider {
   FINNHUB
   COINGECKO
@@ -139,13 +146,18 @@ model Transaction {
   reversalOf           Transaction?                 @relation("TransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
   reversal             Transaction?                 @relation("TransactionReversal")
   type                 TransactionType
+  status               TransactionStatus            @default(CLEARED)
   idempotencyKey       String                       @default(uuid()) @map("idempotency_key") @db.Uuid
   amount               Decimal                      @db.Decimal(24, 8)
   currency             String                       @db.VarChar(3)
   occurredAt           DateTime                     @map("occurred_at")
+  category             String
   description          String
   merchant             String?
   notes                String?
+  reference            String?
+  labels               String[]                     @default([])
+  deletedAt            DateTime?                    @map("deleted_at")
   investmentDetail     InvestmentTransactionDetail?
   createdAt            DateTime                     @default(now()) @map("created_at")
   updatedAt            DateTime                     @updatedAt @map("updated_at")
@@ -153,7 +165,11 @@ model Transaction {
   @@unique([userId, idempotencyKey])
   @@index([userId])
   @@index([userId, occurredAt])
+  @@index([userId, status, occurredAt])
+  @@index([userId, type])
+  @@index([userId, category])
   @@index([accountId])
+  @@index([accountId, occurredAt])
   @@index([destinationAccountId])
   @@map("transactions")
 }

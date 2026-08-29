@@ -164,3 +164,11 @@ export function createInsufficientHoldingException(
     ),
   );
 }
+
+export function createInvalidBulkTransactionException(
+  reason: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError('INVALID_BULK_TRANSACTION_UPDATE', reason, {}),
+  );
+}

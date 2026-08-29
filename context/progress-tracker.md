@@ -225,6 +225,35 @@ change.
 - Verified Prisma validation/generation, the API build and 109 Jest tests,
   scoped API lint, web type-check/lint, 17 Vitest tests, and the Next.js
   production build.
+- Split transaction classification into a required `category` field and a
+  separate required free-text `description` across Prisma, the transactions
+  API, wallet imports, dashboard recent activity, and the web transaction form.
+- Updated the transactions table and search to show and query category and
+  description independently, with category fallback text for migrated legacy
+  rows and category-preserving reversal behavior.
+- Applied `20260830120000_add_transaction_category_and_description` to the
+  configured Neon database; all eleven Prisma migrations are up to date.
+- Verified Prisma validation/generation, both application builds, 114 API Jest
+  tests, scoped API lint, web lint, and 18 Vitest tests after the transaction
+  category/description migration.
+- Completed the Transactions-page MVP improvements with server-side search,
+  multi-value filters, filtered base-currency summaries, six sortable fields,
+  URL-persisted filter state, and 25/50/100-row pagination.
+- Added processing status, transaction-owned labels, external references, and
+  soft deletion to the transaction model. Cleared, non-deleted transactions are
+  now the only rows that affect account balances, dashboard analytics, and
+  investment holdings.
+- Added desktop row selection and atomic bulk category, label, cleared-status,
+  and delete actions, plus overflow actions for view, edit, duplicate, reverse,
+  and delete.
+- Added the transaction detail sheet, filter chips, debounced search, sticky
+  desktop table header, loading preservation, success toasts, mobile filter
+  sheet, and compact mobile transaction cards.
+- Applied `20260830153000_add_transaction_table_fields` to the configured Neon
+  database; all twelve Prisma migrations are up to date.
+- Verified Prisma validation/generation, both production builds, 114 API Jest
+  tests, scoped API source lint, web lint, and 21 Vitest tests after completing
+  the Transactions-page improvements.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 

@@ -1,22 +1,23 @@
-import { z } from "zod/v4"
+import { z } from "zod/v4";
 
 import {
   calculateInvestmentTransactionAmounts,
   compareDecimals,
   isNonNegativeDecimal,
   isPositiveDecimal,
-} from "./investment-transaction-calculations"
+} from "./investment-transaction-calculations";
 import {
   getInvestmentTradeType,
+  transactionStatusOptions,
   transactionTypeValues,
   type TransactionType,
   type TransactionPayload,
-} from "./transaction-types"
+} from "./transaction-types";
 
-const signedAmountPattern = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/
-const decimalField = z.string().trim().optional().or(z.literal(""))
+const signedAmountPattern = /^(?:-)?(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
+const decimalField = z.string().trim().optional().or(z.literal(""));
 
-export const currencyValues = ["USD", "PKR"] as const
+export const currencyValues = ["USD", "PKR"] as const;
 
 const investmentSchema = z.object({
   assetId: z.string().trim().optional().or(z.literal("")),
@@ -37,13 +38,19 @@ const investmentSchema = z.object({
   price: decimalField,
   fees: decimalField,
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
-})
+});
 
 export const transactionFormSchema = z
   .object({
     type: z.enum(transactionTypeValues, {
       error: "Select a transaction type.",
     }),
+    status: z.enum(
+      transactionStatusOptions.map((option) => option.value) as [
+        "PENDING" | "CLEARED" | "FAILED" | "VOIDED",
+        ...("PENDING" | "CLEARED" | "FAILED" | "VOIDED")[],
+      ],
+    ),
     accountId: z.string().uuid("Select an account."),
     destinationAccountId: z.string().uuid().optional().or(z.literal("")),
     amount: decimalField,
@@ -51,13 +58,12 @@ export const transactionFormSchema = z
       error: "Select a currency.",
     }),
     occurredAt: z.string().trim().min(1, "Select a date."),
-    description: z
-      .string()
-      .trim()
-      .min(1, "Enter a description.")
-      .max(255),
+    category: z.string().trim().min(1, "Enter a category.").max(255),
+    description: z.string().trim().min(1, "Enter a description.").max(255),
     merchant: z.string().trim().max(120).optional().or(z.literal("")),
     notes: z.string().trim().max(1000).optional().or(z.literal("")),
+    reference: z.string().trim().max(255).optional().or(z.literal("")),
+    labels: z.string().trim().max(500).optional().or(z.literal("")),
     investment: investmentSchema.optional(),
   })
   .superRefine((data, context) => {
@@ -65,8 +71,8 @@ export const transactionFormSchema = z
       addIssue(
         context,
         ["destinationAccountId"],
-        "Select a destination account for the transfer."
-      )
+        "Select a destination account for the transfer.",
+      );
     }
 
     if (
@@ -76,52 +82,55 @@ export const transactionFormSchema = z
       addIssue(
         context,
         ["destinationAccountId"],
-        "The destination account must be different from the source account."
-      )
+        "The destination account must be different from the source account.",
+      );
     }
 
     if (requiresManualAmount(data.type)) {
       if (!data.amount || !signedAmountPattern.test(data.amount)) {
-        addIssue(context, ["amount"], "Enter a valid amount.")
+        addIssue(context, ["amount"], "Enter a valid amount.");
       }
     }
 
     if (!requiresInvestmentDetail(data.type) && data.type !== "DIVIDEND") {
-      return
+      return;
     }
 
     if (!data.investment?.assetId) {
       if (data.type !== "DIVIDEND") {
-        addIssue(context, ["investment", "assetId"], "Select an asset.")
+        addIssue(context, ["investment", "assetId"], "Select an asset.");
       }
-      return
+      return;
     }
 
-    const expectedTradeType = getInvestmentTradeType(data.type)
+    const expectedTradeType = getInvestmentTradeType(data.type);
     if (data.investment.tradeType !== expectedTradeType) {
       addIssue(
         context,
         ["investment", "tradeType"],
-        "Trade type does not match the transaction type."
-      )
+        "Trade type does not match the transaction type.",
+      );
     }
 
-    if (requiresQuantity(data.type) && !isPositiveDecimal(data.investment.quantity)) {
+    if (
+      requiresQuantity(data.type) &&
+      !isPositiveDecimal(data.investment.quantity)
+    ) {
       addIssue(
         context,
         ["investment", "quantity"],
         data.type === "INVESTMENT_SPLIT"
           ? "Split ratio must be greater than zero."
-          : "Quantity must be greater than zero."
-      )
+          : "Quantity must be greater than zero.",
+      );
     }
 
     if (requiresPrice(data.type) && !isPositiveDecimal(data.investment.price)) {
       addIssue(
         context,
         ["investment", "price"],
-        "Price must be greater than zero."
-      )
+        "Price must be greater than zero.",
+      );
     }
 
     if (
@@ -132,8 +141,8 @@ export const transactionFormSchema = z
       addIssue(
         context,
         ["investment", "fees"],
-        "Fees must be zero or greater."
-      )
+        "Fees must be zero or greater.",
+      );
     }
 
     if (
@@ -146,24 +155,23 @@ export const transactionFormSchema = z
         quantity: data.investment.quantity ?? "",
         price: data.investment.price ?? "",
         fees: data.investment.fees || "0",
-      })
+      });
 
-      if (
-        calculation &&
-        compareDecimals(calculation.cashImpact, "0") === -1
-      ) {
+      if (calculation && compareDecimals(calculation.cashImpact, "0") === -1) {
         addIssue(
           context,
           ["investment", "fees"],
-          "Fees cannot exceed gross sale proceeds."
-        )
+          "Fees cannot exceed gross sale proceeds.",
+        );
       }
     }
-  })
+  });
 
-export type TransactionFormValues = z.input<typeof transactionFormSchema>
-export type ParsedTransactionFormValues = z.output<typeof transactionFormSchema>
-export type TransactionFormPayload = TransactionPayload
+export type TransactionFormValues = z.input<typeof transactionFormSchema>;
+export type ParsedTransactionFormValues = z.output<
+  typeof transactionFormSchema
+>;
+export type TransactionFormPayload = TransactionPayload;
 
 export function requiresManualAmount(type: TransactionType): boolean {
   return (
@@ -175,7 +183,7 @@ export function requiresManualAmount(type: TransactionType): boolean {
     type === "DIVIDEND" ||
     type === "INTEREST" ||
     type === "ADJUSTMENT"
-  )
+  );
 }
 
 export function requiresInvestmentDetail(type: TransactionType): boolean {
@@ -187,11 +195,11 @@ export function requiresInvestmentDetail(type: TransactionType): boolean {
     type === "INVESTMENT_REINVESTMENT" ||
     type === "INVESTMENT_DEPOSIT" ||
     type === "INVESTMENT_WITHDRAWAL"
-  )
+  );
 }
 
 export function requiresQuantity(type: TransactionType): boolean {
-  return requiresInvestmentDetail(type)
+  return requiresInvestmentDetail(type);
 }
 
 export function requiresPrice(type: TransactionType): boolean {
@@ -199,21 +207,21 @@ export function requiresPrice(type: TransactionType): boolean {
     type === "INVESTMENT_BUY" ||
     type === "INVESTMENT_SELL" ||
     type === "INVESTMENT_REINVESTMENT"
-  )
+  );
 }
 
 export function supportsFees(type: TransactionType): boolean {
-  return requiresPrice(type)
+  return requiresPrice(type);
 }
 
 function addIssue(
   context: z.RefinementCtx,
   path: PropertyKey[],
-  message: string
+  message: string,
 ): void {
   context.addIssue({
     code: "custom",
     message,
     path,
-  })
+  });
 }

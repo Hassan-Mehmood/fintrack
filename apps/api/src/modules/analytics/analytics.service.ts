@@ -76,6 +76,7 @@ interface RawTransaction {
   readonly amount: Decimal;
   readonly currency: string;
   readonly occurredAt: Date;
+  readonly category: string;
   readonly description: string;
   readonly account: {
     readonly name: string;
@@ -163,6 +164,8 @@ export class AnalyticsService {
     return this.prisma.transaction.findMany({
       where: {
         userId,
+        status: 'CLEARED',
+        deletedAt: null,
       },
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
       select: {
@@ -173,6 +176,7 @@ export class AnalyticsService {
         amount: true,
         currency: true,
         occurredAt: true,
+        category: true,
         description: true,
         account: {
           select: {
@@ -477,7 +481,7 @@ export class AnalyticsService {
 
       return {
         id: transaction.id,
-        label: transaction.description,
+        label: transaction.description || transaction.category,
         account: transaction.account.name,
         amount: convertedEffect.toFixed(2),
         currency: converter.baseCurrency,

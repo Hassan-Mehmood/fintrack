@@ -94,7 +94,8 @@ describe('buildWalletImportPlan', () => {
         expect.objectContaining({
           type: 'EXPENSE',
           accountName: 'Nayapay',
-          description: 'Transfer, withdraw',
+          category: 'Transfer, withdraw',
+          description: '',
           notes: 'iCloud',
         }),
       ]),

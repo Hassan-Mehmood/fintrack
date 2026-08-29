@@ -264,6 +264,40 @@ describe("TransactionFormDialog", () => {
     expect(screen.queryByLabelText("Price per unit")).not.toBeInTheDocument()
   })
 
+  it("submits category and description as separate fields", async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <TransactionFormDialog
+        accounts={[investmentAccount]}
+        assets={[]}
+        holdings={[]}
+        mode="create"
+        onOpenChange={vi.fn()}
+        onSubmit={onSubmit}
+        open
+      />
+    )
+
+    await selectOption(user, "Account", "Broker account (USD)")
+    await user.type(screen.getByLabelText("Amount"), "25")
+    await user.type(screen.getByLabelText("Category"), "Food")
+    await user.type(screen.getByLabelText("Description"), "Lunch with a client")
+    await user.click(
+      screen.getByRole("button", { name: "Create transaction" })
+    )
+
+    await vi.waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: "Food",
+          description: "Lunch with a client",
+        })
+      )
+    )
+  })
+
   it("prevents submitting a sale above the current holding", async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn().mockResolvedValue(undefined)
@@ -285,10 +319,9 @@ describe("TransactionFormDialog", () => {
     await selectOption(user, "Asset", "Acme (ACME)")
     await user.type(screen.getByLabelText("Quantity"), "2")
     await user.type(screen.getByLabelText("Price per unit"), "10")
+    await user.type(screen.getByLabelText("Category"), "Investment")
     await user.type(screen.getByLabelText("Description"), "Partial sale")
-    await user.click(
-      screen.getByRole("button", { name: "Create transaction" })
-    )
+    await user.click(screen.getByRole("button", { name: "Create transaction" }))
 
     expect(
       await screen.findByText(

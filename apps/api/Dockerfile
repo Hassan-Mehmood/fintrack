@@ -4,7 +4,7 @@ FROM node:22-alpine AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@11.11.0 --activate
 
 WORKDIR /app
 
@@ -13,7 +13,8 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma/
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=fintrack-pnpm,target=/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile
 RUN DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder pnpm prisma generate
 
 FROM base AS build

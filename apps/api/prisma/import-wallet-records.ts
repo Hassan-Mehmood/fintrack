@@ -39,7 +39,8 @@ const EXPECTED_CURRENT_STATE = {
       amount: '654.65',
       currency: 'USD',
       occurredAt: '2026-07-29T00:00:00.000Z',
-      description: 'Bitcoin for long term',
+      category: 'Bitcoin for long term',
+      description: '',
     },
   ],
 } as const;
@@ -67,6 +68,7 @@ interface CurrentState {
     readonly amount: string;
     readonly currency: string;
     readonly occurredAt: string;
+    readonly category: string;
     readonly description: string;
   }>;
 }
@@ -165,6 +167,7 @@ async function main(): Promise<void> {
                 amount: transaction.amount,
                 currency: transaction.currency,
                 occurredAt: new Date(transaction.occurredAt),
+                category: transaction.category,
                 description: transaction.description,
                 merchant: transaction.merchant,
                 notes: transaction.notes,
@@ -299,6 +302,7 @@ async function findTargetUser(client: Prisma.TransactionClient, email: string) {
           amount: true,
           currency: true,
           occurredAt: true,
+          category: true,
           description: true,
           account: { select: { name: true } },
           destinationAccount: { select: { name: true } },
@@ -332,6 +336,7 @@ function toCurrentState(
       amount: transaction.amount.toString(),
       currency: transaction.currency,
       occurredAt: transaction.occurredAt.toISOString(),
+      category: transaction.category,
       description: transaction.description,
     })),
   };

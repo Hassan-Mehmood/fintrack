@@ -49,6 +49,8 @@ export class AccountsService {
       this.prisma.transaction.findMany({
         where: {
           userId: user.id,
+          status: 'CLEARED',
+          deletedAt: null,
         },
         select: {
           type: true,
@@ -72,6 +74,8 @@ export class AccountsService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
+        status: 'CLEARED',
+        deletedAt: null,
         OR: [{ accountId }, { destinationAccountId: accountId }],
       },
       select: {
@@ -104,6 +108,8 @@ export class AccountsService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
+        status: 'CLEARED',
+        deletedAt: null,
         OR: [{ accountId: account.id }, { destinationAccountId: account.id }],
       },
       select: {
@@ -141,6 +147,8 @@ export class AccountsService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
+        status: 'CLEARED',
+        deletedAt: null,
         OR: [{ accountId: account.id }, { destinationAccountId: account.id }],
       },
       select: {

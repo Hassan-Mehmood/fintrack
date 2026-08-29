@@ -461,7 +461,13 @@ export class InvestmentsService {
     userId: string,
   ): Promise<readonly DetailRecord[]> {
     return this.prisma.investmentTransactionDetail.findMany({
-      where: { asset: { userId } },
+      where: {
+        asset: { userId },
+        transaction: {
+          status: 'CLEARED',
+          deletedAt: null,
+        },
+      },
       select: {
         id: true,
         assetId: true,

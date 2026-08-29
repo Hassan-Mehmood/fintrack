@@ -24,6 +24,16 @@ export const transactionTypeValues = transactionTypeOptions.map(
 
 export type TransactionType = (typeof transactionTypeOptions)[number]["value"]
 
+export const transactionStatusOptions = [
+  { value: "PENDING", label: "Pending" },
+  { value: "CLEARED", label: "Cleared" },
+  { value: "FAILED", label: "Failed" },
+  { value: "VOIDED", label: "Voided" },
+] as const
+
+export type TransactionStatus =
+  (typeof transactionStatusOptions)[number]["value"]
+
 export interface InvestmentTransactionDetail {
   readonly id: string
   readonly assetId: string
@@ -53,6 +63,7 @@ export interface InvestmentTransactionDetail {
 export interface Transaction {
   readonly id: string
   readonly type: TransactionType
+  readonly status: TransactionStatus
   readonly accountId: string
   readonly accountName: string
   readonly accountCurrency: string
@@ -63,9 +74,13 @@ export interface Transaction {
   readonly amount: string
   readonly currency: string
   readonly occurredAt: string
+  readonly category: string
   readonly description: string
   readonly merchant: string | null
   readonly notes: string | null
+  readonly reference: string | null
+  readonly labels: readonly string[]
+  readonly deletedAt: string | null
   readonly investmentDetail: InvestmentTransactionDetail | null
   readonly createdAt: string
   readonly updatedAt: string
@@ -74,14 +89,18 @@ export interface Transaction {
 export interface TransactionPayload {
   readonly idempotencyKey?: string
   readonly type: TransactionType
+  readonly status?: TransactionStatus
   readonly accountId: string
   readonly destinationAccountId?: string
   readonly amount?: string
   readonly currency: string
   readonly occurredAt: string
+  readonly category: string
   readonly description: string
   readonly merchant?: string
   readonly notes?: string
+  readonly reference?: string
+  readonly labels?: readonly string[]
   readonly investment?: {
     readonly assetId: string
     readonly tradeType:
@@ -99,6 +118,64 @@ export interface TransactionPayload {
     readonly fees?: string
     readonly notes?: string
   } | null
+}
+
+export interface TransactionListParams {
+  readonly search?: string
+  readonly dateFrom?: string
+  readonly dateTo?: string
+  readonly accountIds?: readonly string[]
+  readonly types?: readonly TransactionType[]
+  readonly categories?: readonly string[]
+  readonly labels?: readonly string[]
+  readonly statuses?: readonly TransactionStatus[]
+  readonly direction?: "IN" | "OUT"
+  readonly minAmount?: string
+  readonly maxAmount?: string
+  readonly currencies?: readonly string[]
+  readonly hasNote?: boolean
+  readonly uncategorizedOnly?: boolean
+  readonly sortBy?:
+    | "date"
+    | "amount"
+    | "description"
+    | "account"
+    | "category"
+    | "createdAt"
+  readonly sortDirection?: "asc" | "desc"
+  readonly page?: number
+  readonly pageSize?: 25 | 50 | 100
+}
+
+export interface TransactionsListResult {
+  readonly data: readonly Transaction[]
+  readonly meta: {
+    readonly total: number
+    readonly page: number
+    readonly pageSize: number
+    readonly pageCount: number
+    readonly baseCurrency: string
+    readonly summary: {
+      readonly moneyIn: string
+      readonly moneyOut: string
+      readonly netCashFlow: string
+      readonly transactionCount: number
+    }
+    readonly filterOptions: {
+      readonly categories: readonly string[]
+      readonly labels: readonly string[]
+      readonly currencies: readonly string[]
+    }
+  }
+}
+
+export interface BulkTransactionPayload {
+  readonly transactionIds: readonly string[]
+  readonly category?: string
+  readonly status?: TransactionStatus
+  readonly addLabels?: readonly string[]
+  readonly removeLabels?: readonly string[]
+  readonly delete?: boolean
 }
 
 export function getTransactionTypeLabel(type: TransactionType): string {

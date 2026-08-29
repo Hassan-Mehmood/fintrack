@@ -8,6 +8,7 @@ import {
 } from '../../common/financial/holdings';
 import { calculateInvestmentTransactionAmounts } from '../../common/financial/investment-transaction-calculations';
 import { convertUsdPkr } from '../../common/financial/fx-conversion';
+import { CurrencyConverter } from '../../common/financial/currency-converter';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   createAccountNotFoundForTransactionException,
@@ -16,6 +17,7 @@ import {
   createInvalidInvestmentAccountException,
   createInvalidInvestmentAmountException,
   createInvalidInvestmentTradeTypeException,
+  createInvalidBulkTransactionException,
   createInvalidTransactionAmountException,
   createInvalidTransferException,
   createInvestmentDetailRequiredException,
@@ -26,9 +28,12 @@ import {
 } from './transactions.errors';
 import type { CreateTransactionDto } from './dto/create-transaction.dto';
 import type { UpdateTransactionDto } from './dto/update-transaction.dto';
+import type { BulkUpdateTransactionsDto } from './dto/bulk-update-transactions.dto';
+import type { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import type {
   InvestmentTransactionDetailResponse,
   TransactionResponse,
+  TransactionsListResponse,
 } from './transactions.types';
 
 const investmentDetailSelect = {
@@ -55,6 +60,7 @@ const investmentDetailSelect = {
 const transactionSelect = {
   id: true,
   type: true,
+  status: true,
   accountId: true,
   account: {
     select: {
@@ -77,9 +83,13 @@ const transactionSelect = {
   amount: true,
   currency: true,
   occurredAt: true,
+  category: true,
   description: true,
   merchant: true,
   notes: true,
+  reference: true,
+  labels: true,
+  deletedAt: true,
   investmentDetail: {
     select: investmentDetailSelect,
   },
@@ -130,6 +140,40 @@ const reversibleTypes = new Set<string>([
   'INVESTMENT_REINVESTMENT',
 ]);
 
+const incomingTypes = new Set<TransactionType>([
+  'INCOME',
+  'REFUND',
+  'INVESTMENT_SELL',
+  'DIVIDEND',
+  'INTEREST',
+]);
+
+const outgoingTypes = new Set<TransactionType>([
+  'EXPENSE',
+  'FEE',
+  'INVESTMENT_BUY',
+  'INVESTMENT_REINVESTMENT',
+]);
+
+const summaryIncomingTypes = new Set<TransactionType>([
+  'INCOME',
+  'REFUND',
+  'DIVIDEND',
+  'INTEREST',
+]);
+
+const summaryOutgoingTypes = new Set<TransactionType>(['EXPENSE', 'FEE']);
+
+const categorisableTypes = new Set<TransactionType>([
+  'INCOME',
+  'EXPENSE',
+  'REFUND',
+  'FEE',
+  'DIVIDEND',
+  'INTEREST',
+  'ADJUSTMENT',
+]);
+
 interface InvestmentPayload {
   readonly assetId: string;
   readonly tradeType: string;
@@ -145,18 +189,70 @@ export class TransactionsService {
 
   async listTransactionsForUser(
     user: AuthenticatedUser,
-  ): Promise<readonly TransactionResponse[]> {
-    const transactions = await this.prisma.transaction.findMany({
-      where: {
-        userId: user.id,
-      },
-      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
-      select: transactionSelect,
-    });
+    query: ListTransactionsQueryDto,
+  ): Promise<TransactionsListResponse> {
+    const where = this.buildListWhere(user.id, query);
+    const orderBy = this.buildListOrderBy(query);
+    const skip = (query.page - 1) * query.pageSize;
 
-    return transactions.map((transaction) =>
-      this.toTransactionResponse(transaction),
+    const [transactions, total, summaryGroups, adjustments, optionRows] =
+      await Promise.all([
+        this.prisma.transaction.findMany({
+          where,
+          orderBy,
+          skip,
+          take: query.pageSize,
+          select: transactionSelect,
+        }),
+        this.prisma.transaction.count({ where }),
+        this.prisma.transaction.groupBy({
+          by: ['type', 'currency'],
+          where: {
+            AND: [where, { status: 'CLEARED', deletedAt: null }],
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.findMany({
+          where: {
+            AND: [
+              where,
+              {
+                type: 'ADJUSTMENT',
+                status: 'CLEARED',
+                deletedAt: null,
+              },
+            ],
+          },
+          select: { amount: true, currency: true },
+        }),
+        this.prisma.transaction.findMany({
+          where: { userId: user.id, deletedAt: null },
+          select: { category: true, currency: true, labels: true },
+        }),
+      ]);
+
+    const summary = this.calculateListSummary(
+      user,
+      summaryGroups,
+      adjustments,
+      total,
     );
+    const filterOptions = this.buildFilterOptions(optionRows);
+
+    return {
+      data: transactions.map((transaction) =>
+        this.toTransactionResponse(transaction),
+      ),
+      meta: {
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
+        baseCurrency: user.baseCurrency,
+        summary,
+        filterOptions,
+      },
+    };
   }
 
   async getTransactionForUser(
@@ -169,6 +265,84 @@ export class TransactionsService {
     );
 
     return this.toTransactionResponse(transaction);
+  }
+
+  async bulkUpdateTransactionsForUser(
+    user: AuthenticatedUser,
+    payload: BulkUpdateTransactionsDto,
+  ): Promise<readonly string[]> {
+    return this.prisma.$transaction(async (tx) => {
+      const transactions = await tx.transaction.findMany({
+        where: {
+          id: { in: payload.transactionIds },
+          userId: user.id,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          type: true,
+          labels: true,
+          reversalOfId: true,
+          reversal: { select: { id: true } },
+        },
+      });
+
+      if (transactions.length !== payload.transactionIds.length) {
+        throw createInvalidBulkTransactionException(
+          'Every selected transaction must exist and belong to the current user.',
+        );
+      }
+
+      if (
+        payload.category &&
+        transactions.some((transaction) =>
+          categorisableTypes.has(transaction.type),
+        ) === false
+      ) {
+        throw createInvalidBulkTransactionException(
+          'The selected transaction types cannot be categorized.',
+        );
+      }
+
+      if (
+        payload.category &&
+        transactions.some(
+          (transaction) => !categorisableTypes.has(transaction.type),
+        )
+      ) {
+        throw createInvalidBulkTransactionException(
+          'Change category is unavailable when the selection contains a non-categorizable transaction.',
+        );
+      }
+
+      const now = new Date();
+      for (const transaction of transactions) {
+        if (transaction.reversalOfId || transaction.reversal) {
+          throw createInvalidBulkTransactionException(
+            'Reversed transactions and reversal entries cannot be changed in bulk.',
+          );
+        }
+
+        const labels = new Set(transaction.labels);
+        payload.addLabels?.forEach((label) => labels.add(label.trim()));
+        payload.removeLabels?.forEach((label) => labels.delete(label.trim()));
+
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            category: payload.category,
+            status: payload.delete ? 'VOIDED' : payload.status,
+            labels:
+              payload.addLabels || payload.removeLabels
+                ? [...labels].filter(Boolean)
+                : undefined,
+            deletedAt: payload.delete ? now : undefined,
+          },
+        });
+      }
+
+      return transactions.map((transaction) => transaction.id);
+    });
   }
 
   async createTransactionForUser(
@@ -237,14 +411,18 @@ export class TransactionsService {
         userId: user.id,
         idempotencyKey: payload.idempotencyKey,
         type: payload.type,
+        status: payload.status,
         accountId: payload.accountId,
         destinationAccountId: payload.destinationAccountId,
         amount: authoritativeAmount,
         currency: payload.currency,
         occurredAt: new Date(payload.occurredAt),
+        category: payload.category,
         description: payload.description,
         merchant: payload.merchant,
         notes: payload.notes,
+        reference: payload.reference,
+        labels: payload.labels,
         investmentDetail: investmentDetailData
           ? {
               create: investmentDetailData,
@@ -331,6 +509,7 @@ export class TransactionsService {
       },
       data: {
         type: payload.type,
+        status: payload.status,
         accountId: payload.accountId,
         destinationAccountId: payload.destinationAccountId,
         amount: authoritativeAmount,
@@ -338,9 +517,12 @@ export class TransactionsService {
         occurredAt: payload.occurredAt
           ? new Date(payload.occurredAt)
           : undefined,
+        category: payload.category,
         description: payload.description,
         merchant: payload.merchant,
         notes: payload.notes,
+        reference: payload.reference,
+        labels: payload.labels,
         investmentDetail: this.buildInvestmentDetailUpdatePayload(
           effectiveType,
           existingTransaction.investmentDetail,
@@ -377,15 +559,19 @@ export class TransactionsService {
         data: {
           userId: user.id,
           type: originalTransaction.type,
+          status: 'CLEARED',
           accountId: originalTransaction.accountId,
           destinationAccountId: originalTransaction.destinationAccountId,
           reversalOfId: originalTransaction.id,
           amount: reversalAmount,
           currency: originalTransaction.currency,
           occurredAt: new Date(),
-          description: `Reversal: ${originalTransaction.description}`,
+          category: originalTransaction.category,
+          description: `Reversal: ${getTransactionDisplayText(originalTransaction)}`,
           merchant: originalTransaction.merchant,
           notes: 'Reversal of transaction ' + originalTransaction.id,
+          reference: originalTransaction.reference,
+          labels: originalTransaction.labels,
           investmentDetail: originalTransaction.investmentDetail
             ? {
                 create: {
@@ -428,15 +614,239 @@ export class TransactionsService {
 
     this.assertTransactionIsMutable(transaction);
 
-    await this.prisma.transaction.delete({
+    await this.prisma.transaction.update({
       where: {
         id: transactionId,
+      },
+      data: {
+        status: 'VOIDED',
+        deletedAt: new Date(),
       },
     });
   }
 
+  private buildListWhere(
+    userId: string,
+    query: ListTransactionsQueryDto,
+  ): Prisma.TransactionWhereInput {
+    const conditions: Prisma.TransactionWhereInput[] = [];
+
+    if (query.search) {
+      conditions.push({
+        OR: [
+          { description: { contains: query.search, mode: 'insensitive' } },
+          { category: { contains: query.search, mode: 'insensitive' } },
+          { merchant: { contains: query.search, mode: 'insensitive' } },
+          { notes: { contains: query.search, mode: 'insensitive' } },
+          { reference: { contains: query.search, mode: 'insensitive' } },
+          { labels: { has: query.search } },
+          {
+            account: {
+              name: { contains: query.search, mode: 'insensitive' },
+            },
+          },
+          {
+            destinationAccount: {
+              name: { contains: query.search, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
+    }
+
+    if (query.dateFrom || query.dateTo) {
+      conditions.push({
+        occurredAt: {
+          gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
+          lte: query.dateTo ? new Date(query.dateTo) : undefined,
+        },
+      });
+    }
+
+    if (query.accountIds?.length) {
+      conditions.push({
+        OR: [
+          { accountId: { in: query.accountIds } },
+          { destinationAccountId: { in: query.accountIds } },
+        ],
+      });
+    }
+
+    if (query.types?.length) {
+      conditions.push({ type: { in: query.types } });
+    }
+
+    if (query.categories?.length) {
+      conditions.push({ category: { in: query.categories } });
+    }
+
+    if (query.labels?.length) {
+      conditions.push({ labels: { hasSome: query.labels } });
+    }
+
+    if (query.statuses?.length) {
+      conditions.push({ status: { in: query.statuses } });
+    }
+
+    if (query.currencies?.length) {
+      conditions.push({ currency: { in: query.currencies } });
+    }
+
+    if (query.direction === 'IN') {
+      conditions.push({
+        OR: [
+          { type: { in: [...incomingTypes] } },
+          { type: 'ADJUSTMENT', amount: { gt: 0 } },
+        ],
+      });
+    } else if (query.direction === 'OUT') {
+      conditions.push({
+        OR: [
+          { type: { in: [...outgoingTypes] } },
+          { type: 'ADJUSTMENT', amount: { lt: 0 } },
+        ],
+      });
+    }
+
+    if (query.minAmount) {
+      conditions.push({
+        OR: [
+          { amount: { gte: query.minAmount } },
+          { amount: { lte: new Prisma.Decimal(query.minAmount).negated() } },
+        ],
+      });
+    }
+
+    if (query.maxAmount) {
+      conditions.push({
+        amount: {
+          gte: new Prisma.Decimal(query.maxAmount).negated(),
+          lte: query.maxAmount,
+        },
+      });
+    }
+
+    if (query.hasNote === true) {
+      conditions.push({ notes: { not: null } });
+      conditions.push({ NOT: { notes: '' } });
+    } else if (query.hasNote === false) {
+      conditions.push({ OR: [{ notes: null }, { notes: '' }] });
+    }
+
+    if (query.uncategorizedOnly) {
+      conditions.push({ category: '' });
+    }
+
+    return {
+      userId,
+      deletedAt: null,
+      AND: conditions,
+    };
+  }
+
+  private buildListOrderBy(
+    query: ListTransactionsQueryDto,
+  ): Prisma.TransactionOrderByWithRelationInput[] {
+    const direction = query.sortDirection;
+    const primary: Prisma.TransactionOrderByWithRelationInput =
+      query.sortBy === 'amount'
+        ? { amount: direction }
+        : query.sortBy === 'description'
+          ? { description: direction }
+          : query.sortBy === 'account'
+            ? { account: { name: direction } }
+            : query.sortBy === 'category'
+              ? { category: direction }
+              : query.sortBy === 'createdAt'
+                ? { createdAt: direction }
+                : { occurredAt: direction };
+
+    return [primary, { createdAt: 'desc' }];
+  }
+
+  private calculateListSummary(
+    user: AuthenticatedUser,
+    groups: ReadonlyArray<{
+      readonly type: TransactionType;
+      readonly currency: string;
+      readonly _sum: { readonly amount: Prisma.Decimal | null };
+    }>,
+    adjustments: ReadonlyArray<{
+      readonly amount: Prisma.Decimal;
+      readonly currency: string;
+    }>,
+    transactionCount: number,
+  ): TransactionsListResponse['meta']['summary'] {
+    const converter = new CurrencyConverter(
+      user.baseCurrency,
+      user.exchangeRate,
+    );
+    let moneyIn = new Prisma.Decimal(0);
+    let moneyOut = new Prisma.Decimal(0);
+
+    for (const group of groups) {
+      if (group.type === 'ADJUSTMENT' || !group._sum.amount) {
+        continue;
+      }
+
+      const amount = converter.convert(group._sum.amount, group.currency);
+      if (summaryIncomingTypes.has(group.type)) {
+        if (amount.isNegative()) {
+          moneyOut = moneyOut.add(amount.abs());
+        } else {
+          moneyIn = moneyIn.add(amount);
+        }
+      } else if (summaryOutgoingTypes.has(group.type)) {
+        if (amount.isNegative()) {
+          moneyIn = moneyIn.add(amount.abs());
+        } else {
+          moneyOut = moneyOut.add(amount);
+        }
+      }
+    }
+
+    for (const adjustment of adjustments) {
+      const amount = converter.convert(adjustment.amount, adjustment.currency);
+      if (amount.isNegative()) {
+        moneyOut = moneyOut.add(amount.abs());
+      } else {
+        moneyIn = moneyIn.add(amount);
+      }
+    }
+
+    return {
+      moneyIn: moneyIn.toFixed(2),
+      moneyOut: moneyOut.toFixed(2),
+      netCashFlow: moneyIn.sub(moneyOut).toFixed(2),
+      transactionCount,
+    };
+  }
+
+  private buildFilterOptions(
+    rows: ReadonlyArray<{
+      readonly category: string;
+      readonly currency: string;
+      readonly labels: readonly string[];
+    }>,
+  ): TransactionsListResponse['meta']['filterOptions'] {
+    return {
+      categories: [
+        ...new Set(rows.map((row) => row.category).filter(Boolean)),
+      ].sort((left, right) => left.localeCompare(right)),
+      labels: [...new Set(rows.flatMap((row) => row.labels))].sort(
+        (left, right) => left.localeCompare(right),
+      ),
+      currencies: [...new Set(rows.map((row) => row.currency))].sort(),
+    };
+  }
+
   private assertTransactionIsMutable(transaction: TransactionRecord): void {
-    if (transaction.reversalOfId || transaction.reversal) {
+    if (
+      transaction.reversalOfId ||
+      transaction.reversal ||
+      transaction.deletedAt ||
+      transaction.status === 'VOIDED'
+    ) {
       throw createTransactionLockedException(transaction.id);
     }
   }
@@ -827,7 +1237,11 @@ export class TransactionsService {
         transactionId: excludedTransactionId
           ? { not: excludedTransactionId }
           : undefined,
-        transaction: accountId ? { accountId } : undefined,
+        transaction: {
+          status: 'CLEARED',
+          deletedAt: null,
+          accountId,
+        },
       },
       select: {
         tradeType: true,
@@ -954,6 +1368,7 @@ export class TransactionsService {
     return {
       id: transaction.id,
       type: transaction.type,
+      status: transaction.status,
       accountId: transaction.accountId,
       accountName: transaction.account.name,
       accountCurrency: transaction.account.currency,
@@ -964,9 +1379,13 @@ export class TransactionsService {
       amount: transaction.amount.toString(),
       currency: transaction.currency,
       occurredAt: transaction.occurredAt.toISOString(),
+      category: transaction.category,
       description: transaction.description,
       merchant: transaction.merchant,
       notes: transaction.notes,
+      reference: transaction.reference,
+      labels: transaction.labels,
+      deletedAt: transaction.deletedAt?.toISOString() ?? null,
       investmentDetail: transaction.investmentDetail
         ? this.toInvestmentDetailResponse(transaction.investmentDetail)
         : null,
@@ -1009,4 +1428,11 @@ function normalizeAmount(amount: string, type: string): string {
 
 function negateAmount(amount: string): string {
   return amount.startsWith('-') ? amount.slice(1) : `-${amount}`;
+}
+
+function getTransactionDisplayText(transaction: {
+  readonly category: string;
+  readonly description: string;
+}): string {
+  return transaction.description || transaction.category;
 }

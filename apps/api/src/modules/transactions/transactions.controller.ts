@@ -7,14 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { BulkUpdateTransactionsDto } from './dto/bulk-update-transactions.dto';
+import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import { TransactionsService } from './transactions.service';
 import type {
   DeleteTransactionResponse,
+  BulkUpdateTransactionsResponse,
   TransactionItemResponse,
   TransactionsListResponse,
 } from './transactions.types';
@@ -26,14 +30,23 @@ export class TransactionsController {
   @Get()
   async listTransactions(
     @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListTransactionsQueryDto,
   ): Promise<TransactionsListResponse> {
-    const transactions =
-      await this.transactionsService.listTransactionsForUser(user);
+    return this.transactionsService.listTransactionsForUser(user, query);
+  }
 
+  @Patch('bulk')
+  async bulkUpdateTransactions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() payload: BulkUpdateTransactionsDto,
+  ): Promise<BulkUpdateTransactionsResponse> {
     return {
-      data: transactions,
-      meta: {
-        total: transactions.length,
+      data: {
+        updatedIds:
+          await this.transactionsService.bulkUpdateTransactionsForUser(
+            user,
+            payload,
+          ),
       },
     };
   }

@@ -1,6 +1,7 @@
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { Prisma } from '../../generated/prisma/client';
 import { TransactionsService } from './transactions.service';
+import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import {
   createAssetNotFoundForTransactionException,
   createInvalidInvestmentAmountException,
@@ -43,10 +44,12 @@ describe('TransactionsService', () => {
       findMany: jest.Mock;
     };
     transaction: {
+      count: jest.Mock;
       create: jest.Mock;
       delete: jest.Mock;
       findFirst: jest.Mock;
       findMany: jest.Mock;
+      groupBy: jest.Mock;
       update: jest.Mock;
     };
     $transaction: jest.Mock;
@@ -64,21 +67,33 @@ describe('TransactionsService', () => {
         findMany: jest.fn(),
       },
       transaction: {
+        count: jest.fn(),
         create: jest.fn(),
         delete: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
+        groupBy: jest.fn(),
         update: jest.fn(),
       },
-      $transaction: jest.fn(async (operations: Array<Promise<unknown>>) => {
-        const results: unknown[] = [];
+      $transaction: jest.fn(
+        async (
+          operations:
+            | Array<Promise<unknown>>
+            | ((client: typeof prisma) => Promise<unknown>),
+        ) => {
+          if (typeof operations === 'function') {
+            return operations(prisma);
+          }
 
-        for (const operation of operations) {
-          results.push(await operation);
-        }
+          const results: unknown[] = [];
 
-        return results;
-      }),
+          for (const operation of operations) {
+            results.push(await operation);
+          }
+
+          return results;
+        },
+      ),
     };
 
     service = new TransactionsService(prisma as never);
@@ -91,17 +106,30 @@ describe('TransactionsService', () => {
   });
 
   it('lists user transactions ordered by date', async () => {
-    prisma.transaction.findMany.mockResolvedValue([createTransactionRecord()]);
+    prisma.transaction.findMany
+      .mockResolvedValueOnce([createTransactionRecord()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    prisma.transaction.count.mockResolvedValue(1);
+    prisma.transaction.groupBy.mockResolvedValue([]);
 
     await expect(
-      service.listTransactionsForUser(authenticatedUser),
-    ).resolves.toEqual([
+      service.listTransactionsForUser(
+        authenticatedUser,
+        new ListTransactionsQueryDto(),
+      ),
+    ).resolves.toEqual(
       expect.objectContaining({
-        id: 'transaction-1',
-        accountName: 'Primary Checking',
-        amount: '100.50',
+        data: [
+          expect.objectContaining({
+            id: 'transaction-1',
+            accountName: 'Primary Checking',
+            amount: '100.50',
+          }),
+        ],
+        meta: expect.objectContaining({ total: 1, page: 1, pageSize: 25 }),
       }),
-    ]);
+    );
   });
 
   it('throws when requesting a transaction not owned by the user', async () => {
@@ -119,9 +147,11 @@ describe('TransactionsService', () => {
       id: 'account-1',
       currency: 'USD',
     });
-    prisma.transaction.create.mockResolvedValue(
-      createTransactionRecord({ amount: '100.50' }),
-    );
+    let createInput: unknown;
+    prisma.transaction.create.mockImplementation((input: unknown) => {
+      createInput = input;
+      return Promise.resolve(createTransactionRecord({ amount: '100.50' }));
+    });
 
     const result = await service.createTransactionForUser(authenticatedUser, {
       type: 'EXPENSE',
@@ -129,6 +159,7 @@ describe('TransactionsService', () => {
       amount: '100.50',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Grocery shopping',
     });
 
@@ -141,6 +172,12 @@ describe('TransactionsService', () => {
     );
 
     expect(prisma.transaction.create).toHaveBeenCalledTimes(1);
+    expect(createInput).toMatchObject({
+      data: {
+        category: 'General',
+        description: 'Grocery shopping',
+      },
+    });
   });
 
   it('creates a transfer between two owned accounts', async () => {
@@ -162,6 +199,7 @@ describe('TransactionsService', () => {
       amount: '500',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Transfer to savings',
     });
 
@@ -188,6 +226,7 @@ describe('TransactionsService', () => {
         amount: '500',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Invalid transfer',
       }),
     ).rejects.toEqual(
@@ -210,6 +249,7 @@ describe('TransactionsService', () => {
         amount: '100',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Wrong currency',
       }),
     ).rejects.toEqual(createTransactionCurrencyMismatchException('PKR', 'USD'));
@@ -237,6 +277,7 @@ describe('TransactionsService', () => {
       amount: '1',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Buy BTC',
       investment: {
         assetId: 'asset-1',
@@ -299,6 +340,7 @@ describe('TransactionsService', () => {
       accountId: 'account-1',
       currency: 'PKR',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Cross-currency purchase',
       investment: {
         assetId: 'asset-1',
@@ -360,6 +402,7 @@ describe('TransactionsService', () => {
       amount: '9999',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Partial sale',
       investment: {
         assetId: 'asset-1',
@@ -404,6 +447,7 @@ describe('TransactionsService', () => {
         accountId: 'account-1',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Invalid sale',
         investment: {
           assetId: 'asset-1',
@@ -433,6 +477,7 @@ describe('TransactionsService', () => {
         amount: '1000',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Buy BTC',
       }),
     ).rejects.toEqual(
@@ -455,6 +500,7 @@ describe('TransactionsService', () => {
         amount: '1000',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Buy BTC',
         investment: {
           assetId: 'asset-1',
@@ -480,6 +526,7 @@ describe('TransactionsService', () => {
         amount: '1000',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Buy BTC',
         investment: {
           assetId: 'asset-1',
@@ -504,6 +551,7 @@ describe('TransactionsService', () => {
         amount: '1000',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Buy BTC',
         investment: {
           assetId: 'asset-1',
@@ -533,12 +581,14 @@ describe('TransactionsService', () => {
       authenticatedUser,
       'transaction-1',
       {
+        category: 'General',
         description: 'Updated description',
       },
     );
 
     expect(result).toEqual(
       expect.objectContaining({
+        category: 'General',
         description: 'Updated description',
       }),
     );
@@ -589,6 +639,7 @@ describe('TransactionsService', () => {
 
     await expect(
       service.updateTransactionForUser(authenticatedUser, 'transaction-1', {
+        category: 'General',
         description: 'Updated',
       }),
     ).rejects.toEqual(createTransactionLockedException('transaction-1'));
@@ -683,15 +734,19 @@ describe('TransactionsService', () => {
 
   it('deletes a transaction and restores the account balance implicitly', async () => {
     prisma.transaction.findFirst.mockResolvedValue(createTransactionRecord());
-    prisma.transaction.delete.mockResolvedValue({ id: 'transaction-1' });
+    prisma.transaction.update.mockResolvedValue({ id: 'transaction-1' });
 
     await expect(
       service.deleteTransactionForUser(authenticatedUser, 'transaction-1'),
     ).resolves.toBeUndefined();
 
-    expect(prisma.transaction.delete).toHaveBeenCalledWith({
+    expect(prisma.transaction.update).toHaveBeenCalledWith({
       where: {
         id: 'transaction-1',
+      },
+      data: {
+        status: 'VOIDED',
+        deletedAt: mockDate,
       },
     });
   });
@@ -733,6 +788,7 @@ describe('TransactionsService', () => {
       amount: '100',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'AAPL dividend',
       investment: {
         assetId: 'asset-1',
@@ -771,6 +827,7 @@ describe('TransactionsService', () => {
       amount: '25',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Fund distribution',
     });
 
@@ -808,6 +865,7 @@ describe('TransactionsService', () => {
       amount: '0',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: '2-for-1 stock split',
       investment: {
         assetId: 'asset-1',
@@ -853,6 +911,7 @@ describe('TransactionsService', () => {
       accountId: 'account-1',
       currency: 'USD',
       occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
       description: 'Transfer shares in',
       investment: {
         assetId: 'asset-1',
@@ -888,6 +947,7 @@ describe('TransactionsService', () => {
         amount: '0',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Invalid split',
         investment: {
           assetId: 'asset-1',
@@ -916,6 +976,7 @@ describe('TransactionsService', () => {
         amount: '100',
         currency: 'USD',
         occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
         description: 'Invalid dividend',
         investment: {
           assetId: 'asset-1',
@@ -934,6 +995,7 @@ describe('TransactionsService', () => {
 
 function createTransactionRecord({
   amount = '100.50',
+  category = 'General',
   createdAt = new Date('2026-07-01T10:00:00.000Z'),
   description = 'Test transaction',
   destinationAccountId = null,
@@ -945,6 +1007,7 @@ function createTransactionRecord({
   type = 'EXPENSE',
 }: {
   readonly amount?: string;
+  readonly category?: string;
   readonly createdAt?: Date;
   readonly description?: string;
   readonly destinationAccountId?: string | null;
@@ -976,9 +1039,14 @@ function createTransactionRecord({
     },
     currency: 'USD',
     occurredAt: new Date('2026-07-01T00:00:00.000Z'),
+    category,
     description,
+    status: 'CLEARED',
     merchant: null,
     notes: null,
+    reference: null,
+    labels: [],
+    deletedAt: null,
     investmentDetail,
     createdAt,
     updatedAt: new Date('2026-07-02T10:00:00.000Z'),

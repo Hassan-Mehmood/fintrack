@@ -1,4 +1,10 @@
-import type { Transaction, TransactionPayload } from "./transaction-types"
+import type {
+  BulkTransactionPayload,
+  Transaction,
+  TransactionListParams,
+  TransactionPayload,
+  TransactionsListResult,
+} from "./transaction-types"
 
 interface GetToken {
   (): Promise<string | null>
@@ -40,24 +46,16 @@ interface TransactionItemResponse {
   readonly data: Transaction
 }
 
-interface TransactionsListResponse {
-  readonly data: readonly Transaction[]
-  readonly meta: {
-    readonly total: number
-  }
-}
-
 export const transactionsQueryKey = ["transactions"] as const
 
 export async function listTransactions(
-  getToken: GetToken
-): Promise<readonly Transaction[]> {
-  const response = await apiRequest<TransactionsListResponse>(
+  getToken: GetToken,
+  params: TransactionListParams = {}
+): Promise<TransactionsListResult> {
+  return apiRequest<TransactionsListResult>(
     getToken,
-    "/api/v1/transactions"
+    `/api/v1/transactions?${buildListQuery(params)}`
   )
-
-  return response.data
 }
 
 export async function getTransaction(
@@ -127,6 +125,41 @@ export async function reverseTransaction(
   )
 
   return response.data
+}
+
+export async function bulkUpdateTransactions(
+  getToken: GetToken,
+  payload: BulkTransactionPayload
+): Promise<readonly string[]> {
+  const response = await apiRequest<{
+    readonly data: { readonly updatedIds: readonly string[] }
+  }>(getToken, "/api/v1/transactions/bulk", {
+    body: JSON.stringify(payload),
+    method: "PATCH",
+  })
+
+  return response.data.updatedIds
+}
+
+function buildListQuery(params: TransactionListParams): string {
+  const query = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === "") {
+      return
+    }
+
+    if (Array.isArray(value)) {
+      if (value.length > 0) {
+        query.set(key, value.join(","))
+      }
+      return
+    }
+
+    query.set(key, String(value))
+  })
+
+  return query.toString()
 }
 
 async function apiRequest<T>(

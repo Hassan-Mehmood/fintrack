@@ -339,6 +339,8 @@ export class PortfoliosService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId: user.id,
+        status: 'CLEARED',
+        deletedAt: null,
         OR: [
           {
             accountId: {
@@ -484,6 +486,8 @@ export class PortfoliosService {
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId,
+        status: 'CLEARED',
+        deletedAt: null,
         OR: [
           {
             accountId: {
@@ -635,6 +639,8 @@ export class PortfoliosService {
           userId,
         },
         transaction: {
+          status: 'CLEARED',
+          deletedAt: null,
           accountId: {
             in: [...accountIds],
           },

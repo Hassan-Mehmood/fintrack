@@ -430,6 +430,7 @@ function createTransaction(
     amount: new Decimal(amount),
     currency: 'USD',
     occurredAt,
+    category: 'General',
     description,
     account: {
       name: 'Account',

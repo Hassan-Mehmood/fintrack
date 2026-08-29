@@ -71,6 +71,7 @@ export interface WalletImportTransaction {
   readonly amount: string;
   readonly currency: WalletCurrency;
   readonly occurredAt: string;
+  readonly category: string;
   readonly description: string;
   readonly merchant: string | null;
   readonly notes: string | null;
@@ -325,7 +326,8 @@ function createOrdinaryTransaction(row: WalletRow): WalletImportTransaction {
     amount: row.amount,
     currency: row.currency,
     occurredAt: row.occurredAt,
-    description: row.category,
+    category: row.category,
+    description: '',
     merchant: emptyToNull(row.payee),
     notes: createNotes(row),
   };
@@ -350,7 +352,8 @@ function createTransferTransaction(
     amount: expense.amount,
     currency: expense.currency,
     occurredAt: expense.occurredAt,
-    description: expense.category,
+    category: expense.category,
+    description: '',
     merchant: emptyToNull(expense.payee || income.payee),
     notes: combineNotes(createNotes(expense), createNotes(income)),
   };
@@ -373,7 +376,8 @@ function createAdjustmentTransaction(row: WalletRow): WalletImportTransaction {
     amount,
     currency: row.currency,
     occurredAt: row.occurredAt,
-    description: row.category,
+    category: row.category,
+    description: '',
     merchant: emptyToNull(row.payee),
     notes: createNotes(row),
   };

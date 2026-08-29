@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { shadcn } from "@clerk/ui/themes";
 import { QueryProvider } from "@/components/query-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { syncAuthenticatedUser } from "@/lib/sync-authenticated-user";
 import "./globals.css";
 
@@ -19,7 +20,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "FinTrack Dashboard",
-  description: "Personal finance dashboard for accounts, spending, and investments.",
+  description:
+    "Personal finance dashboard for accounts, spending, and investments.",
 };
 
 export default async function RootLayout({
@@ -37,7 +39,10 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ClerkProvider appearance={{ theme: shadcn }}>
           <QueryProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <TooltipProvider>
+              {children}
+              <Toaster richColors closeButton />
+            </TooltipProvider>
           </QueryProvider>
         </ClerkProvider>
       </body>

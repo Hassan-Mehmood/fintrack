@@ -315,6 +315,16 @@ Store the following in PostgreSQL:
 
 Financial values must use PostgreSQL `NUMERIC` fields.
 
+Transactions store `category` as the required classification text and
+`description` as the separate required user-facing description. The migration
+that introduced this distinction preserved the former `description` values as
+categories and initialized descriptions on legacy rows to an empty string.
+Transactions also store a processing status, transaction-owned string labels,
+an optional reference, and an optional soft-deletion timestamp. Only cleared,
+non-deleted transactions affect balances, dashboard summaries, and investment
+holdings. Pending, failed, and voided rows remain visible in active transaction
+history, while soft-deleted rows are excluded from normal list queries.
+
 For investment transactions, `InvestmentTransactionDetail.grossAmount` stores
 the decimal-safe quantity-times-price result, `fees` stores the recorded
 charges, and `Transaction.amount` stores the authoritative final cash impact.
