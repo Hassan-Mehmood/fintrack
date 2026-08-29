@@ -5,16 +5,27 @@ change.
 
 ## Current Phase
 
-- Multi-currency investment reporting implemented and migrated; ready for
-  authenticated flow verification.
+- One-time wallet-record import completed and verified for
+  `hasanafridi38@gmail.com`; ready for balance reconciliation.
 
 ## Current Goal
 
-- Manually verify the multi-currency Investments page and cross-currency
-  transaction flows with authenticated data.
+- Reconcile the seven imported accounts with explicit balance adjustments once
+  current balances are provided.
 
 ## Completed
 
+- Added a guarded one-time wallet CSV importer with strict format and target-user
+  validation, deterministic idempotency keys, decimal-safe normalization, and
+  dry-run/apply modes.
+- Mapped the 479-row wallet export into seven zero-opening-balance accounts and
+  385 transactions: 241 expenses, 21 income entries, 94 paired transfers, and
+  29 signed balance adjustments.
+- Made account-and-transaction replacement atomic with a serializable Prisma
+  transaction, explicit email confirmation, and a reviewed database-state
+  guard while retaining the user's asset catalog and portfolio.
+- Added focused importer tests, verified the real CSV/database dry run, applied
+  the reviewed replacement, and confirmed the resulting counts and balances.
 - Standardized project documentation references on the existing `context/` folder.
 - Finalized MVP financial accounts as asset-only account types: bank account, cash wallet, digital wallet, broker account, and cryptocurrency wallet.
 - Finalized MVP transaction types as income, expense, transfer, refund, fee, investment buy, investment sell, and adjustment.
@@ -223,6 +234,8 @@ change.
 
 ## Next Up
 
+- Collect current balances for the seven imported accounts and record explicit
+  adjustment transactions to reconcile their zero-based derived balances.
 - Manually verify USD, PKR, and Native Currencies modes with holdings spread
   across multiple accounts and portfolios.
 - Verify a USD-priced investment purchase from a PKR account and confirm the
