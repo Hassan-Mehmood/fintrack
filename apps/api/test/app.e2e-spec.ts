@@ -44,6 +44,16 @@ describe('AppController (e2e)', () => {
       .expect(401);
   });
 
+  it('requires authentication for account transaction ledgers', () => {
+    return request(app.getHttpServer())
+      .get('/api/v1/accounts/ed32ab72-f77e-4eec-a090-db723db0b637/transactions')
+      .expect(401);
+  });
+
+  it('requires authentication for transaction categories', () => {
+    return request(app.getHttpServer()).get('/api/v1/categories').expect(401);
+  });
+
   afterEach(async () => {
     await app.close();
   });

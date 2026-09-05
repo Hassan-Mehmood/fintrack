@@ -1,5 +1,3 @@
-
-
 export const transactionTypeOptions = [
   { value: "INCOME", label: "Income" },
   { value: "EXPENSE", label: "Expense" },
@@ -19,10 +17,19 @@ export const transactionTypeOptions = [
 ] as const
 
 export const transactionTypeValues = transactionTypeOptions.map(
-  (option) => option.value
+  (option) => option.value,
 ) as [TransactionType, ...TransactionType[]]
 
 export type TransactionType = (typeof transactionTypeOptions)[number]["value"]
+
+export type TransactionCategories = Readonly<
+  Record<TransactionType, readonly string[]>
+>
+
+export const emptyTransactionCategories: TransactionCategories =
+  Object.fromEntries(
+    transactionTypeOptions.map((option) => [option.value, []]),
+  ) as unknown as TransactionCategories
 
 export const transactionStatusOptions = [
   { value: "PENDING", label: "Pending" },
@@ -84,6 +91,13 @@ export interface Transaction {
   readonly investmentDetail: InvestmentTransactionDetail | null
   readonly createdAt: string
   readonly updatedAt: string
+  readonly accountEffect?: string
+  readonly accountDirection?: "IN" | "OUT" | "NEUTRAL"
+}
+
+export interface AccountTransaction extends Transaction {
+  readonly accountEffect: string
+  readonly accountDirection: "IN" | "OUT" | "NEUTRAL"
 }
 
 export interface TransactionPayload {
@@ -96,7 +110,7 @@ export interface TransactionPayload {
   readonly currency: string
   readonly occurredAt: string
   readonly category: string
-  readonly description: string
+  readonly description?: string
   readonly merchant?: string
   readonly notes?: string
   readonly reference?: string
@@ -136,12 +150,7 @@ export interface TransactionListParams {
   readonly hasNote?: boolean
   readonly uncategorizedOnly?: boolean
   readonly sortBy?:
-    | "date"
-    | "amount"
-    | "description"
-    | "account"
-    | "category"
-    | "createdAt"
+    "date" | "amount" | "description" | "account" | "category" | "createdAt"
   readonly sortDirection?: "asc" | "desc"
   readonly page?: number
   readonly pageSize?: 25 | 50 | 100
@@ -169,6 +178,13 @@ export interface TransactionsListResult {
   }
 }
 
+export interface AccountTransactionsListResult extends Omit<
+  TransactionsListResult,
+  "data"
+> {
+  readonly data: readonly AccountTransaction[]
+}
+
 export interface BulkTransactionPayload {
   readonly transactionIds: readonly string[]
   readonly category?: string
@@ -180,7 +196,8 @@ export interface BulkTransactionPayload {
 
 export function getTransactionTypeLabel(type: TransactionType): string {
   return (
-    transactionTypeOptions.find((option) => option.value === type)?.label ?? type
+    transactionTypeOptions.find((option) => option.value === type)?.label ??
+    type
   )
 }
 
@@ -236,7 +253,7 @@ export function getTransactionSign(type: TransactionType): 1 | -1 | 0 {
 }
 
 export function getInvestmentTradeType(
-  type: TransactionType
+  type: TransactionType,
 ):
   | "BUY"
   | "SELL"

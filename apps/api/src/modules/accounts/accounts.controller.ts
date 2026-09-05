@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Body,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -19,10 +20,16 @@ import type {
 import { CreateAccountDto } from './dto/create-account.dto';
 import { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { TransactionsService } from '../transactions/transactions.service';
+import { ListTransactionsQueryDto } from '../transactions/dto/list-transactions-query.dto';
+import type { AccountTransactionsListResponse } from '../transactions/transactions.types';
 
 @Controller('api/v1/accounts')
 export class AccountsController {
-  constructor(private readonly accountsService: AccountsService) {}
+  constructor(
+    private readonly accountsService: AccountsService,
+    private readonly transactionsService: TransactionsService,
+  ) {}
 
   @Get()
   async listAccounts(
@@ -46,6 +53,19 @@ export class AccountsController {
     return {
       data: await this.accountsService.getAccountForUser(user, accountId),
     };
+  }
+
+  @Get(':accountId/transactions')
+  async listAccountTransactions(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Query() query: ListTransactionsQueryDto,
+  ): Promise<AccountTransactionsListResponse> {
+    return this.transactionsService.listAccountTransactionsForUser(
+      user,
+      accountId,
+      query,
+    );
   }
 
   @Post()

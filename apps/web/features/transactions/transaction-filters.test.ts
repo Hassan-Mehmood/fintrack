@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  clearTransactionFilters,
   readTransactionFilters,
   toTransactionListParams,
   writeTransactionFilter,
@@ -55,5 +56,55 @@ describe("transaction URL filters", () => {
 
     expect(next.get("page")).toBeNull()
     expect(next.get("statuses")).toBe("CLEARED")
+  })
+
+  it.each([
+    "thisWeek",
+    "thisMonth",
+    "lastMonth",
+    "thisYear",
+    "last7Days",
+    "last30Days",
+  ])("calculates a bounded range for %s", (datePreset) => {
+    const filters = readTransactionFilters(
+      new URLSearchParams(`date=${datePreset}`)
+    )
+    const params = toTransactionListParams(filters, "")
+
+    expect(params.dateFrom).toBeDefined()
+    expect(params.dateTo).toBeDefined()
+    expect(new Date(params.dateFrom ?? "").getTime()).toBeLessThanOrEqual(
+      new Date(params.dateTo ?? "").getTime()
+    )
+  })
+
+  it("supports custom ranges and all time", () => {
+    const custom = toTransactionListParams(
+      readTransactionFilters(
+        new URLSearchParams(
+          "date=custom&from=2026-08-05&to=2026-08-12&sortBy=amount&sortDirection=asc&page=2&pageSize=100"
+        )
+      ),
+      ""
+    )
+    expect(new Date(custom.dateFrom ?? "").getDate()).toBe(5)
+    expect(new Date(custom.dateTo ?? "").getDate()).toBe(12)
+    expect(custom).toMatchObject({
+      sortBy: "amount",
+      sortDirection: "asc",
+      page: 2,
+      pageSize: 100,
+    })
+
+    const allTime = toTransactionListParams(
+      readTransactionFilters(new URLSearchParams("date=allTime")),
+      ""
+    )
+    expect(allTime.dateFrom).toBeUndefined()
+    expect(allTime.dateTo).toBeUndefined()
+  })
+
+  it("clears filters back to this month", () => {
+    expect(clearTransactionFilters().toString()).toBe("date=thisMonth")
   })
 })

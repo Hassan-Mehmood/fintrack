@@ -4,8 +4,11 @@ import { TransactionsService } from './transactions.service';
 import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import {
   createAssetNotFoundForTransactionException,
+  createAccountNotFoundForTransactionException,
+  createInvalidBulkTransactionException,
   createInvalidInvestmentAmountException,
   createInvalidInvestmentTradeTypeException,
+  createInvalidTransactionCategoryException,
   createInvalidTransferException,
   createInvestmentDetailRequiredException,
   createTransactionCurrencyMismatchException,
@@ -33,6 +36,9 @@ const mockDate = new Date('2026-07-07T10:00:00.000Z');
 
 describe('TransactionsService', () => {
   let service: TransactionsService;
+  let categoriesService: {
+    isAllowedForUser: jest.Mock;
+  };
   let prisma: {
     account: {
       findFirst: jest.Mock;
@@ -96,7 +102,13 @@ describe('TransactionsService', () => {
       ),
     };
 
-    service = new TransactionsService(prisma as never);
+    categoriesService = {
+      isAllowedForUser: jest.fn().mockResolvedValue(true),
+    };
+    service = new TransactionsService(
+      prisma as never,
+      categoriesService as never,
+    );
     jest.useFakeTimers();
     jest.setSystemTime(mockDate);
   });
@@ -129,6 +141,139 @@ describe('TransactionsService', () => {
         ],
         meta: expect.objectContaining({ total: 1, page: 1, pageSize: 25 }),
       }),
+    );
+  });
+
+  it('lists account-relative effects and totals cleared balance changes', async () => {
+    const rows = [
+      createEffectTransactionRecord({
+        id: 'income',
+        type: 'INCOME',
+        amount: '100.5',
+      }),
+      createEffectTransactionRecord({
+        id: 'expense',
+        type: 'EXPENSE',
+        amount: '25',
+      }),
+      createEffectTransactionRecord({
+        id: 'transfer',
+        type: 'TRANSFER',
+        amount: '40',
+        destinationAccountId: 'account-2',
+        destinationAccountName: 'Savings',
+      }),
+      createEffectTransactionRecord({
+        id: 'buy',
+        type: 'INVESTMENT_BUY',
+        amount: '10',
+      }),
+      createEffectTransactionRecord({
+        id: 'adjustment',
+        type: 'ADJUSTMENT',
+        amount: '-5',
+      }),
+      createEffectTransactionRecord({
+        id: 'deposit',
+        type: 'INVESTMENT_DEPOSIT',
+        amount: '0',
+      }),
+      createEffectTransactionRecord({
+        id: 'pending',
+        type: 'INCOME',
+        amount: '1000',
+        status: 'PENDING',
+      }),
+    ];
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.transaction.findMany
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce(rows.slice(0, 6))
+      .mockResolvedValueOnce([]);
+    prisma.transaction.count.mockResolvedValue(rows.length);
+
+    const result = await service.listAccountTransactionsForUser(
+      authenticatedUser,
+      'account-1',
+      new ListTransactionsQueryDto(),
+    );
+
+    expect(result.meta.summary).toEqual({
+      moneyIn: '100.50',
+      moneyOut: '80.00',
+      netCashFlow: '20.50',
+      transactionCount: 7,
+    });
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'transfer',
+          accountEffect: '-40',
+          accountDirection: 'OUT',
+        }),
+        expect.objectContaining({
+          id: 'adjustment',
+          accountEffect: '-5',
+          accountDirection: 'OUT',
+        }),
+        expect.objectContaining({
+          id: 'deposit',
+          accountEffect: '0',
+          accountDirection: 'NEUTRAL',
+        }),
+      ]),
+    );
+  });
+
+  it('shows a transfer as an inflow for its destination account', async () => {
+    const transfer = createEffectTransactionRecord({
+      id: 'transfer',
+      type: 'TRANSFER',
+      amount: '40',
+      destinationAccountId: 'account-2',
+      destinationAccountName: 'Savings',
+    });
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-2',
+      currency: 'USD',
+    });
+    prisma.transaction.findMany
+      .mockResolvedValueOnce([transfer])
+      .mockResolvedValueOnce([transfer])
+      .mockResolvedValueOnce([]);
+    prisma.transaction.count.mockResolvedValue(1);
+
+    const result = await service.listAccountTransactionsForUser(
+      authenticatedUser,
+      'account-2',
+      new ListTransactionsQueryDto(),
+    );
+
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        accountEffect: '40',
+        accountDirection: 'IN',
+      }),
+    );
+    expect(result.meta.summary).toEqual(
+      expect.objectContaining({ moneyIn: '40.00', netCashFlow: '40.00' }),
+    );
+  });
+
+  it('rejects an account ledger request when the account is unowned', async () => {
+    prisma.account.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.listAccountTransactionsForUser(
+        authenticatedUser,
+        'account-2',
+        new ListTransactionsQueryDto(),
+      ),
+    ).rejects.toEqual(
+      createAccountNotFoundForTransactionException('account-2'),
     );
   });
 
@@ -178,6 +323,87 @@ describe('TransactionsService', () => {
         description: 'Grocery shopping',
       },
     });
+  });
+
+  it('stores an omitted description as an empty string', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    let createdDescription: unknown;
+    prisma.transaction.create.mockImplementation((input: unknown) => {
+      const request = input as {
+        readonly data: { readonly description: unknown };
+      };
+      createdDescription = request.data.description;
+      return Promise.resolve(
+        createTransactionRecord({ description: String(createdDescription) }),
+      );
+    });
+
+    await service.createTransactionForUser(authenticatedUser, {
+      type: 'EXPENSE',
+      accountId: 'account-1',
+      amount: '10',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'Groceries',
+    });
+
+    expect(createdDescription).toBe('');
+  });
+
+  it('rejects a category outside defaults and owned history', async () => {
+    categoriesService.isAllowedForUser.mockResolvedValue(false);
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'EXPENSE',
+        accountId: 'account-1',
+        amount: '10',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'Private category',
+      }),
+    ).rejects.toEqual(
+      createInvalidTransactionCategoryException('EXPENSE', 'Private category'),
+    );
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a mixed-type bulk category unavailable to every type', async () => {
+    prisma.transaction.findMany.mockResolvedValue([
+      {
+        id: 'expense',
+        type: 'EXPENSE',
+        labels: [],
+        reversalOfId: null,
+        reversal: null,
+      },
+      {
+        id: 'income',
+        type: 'INCOME',
+        labels: [],
+        reversalOfId: null,
+        reversal: null,
+      },
+    ]);
+    categoriesService.isAllowedForUser
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(
+      service.bulkUpdateTransactionsForUser(authenticatedUser, {
+        transactionIds: ['expense', 'income'],
+        category: 'Housing',
+      }),
+    ).rejects.toEqual(
+      createInvalidBulkTransactionException(
+        'Select a category available for every selected transaction type.',
+      ),
+    );
+    expect(categoriesService.isAllowedForUser).toHaveBeenCalledTimes(2);
+    expect(prisma.transaction.update).not.toHaveBeenCalled();
   });
 
   it('creates a transfer between two owned accounts', async () => {
@@ -594,6 +820,31 @@ describe('TransactionsService', () => {
     );
   });
 
+  it('clears an existing description to an empty string', async () => {
+    prisma.transaction.findFirst.mockResolvedValue(createTransactionRecord());
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    let updatedDescription: unknown;
+    prisma.transaction.update.mockImplementation((input: unknown) => {
+      const request = input as {
+        readonly data: { readonly description: unknown };
+      };
+      updatedDescription = request.data.description;
+      return Promise.resolve(createTransactionRecord({ description: '' }));
+    });
+
+    const result = await service.updateTransactionForUser(
+      authenticatedUser,
+      'transaction-1',
+      { description: '' },
+    );
+
+    expect(updatedDescription).toBe('');
+    expect(result.description).toBe('');
+  });
+
   it('removes an optional dividend asset link when it is cleared', async () => {
     prisma.transaction.findFirst.mockResolvedValue(
       createTransactionRecord({
@@ -994,6 +1245,7 @@ describe('TransactionsService', () => {
 });
 
 function createTransactionRecord({
+  accountId = 'account-1',
   amount = '100.50',
   category = 'General',
   createdAt = new Date('2026-07-01T10:00:00.000Z'),
@@ -1004,8 +1256,10 @@ function createTransactionRecord({
   investmentDetail = null,
   reversalOfId = null,
   reversedById = null,
+  status = 'CLEARED',
   type = 'EXPENSE',
 }: {
+  readonly accountId?: string;
   readonly amount?: string;
   readonly category?: string;
   readonly createdAt?: Date;
@@ -1018,12 +1272,13 @@ function createTransactionRecord({
   > | null;
   readonly reversalOfId?: string | null;
   readonly reversedById?: string | null;
+  readonly status?: string;
   readonly type?: string;
 } = {}) {
   return {
     id,
     type,
-    accountId: 'account-1',
+    accountId,
     account: {
       name: 'Primary Checking',
       currency: 'USD',
@@ -1041,7 +1296,7 @@ function createTransactionRecord({
     occurredAt: new Date('2026-07-01T00:00:00.000Z'),
     category,
     description,
-    status: 'CLEARED',
+    status,
     merchant: null,
     notes: null,
     reference: null,
@@ -1050,6 +1305,16 @@ function createTransactionRecord({
     investmentDetail,
     createdAt,
     updatedAt: new Date('2026-07-02T10:00:00.000Z'),
+  };
+}
+
+function createEffectTransactionRecord(
+  options: Parameters<typeof createTransactionRecord>[0] = {},
+) {
+  const record = createTransactionRecord(options);
+  return {
+    ...record,
+    amount: new Prisma.Decimal(record.amount.toString()),
   };
 }
 

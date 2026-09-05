@@ -10,11 +10,13 @@ import { MarketDataModule } from './modules/market-data/market-data.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 
 @Module({
   imports: [
     PrismaModule,
     AuthModule,
+    CategoriesModule,
     AccountsModule,
     AssetsModule,
     MarketDataModule,

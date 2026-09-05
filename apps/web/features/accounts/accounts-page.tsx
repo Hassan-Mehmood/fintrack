@@ -3,8 +3,10 @@
 import { useAuth } from "@clerk/nextjs"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import Link from "next/link"
 import {
   CircleAlertIcon,
+  EyeIcon,
   PencilLineIcon,
   PlusIcon,
   Trash2Icon,
@@ -119,7 +121,8 @@ export function AccountsPage() {
 
   const accounts = accountsQuery.data ?? []
   const totalAccounts = accounts.length
-  const currenciesCount = new Set(accounts.map((account) => account.currency)).size
+  const currenciesCount = new Set(accounts.map((account) => account.currency))
+    .size
 
   async function handleSaveAccount(payload: AccountFormPayload): Promise<void> {
     if (!dialogState) {
@@ -127,7 +130,8 @@ export function AccountsPage() {
     }
 
     await saveAccountMutation.mutateAsync({
-      accountId: dialogState.mode === "edit" ? dialogState.account.id : undefined,
+      accountId:
+        dialogState.mode === "edit" ? dialogState.account.id : undefined,
       mode: dialogState.mode,
       payload,
     })
@@ -191,7 +195,8 @@ export function AccountsPage() {
           <CardHeader>
             <CardTitle>Managed accounts</CardTitle>
             <CardDescription>
-              Manage your bank accounts, wallets, and investment accounts from one place.
+              Manage your bank accounts, wallets, and investment accounts from
+              one place.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -205,7 +210,8 @@ export function AccountsPage() {
                   </EmptyMedia>
                   <EmptyTitle>No accounts yet</EmptyTitle>
                   <EmptyDescription>
-                    Add your first bank, cash, digital, broker, or crypto account to start tracking balances.
+                    Add your first bank, cash, digital, broker, or crypto
+                    account to start tracking balances.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -222,7 +228,9 @@ export function AccountsPage() {
                     <TableHead>Account</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Currency</TableHead>
-                    <TableHead className="text-right">Current balance</TableHead>
+                    <TableHead className="text-right">
+                      Current balance
+                    </TableHead>
                     <TableHead>Opened</TableHead>
                     <TableHead>Activity</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -233,16 +241,25 @@ export function AccountsPage() {
                     <TableRow key={account.id}>
                       <TableCell>
                         <div className="flex min-w-0 flex-col gap-1">
-                          <span className="truncate font-medium">{account.name}</span>
+                          <Link
+                            className="truncate font-medium hover:underline"
+                            href={`/accounts/${account.id}`}
+                          >
+                            {account.name}
+                          </Link>
                           <span className="truncate text-xs text-muted-foreground">
                             Updated {formatDate(account.updatedAt)}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{getAccountTypeLabel(account.type)}</Badge>
+                        <Badge variant="secondary">
+                          {getAccountTypeLabel(account.type)}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="font-mono">{account.currency}</TableCell>
+                      <TableCell className="font-mono">
+                        {account.currency}
+                      </TableCell>
                       <TableCell className="text-right font-mono font-medium">
                         {formatAmount(account.currentBalance, account.currency)}
                       </TableCell>
@@ -250,13 +267,26 @@ export function AccountsPage() {
                       <TableCell>
                         {account.transactionCount > 0 ? (
                           <Badge variant="secondary">
-                            {account.transactionCount} {account.transactionCount === 1 ? "transaction" : "transactions"}
+                            {account.transactionCount}{" "}
+                            {account.transactionCount === 1
+                              ? "transaction"
+                              : "transactions"}
                           </Badge>
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setAccountToAdjust(account)}>
+                          <Button asChild size="sm" variant="ghost">
+                            <Link href={`/accounts/${account.id}`}>
+                              <EyeIcon data-icon="inline-start" />
+                              View
+                            </Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAccountToAdjust(account)}
+                          >
                             Adjust balance
                           </Button>
                           <Button
@@ -289,7 +319,10 @@ export function AccountsPage() {
       </main>
 
       {accountToAdjust ? (
-        <AdjustBalanceDialog account={accountToAdjust} onClose={() => setAccountToAdjust(null)} />
+        <AdjustBalanceDialog
+          account={accountToAdjust}
+          onClose={() => setAccountToAdjust(null)}
+        />
       ) : null}
 
       <AccountFormDialog
@@ -298,8 +331,7 @@ export function AccountsPage() {
         account={dialogState?.mode === "edit" ? dialogState.account : null}
         defaultCurrency={
           (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
-            | "USD"
-            | "PKR"
+            "USD" | "PKR"
         }
         isPending={saveAccountMutation.isPending}
         errorMessage={
@@ -388,7 +420,9 @@ function SummaryCard({
         <CardDescription>{detail}</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="font-mono text-2xl font-semibold tracking-normal">{value}</p>
+        <p className="font-mono text-2xl font-semibold tracking-normal">
+          {value}
+        </p>
       </CardContent>
     </Card>
   )
@@ -414,4 +448,3 @@ function AccountsTableSkeleton() {
     </div>
   )
 }
-

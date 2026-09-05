@@ -86,7 +86,8 @@ This application is a personal finance and investment management platform for in
 
 * Users can record income, expenses, transfers, refunds, fees, investment purchases, investment sales, and balance adjustments.
 * Users can select the account affected by each transaction.
-* Users can add an amount, date, category, description, merchant, and notes.
+* Users select a transaction category and can add an amount, date, optional
+  description, merchant, and notes.
 * Account balances update automatically when a transaction is created.
 * Users can view, filter, search, edit, and reverse recorded transactions.
 * Reversals are recorded as linked corrective transactions so confirmed financial history remains traceable.
@@ -95,6 +96,8 @@ This application is a personal finance and investment management platform for in
 ### Expense Tracking and Budgets
 
 * Users can organize expenses using default and custom categories.
+* Transaction forms offer type-specific default categories together with
+  categories already used for that transaction type.
 * Users can view spending totals by category and time period.
 * Users can create monthly budgets for individual categories.
 * Users can compare actual spending against their assigned budgets.

@@ -62,7 +62,9 @@ import {
   isTransferType,
   transactionStatusOptions,
   transactionTypeOptions,
+  emptyTransactionCategories,
   type Transaction,
+  type TransactionCategories,
   type TransactionType,
 } from "./transaction-types";
 
@@ -73,6 +75,8 @@ interface TransactionFormDialogProps {
   readonly errorMessage?: string | null;
   readonly exchangeRate?: string | null;
   readonly holdings: readonly Holding[];
+  readonly categoriesByType?: TransactionCategories;
+  readonly initialAccountId?: string;
   readonly isPending?: boolean;
   readonly mode: "create" | "edit";
   readonly onOpenChange: (open: boolean) => void;
@@ -88,6 +92,8 @@ export function TransactionFormDialog({
   errorMessage,
   exchangeRate,
   holdings,
+  categoriesByType = emptyTransactionCategories,
+  initialAccountId,
   isPending = false,
   mode,
   onOpenChange,
@@ -96,14 +102,20 @@ export function TransactionFormDialog({
   transaction,
 }: TransactionFormDialogProps) {
   const form = useForm<TransactionFormValues>({
-    defaultValues: getDefaultValues(transaction, defaultCurrency),
+    defaultValues: getDefaultValues(
+      transaction,
+      defaultCurrency,
+      initialAccountId,
+    ),
   });
 
   useEffect(() => {
     if (open) {
-      form.reset(getDefaultValues(transaction, defaultCurrency));
+      form.reset(
+        getDefaultValues(transaction, defaultCurrency, initialAccountId),
+      );
     }
-  }, [defaultCurrency, form, open, transaction]);
+  }, [defaultCurrency, form, initialAccountId, open, transaction]);
 
   const {
     control,
@@ -359,6 +371,7 @@ export function TransactionFormDialog({
                       }
 
                       field.onChange(selectedType);
+                      setValue("category", "", { shouldValidate: false });
                       setValue(
                         "investment",
                         getEmptyInvestmentValues(selectedType),
@@ -764,18 +777,36 @@ export function TransactionFormDialog({
           <FieldGroup className="grid gap-5 md:grid-cols-2">
             <Field data-invalid={Boolean(errors.category) || undefined}>
               <FieldLabel htmlFor="transaction-category">Category</FieldLabel>
-              <Input
-                id="transaction-category"
-                aria-invalid={Boolean(errors.category) || undefined}
-                placeholder="Food, Salary, Transfer..."
-                {...register("category")}
+              <Controller
+                control={control}
+                name="category"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger
+                      id="transaction-category"
+                      aria-invalid={Boolean(errors.category) || undefined}
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {categoriesByType[watchedType].map((category) => (
+                          <SelectItem key={category} value={category}>
+                            {category}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
               />
               <FieldError errors={[errors.category]} />
             </Field>
 
             <Field data-invalid={Boolean(errors.description) || undefined}>
               <FieldLabel htmlFor="transaction-description">
-                Description
+                Description (optional)
               </FieldLabel>
               <Input
                 id="transaction-description"
@@ -864,12 +895,13 @@ export function TransactionFormDialog({
 function getDefaultValues(
   transaction: Transaction | null | undefined,
   defaultCurrency: (typeof currencyValues)[number],
+  initialAccountId?: string,
 ): TransactionFormValues {
   if (!transaction) {
     return {
       type: "EXPENSE",
       status: "CLEARED",
-      accountId: "",
+      accountId: initialAccountId ?? "",
       destinationAccountId: "",
       amount: "",
       currency: defaultCurrency,

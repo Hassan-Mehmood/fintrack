@@ -11,7 +11,6 @@ import {
   IsUUID,
   Matches,
   MaxLength,
-  MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -63,7 +62,6 @@ export class UpdateTransactionDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(255)
   @Transform(({ value }: { value: unknown }): string =>
     typeof value === 'string' ? value.trim() : '',
@@ -72,7 +70,6 @@ export class UpdateTransactionDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(255)
   @Transform(({ value }: { value: unknown }): string =>
     typeof value === 'string' ? value.trim() : '',

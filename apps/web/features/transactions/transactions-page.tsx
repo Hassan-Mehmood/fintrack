@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import {
   ArrowDownIcon,
+  ArrowLeftIcon,
   ArrowLeftRightIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
@@ -31,6 +32,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -97,19 +99,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  ApiClientError,
+  accountQueryKey,
   accountsQueryKey,
+  getAccount,
   listAccounts,
+  updateAccount,
 } from "@/features/accounts/accounts-api";
 import {
   getAccountTypeLabel,
+  type Account,
   type AccountType,
 } from "@/features/accounts/account-types";
+import { AccountFormDialog } from "@/features/accounts/account-form-dialog";
+import type { AccountFormPayload } from "@/features/accounts/account-form-schema";
+import { AdjustBalanceDialog } from "@/features/accounts/adjust-balance-dialog";
+import {
+  categoriesQueryKey,
+  listTransactionCategories,
+} from "@/features/categories/categories-api";
 import { assetsQueryKey, listAssets } from "@/features/assets/assets-api";
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api";
 import {
   holdingsQueryKey,
   listHoldings,
 } from "@/features/investments/investments-api";
+import { portfoliosQueryKey } from "@/features/portfolios/portfolios-api";
 import {
   getSettings,
   settingsQueryKey,
@@ -133,6 +148,7 @@ import {
   createTransaction,
   deleteTransaction,
   listTransactions,
+  listAccountTransactions,
   reverseTransaction,
   transactionsQueryKey,
   updateTransaction,
@@ -146,6 +162,7 @@ import {
   transactionTypeOptions,
   type BulkTransactionPayload,
   type Transaction,
+  type TransactionCategories,
   type TransactionStatus,
   type TransactionType,
 } from "./transaction-types";
@@ -160,32 +177,29 @@ type Confirmation =
   | { readonly kind: "bulk-delete"; readonly count: number }
   | null;
 
-const categorisableTypes = new Set<TransactionType>([
-  "INCOME",
-  "EXPENSE",
-  "REFUND",
-  "FEE",
-  "DIVIDEND",
-  "INTEREST",
-  "ADJUSTMENT",
-]);
-
-export function TransactionsPage() {
+export function TransactionsPage({
+  accountId,
+}: {
+  readonly accountId?: string;
+}) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const filters = useMemo(
-    () => readTransactionFilters(searchParams),
-    [searchParams],
-  );
+  const filters = useMemo(() => {
+    const parsed = readTransactionFilters(searchParams);
+    return accountId ? { ...parsed, accountIds: [], currencies: [] } : parsed;
+  }, [accountId, searchParams]);
   const [searchText, setSearchText] = useState(filters.search);
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
   const [dialog, setDialog] = useState<DialogState>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [details, setDetails] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [accountAction, setAccountAction] = useState<"edit" | "adjust" | null>(
+    null,
+  );
 
   function updateUrl(
     key: string,
@@ -211,14 +225,26 @@ export function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchText]);
 
-  const listParams = useMemo(
-    () => toTransactionListParams(filters, debouncedSearch),
-    [filters, debouncedSearch],
-  );
+  const listParams = useMemo(() => {
+    const params = toTransactionListParams(filters, debouncedSearch);
+    return accountId ? { ...params, accountIds: [], currencies: [] } : params;
+  }, [accountId, filters, debouncedSearch]);
   const listKey = useMemo(() => JSON.stringify(listParams), [listParams]);
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
     queryFn: () => listAccounts(getToken),
+  });
+  const accountQuery = useQuery({
+    queryKey: accountQueryKey(accountId ?? "inactive"),
+    queryFn: () => {
+      if (!accountId) throw new Error("Account id is required.");
+      return getAccount(getToken, accountId);
+    },
+    enabled: Boolean(accountId),
+  });
+  const categoriesQuery = useQuery({
+    queryKey: categoriesQueryKey,
+    queryFn: () => listTransactionCategories(getToken),
   });
   const assetsQuery = useQuery({
     queryKey: assetsQueryKey,
@@ -233,8 +259,16 @@ export function TransactionsPage() {
     queryFn: () => getSettings(getToken),
   });
   const transactionsQuery = useQuery({
-    queryKey: [...transactionsQueryKey, listKey],
-    queryFn: () => listTransactions(getToken, listParams),
+    queryKey: [
+      ...transactionsQueryKey,
+      ...(accountId ? ["account", accountId] : ["all"]),
+      listKey,
+    ],
+    queryFn: () =>
+      accountId
+        ? listAccountTransactions(getToken, accountId, listParams)
+        : listTransactions(getToken, listParams),
+    enabled: !accountId || accountQuery.isSuccess,
     placeholderData: keepPreviousData,
   });
 
@@ -268,8 +302,15 @@ export function TransactionsPage() {
     mutationFn: (payload: BulkTransactionPayload) =>
       bulkUpdateTransactions(getToken, payload),
   });
+  const updateAccountMutation = useMutation({
+    mutationFn: (payload: AccountFormPayload) => {
+      if (!accountId) throw new Error("Account id is required.");
+      return updateAccount(getToken, accountId, payload);
+    },
+  });
 
   const accounts = accountsQuery.data ?? [];
+  const account = accountQuery.data;
   const transactions = transactionsQuery.data?.data ?? [];
   const meta = transactionsQuery.data?.meta;
   const visibleIds = transactions.map((transaction) => transaction.id);
@@ -280,10 +321,15 @@ export function TransactionsPage() {
     visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
   const hasActiveFilters =
     getFilterChips(filters).length > 0 || Boolean(filters.search);
+  const accountNotFound =
+    accountQuery.error instanceof ApiClientError &&
+    accountQuery.error.status === 404;
   const hasError =
     accountsQuery.isError ||
     assetsQuery.isError ||
     holdingsQuery.isError ||
+    categoriesQuery.isError ||
+    (accountQuery.isError && !accountNotFound) ||
     transactionsQuery.isError;
 
   function toggleArrayFilter(
@@ -304,6 +350,16 @@ export function TransactionsPage() {
     router.replace(`${pathname}?${clearTransactionFilters()}`, {
       scroll: false,
     });
+  }
+  async function retryFailedQueries() {
+    await Promise.all([
+      accountsQuery.refetch(),
+      categoriesQuery.refetch(),
+      assetsQuery.refetch(),
+      holdingsQuery.refetch(),
+      ...(accountId ? [accountQuery.refetch()] : []),
+      ...(!accountId || account ? [transactionsQuery.refetch()] : []),
+    ]);
   }
   function toggleSort(sortBy: TransactionFilters["sortBy"]) {
     const direction =
@@ -339,7 +395,23 @@ export function TransactionsPage() {
       queryClient.invalidateQueries({ queryKey: assetsQueryKey }),
       queryClient.invalidateQueries({ queryKey: holdingsQueryKey }),
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
+      queryClient.invalidateQueries({ queryKey: categoriesQueryKey }),
+      queryClient.invalidateQueries({ queryKey: portfoliosQueryKey }),
+      ...(accountId
+        ? [
+            queryClient.invalidateQueries({
+              queryKey: accountQueryKey(accountId),
+            }),
+          ]
+        : []),
     ]);
+  }
+
+  async function saveAccount(payload: AccountFormPayload) {
+    await updateAccountMutation.mutateAsync(payload);
+    toast.success("Account updated.");
+    setAccountAction(null);
+    await invalidateAll();
   }
   async function save(payload: TransactionFormPayload) {
     if (!dialog) return;
@@ -391,42 +463,112 @@ export function TransactionsPage() {
     categories: meta?.filterOptions.categories ?? [],
     labels: meta?.filterOptions.labels ?? [],
     currencies: meta?.filterOptions.currencies ?? [],
+    hideAccount: Boolean(accountId),
+    hideCurrency: Boolean(accountId),
     updateUrl,
     toggleArrayFilter,
   };
+  const bulkCategories = getCommonCategories(
+    selectedTransactions.map((transaction) => transaction.type),
+    categoriesQuery.data,
+  );
 
   return (
     <AppShell
-      currentSection="transactions"
-      title="Transactions"
-      description="View and manage activity across all accounts."
+      currentSection={accountId ? "accounts" : "transactions"}
+      title={accountId ? (account?.name ?? "Account") : "Transactions"}
+      description={
+        accountId
+          ? "Review balances and activity for this account."
+          : "View and manage activity across all accounts."
+      }
       primaryAction={
-        <Button
-          size="sm"
-          disabled={!accounts.length}
-          onClick={() => setDialog({ mode: "create" })}
-        >
-          <PlusIcon data-icon="inline-start" />
-          Add transaction
-        </Button>
+        <div className="flex items-center gap-2">
+          {account ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAccountAction("edit")}
+              >
+                <PencilLineIcon data-icon="inline-start" />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAccountAction("adjust")}
+              >
+                <ArrowUpDownIcon data-icon="inline-start" />
+                <span className="hidden sm:inline">Adjust balance</span>
+              </Button>
+            </>
+          ) : null}
+          <Button
+            size="sm"
+            disabled={
+              !accounts.length ||
+              categoriesQuery.isPending ||
+              categoriesQuery.isError ||
+              Boolean(accountId && !account)
+            }
+            onClick={() => setDialog({ mode: "create" })}
+          >
+            <PlusIcon data-icon="inline-start" />
+            Add transaction
+          </Button>
+        </div>
       }
     >
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
+        {accountId ? (
+          <div>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/accounts">
+                <ArrowLeftIcon data-icon="inline-start" />
+                Back to accounts
+              </Link>
+            </Button>
+          </div>
+        ) : null}
+        {accountId && accountQuery.isLoading ? <AccountHeaderSkeleton /> : null}
+        {accountId && accountNotFound ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <CircleAlertIcon />
+              </EmptyMedia>
+              <EmptyTitle>Account not found</EmptyTitle>
+              <EmptyDescription>
+                This account does not exist or is unavailable to your user.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+
+        {account ? <AccountOverview account={account} /> : null}
+
         {hasError ? (
           <Alert variant="destructive">
             <CircleAlertIcon />
-            <AlertTitle>Unable to load transactions</AlertTitle>
+            <AlertTitle>
+              {accountId
+                ? "Unable to load account activity"
+                : "Unable to load transactions"}
+            </AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-3">
               <span>
                 {transactionsQuery.error?.message ??
                   accountsQuery.error?.message ??
+                  accountQuery.error?.message ??
+                  categoriesQuery.error?.message ??
                   assetsQuery.error?.message ??
                   holdingsQuery.error?.message}
               </span>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void transactionsQuery.refetch()}
+                onClick={() => void retryFailedQueries()}
               >
                 Retry
               </Button>
@@ -435,27 +577,38 @@ export function TransactionsPage() {
         ) : null}
 
         <section
-          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+          className={cn(
+            "grid gap-3 sm:grid-cols-2 xl:grid-cols-4",
+            accountId && !account && "hidden",
+          )}
           aria-label="Filtered transaction summary"
         >
           <SummaryCard
-            label="Money in"
+            label={accountId ? "Inflows" : "Money in"}
             value={
               meta ? formatAmount(meta.summary.moneyIn, meta.baseCurrency) : "—"
             }
-            detail={`Base currency: ${meta?.baseCurrency ?? "—"}`}
+            detail={
+              accountId
+                ? `For ${getDatePresetLabel(filters.datePreset)}`
+                : `Base currency: ${meta?.baseCurrency ?? "—"}`
+            }
           />
           <SummaryCard
-            label="Money out"
+            label={accountId ? "Outflows" : "Money out"}
             value={
               meta
                 ? formatAmount(meta.summary.moneyOut, meta.baseCurrency)
                 : "—"
             }
-            detail="Transfers and investments excluded"
+            detail={
+              accountId
+                ? "All cleared account effects"
+                : "Transfers and investments excluded"
+            }
           />
           <SummaryCard
-            label="Net cash flow"
+            label={accountId ? "Net movement" : "Net cash flow"}
             value={
               meta
                 ? formatSignedAmount(
@@ -473,7 +626,7 @@ export function TransactionsPage() {
           />
         </section>
 
-        <Card>
+        <Card className={cn(accountId && !account && "hidden")}>
           <CardHeader className="gap-4">
             <div className="flex items-center justify-between gap-3">
               <CardTitle>Transaction history</CardTitle>
@@ -580,13 +733,8 @@ export function TransactionsPage() {
             {selectedIds.size ? (
               <BulkBar
                 count={selectedIds.size}
-                canCategorize={
-                  selectedTransactions.length > 0 &&
-                  selectedTransactions.every((item) =>
-                    categorisableTypes.has(item.type),
-                  )
-                }
-                categories={meta?.filterOptions.categories ?? []}
+                canCategorize={bulkCategories.length > 0}
+                categories={bulkCategories}
                 labels={meta?.filterOptions.labels ?? []}
                 pending={bulkMutation.isPending}
                 onClear={() => setSelectedIds(new Set())}
@@ -634,7 +782,7 @@ export function TransactionsPage() {
                     </Button>
                   ) : (
                     <Button
-                      disabled={!accounts.length}
+                      disabled={!accounts.length || !categoriesQuery.isSuccess}
                       onClick={() => setDialog({ mode: "create" })}
                     >
                       <PlusIcon />
@@ -697,6 +845,13 @@ export function TransactionsPage() {
                         <TableHead className="hidden 2xl:table-cell">
                           Labels
                         </TableHead>
+                        <SortHead
+                          label="Created"
+                          value="createdAt"
+                          filters={filters}
+                          onSort={toggleSort}
+                          className="hidden 2xl:table-cell"
+                        />
                         <SortHead
                           label="Amount"
                           value="amount"
@@ -766,6 +921,9 @@ export function TransactionsPage() {
                       onDelete={(item) =>
                         setConfirmation({ kind: "delete", transaction: item })
                       }
+                      onReverse={(item) =>
+                        setConfirmation({ kind: "reverse", transaction: item })
+                      }
                     />
                   ))}
                 </div>
@@ -787,6 +945,8 @@ export function TransactionsPage() {
         accounts={accounts}
         assets={assetsQuery.data ?? []}
         holdings={holdingsQuery.data ?? []}
+        categoriesByType={categoriesQuery.data}
+        initialAccountId={accountId}
         exchangeRate={settingsQuery.data?.exchangeRate}
         defaultCurrency={
           (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
@@ -802,6 +962,32 @@ export function TransactionsPage() {
         }}
         onSubmit={save}
       />
+      {account && accountAction === "edit" ? (
+        <AccountFormDialog
+          open
+          mode="edit"
+          account={account}
+          isPending={updateAccountMutation.isPending}
+          errorMessage={
+            updateAccountMutation.isError
+              ? updateAccountMutation.error.message
+              : null
+          }
+          onOpenChange={(open) => {
+            if (!open) {
+              setAccountAction(null);
+              updateAccountMutation.reset();
+            }
+          }}
+          onSubmit={saveAccount}
+        />
+      ) : null}
+      {account && accountAction === "adjust" ? (
+        <AdjustBalanceDialog
+          account={account}
+          onClose={() => setAccountAction(null)}
+        />
+      ) : null}
       <DetailSheet
         transaction={details}
         baseCurrency={
@@ -895,6 +1081,8 @@ type FilterProps = {
   categories: readonly string[];
   labels: readonly string[];
   currencies: readonly string[];
+  hideAccount?: boolean;
+  hideCurrency?: boolean;
   updateUrl: (
     key: string,
     value: string | readonly string[] | boolean | undefined,
@@ -913,6 +1101,8 @@ function FilterControls({
   categories,
   labels,
   currencies,
+  hideAccount,
+  hideCurrency,
   updateUrl,
   toggleArrayFilter,
   mobile,
@@ -942,18 +1132,20 @@ function FilterControls({
           />
         </div>
       ) : null}
-      <MultiFilter
-        label="Accounts"
-        selected={filters.accountIds}
-        options={accounts.map((account) => ({
-          value: account.id,
-          label: `${account.name} · ${getAccountTypeLabel(account.type)}${account.archivedAt ? " (Archived)" : ""}`,
-        }))}
-        onToggle={(value) =>
-          toggleArrayFilter("accounts", filters.accountIds, value)
-        }
-        mobile={mobile}
-      />
+      {!hideAccount ? (
+        <MultiFilter
+          label="Accounts"
+          selected={filters.accountIds}
+          options={accounts.map((account) => ({
+            value: account.id,
+            label: `${account.name} · ${getAccountTypeLabel(account.type)}${account.archivedAt ? " (Archived)" : ""}`,
+          }))}
+          onToggle={(value) =>
+            toggleArrayFilter("accounts", filters.accountIds, value)
+          }
+          mobile={mobile}
+        />
+      ) : null}
       <MultiFilter
         label="Types"
         selected={filters.types}
@@ -999,7 +1191,7 @@ function FilterControls({
         }
         mobile={mobile}
       />
-      {currencies.length > 1 ? (
+      {!hideCurrency && currencies.length > 1 ? (
         <MultiFilter
           label="Currency"
           selected={filters.currencies}
@@ -1318,7 +1510,7 @@ function TransactionRow({
     >
       <TableCell onClick={(event) => event.stopPropagation()}>
         <Checkbox
-          aria-label={`Select ${transaction.description}`}
+          aria-label={`Select ${displayText(transaction)}`}
           checked={selected}
           onCheckedChange={(value) => onSelect(value === true)}
         />
@@ -1359,6 +1551,9 @@ function TransactionRow({
       </TableCell>
       <TableCell className="hidden 2xl:table-cell">
         <Labels labels={transaction.labels} />
+      </TableCell>
+      <TableCell className="hidden whitespace-nowrap 2xl:table-cell">
+        {formatDate(transaction.createdAt)}
       </TableCell>
       <TableCell
         className={cn(
@@ -1426,7 +1621,7 @@ function Actions({
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label={`Actions for ${transaction.description}`}
+          aria-label={`Actions for ${displayText(transaction)}`}
         >
           <MoreHorizontalIcon />
         </Button>
@@ -1489,7 +1684,7 @@ function DetailSheet({
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{transaction.description}</SheetTitle>
+          <SheetTitle>{displayText(transaction)}</SheetTitle>
           <SheetDescription>
             {transactionAmount(transaction)} ·{" "}
             {getTransactionTypeLabel(transaction.type)}
@@ -1722,6 +1917,58 @@ function SummaryCard({
     </Card>
   );
 }
+
+function AccountOverview({ account }: { readonly account: Account }) {
+  return (
+    <section
+      className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+      aria-label="Account balances and details"
+    >
+      <SummaryCard
+        label="Current balance"
+        value={formatAmount(account.currentBalance, account.currency)}
+        detail="Complete account balance"
+      />
+      <SummaryCard
+        label="Opening balance"
+        value={formatAmount(account.openingBalance, account.currency)}
+        detail={`Opened ${formatDate(account.openedAt)}`}
+      />
+      <Card className="md:col-span-2">
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs text-muted-foreground">Account type</p>
+            <p className="font-medium">{getAccountTypeLabel(account.type)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Currency</p>
+            <p className="font-mono font-medium">{account.currency}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Last updated</p>
+            <p className="font-medium">{formatDateTime(account.updatedAt)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Status</p>
+            <p className="font-medium">
+              {account.archivedAt ? "Archived" : "Active"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function AccountHeaderSkeleton() {
+  return (
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <Skeleton className="h-24" />
+      <Skeleton className="h-24" />
+      <Skeleton className="h-24 md:col-span-2" />
+    </div>
+  );
+}
 function TableSkeleton() {
   return (
     <div className="grid gap-2" aria-label="Loading transactions">
@@ -1809,7 +2056,7 @@ function confirmationText(action: Confirmation) {
   if (action.kind === "bulk-delete")
     return `This soft-deletes ${action.count} selected transactions in one request. Linked transfers stop affecting both accounts.`;
   const item = action.transaction;
-  const detail = `${item.description}, ${formatAmount(item.amount, item.currency)}, ${formatDate(item.occurredAt)}, from ${item.accountName}.`;
+  const detail = `${displayText(item)}, ${formatAmount(item.amount, item.currency)}, ${formatDate(item.occurredAt)}, from ${item.accountName}.`;
   if (action.kind === "reverse")
     return `Reverse ${detail} A corrective transaction preserves the original record.`;
   return `Delete ${detail}${isTransferType(item.type) ? " The linked transfer will stop affecting both accounts." : ""} It will no longer affect balances or summaries.`;
@@ -1829,14 +2076,24 @@ function amountColor(item: Transaction) {
   if (
     item.status === "FAILED" ||
     item.status === "VOIDED" ||
-    isTransferType(item.type)
+    (!item.accountDirection && isTransferType(item.type))
   )
     return "text-muted-foreground";
+  if (item.accountDirection)
+    return item.accountDirection === "IN"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : item.accountDirection === "OUT"
+        ? "text-foreground"
+        : "text-muted-foreground";
   return getTransactionSign(item.type) > 0
     ? "text-emerald-600 dark:text-emerald-400"
     : "text-foreground";
 }
 function transactionAmount(item: Transaction) {
+  if (item.accountEffect !== undefined)
+    return item.accountDirection === "NEUTRAL"
+      ? formatAmount(item.accountEffect, item.currency)
+      : formatSignedAmount(item.accountEffect, item.currency);
   const sign = isTransferType(item.type)
     ? "↔ "
     : getTransactionSign(item.type) > 0
@@ -1853,9 +2110,26 @@ function statusLabel(status: TransactionStatus) {
   );
 }
 function directionLabel(item: Transaction) {
+  if (item.accountDirection)
+    return item.accountDirection === "IN"
+      ? "Money in"
+      : item.accountDirection === "OUT"
+        ? "Money out"
+        : "Neutral";
   if (isTransferType(item.type)) return "Transfer";
   const sign = getTransactionSign(item.type);
   return sign > 0 ? "Money in" : sign < 0 ? "Money out" : "Neutral";
+}
+
+function getCommonCategories(
+  types: readonly TransactionType[],
+  categories?: TransactionCategories,
+): readonly string[] {
+  if (!categories || types.length === 0) return [];
+  const uniqueTypes = [...new Set(types)];
+  return categories[uniqueTypes[0]].filter((category) =>
+    uniqueTypes.every((type) => categories[type].includes(category)),
+  );
 }
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(

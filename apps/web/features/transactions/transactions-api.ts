@@ -4,6 +4,7 @@ import type {
   TransactionListParams,
   TransactionPayload,
   TransactionsListResult,
+  AccountTransactionsListResult,
 } from "./transaction-types"
 
 interface GetToken {
@@ -50,21 +51,32 @@ export const transactionsQueryKey = ["transactions"] as const
 
 export async function listTransactions(
   getToken: GetToken,
-  params: TransactionListParams = {}
+  params: TransactionListParams = {},
 ): Promise<TransactionsListResult> {
   return apiRequest<TransactionsListResult>(
     getToken,
-    `/api/v1/transactions?${buildListQuery(params)}`
+    `/api/v1/transactions?${buildListQuery(params)}`,
+  )
+}
+
+export async function listAccountTransactions(
+  getToken: GetToken,
+  accountId: string,
+  params: TransactionListParams = {},
+): Promise<AccountTransactionsListResult> {
+  return apiRequest<AccountTransactionsListResult>(
+    getToken,
+    `/api/v1/accounts/${accountId}/transactions?${buildListQuery(params)}`,
   )
 }
 
 export async function getTransaction(
   getToken: GetToken,
-  transactionId: string
+  transactionId: string,
 ): Promise<Transaction> {
   const response = await apiRequest<TransactionItemResponse>(
     getToken,
-    `/api/v1/transactions/${transactionId}`
+    `/api/v1/transactions/${transactionId}`,
   )
 
   return response.data
@@ -72,7 +84,7 @@ export async function getTransaction(
 
 export async function createTransaction(
   getToken: GetToken,
-  payload: TransactionPayload
+  payload: TransactionPayload,
 ): Promise<Transaction> {
   const response = await apiRequest<TransactionItemResponse>(
     getToken,
@@ -80,7 +92,7 @@ export async function createTransaction(
     {
       body: JSON.stringify(payload),
       method: "POST",
-    }
+    },
   )
 
   return response.data
@@ -89,7 +101,7 @@ export async function createTransaction(
 export async function updateTransaction(
   getToken: GetToken,
   transactionId: string,
-  payload: TransactionPayload
+  payload: TransactionPayload,
 ): Promise<Transaction> {
   const response = await apiRequest<TransactionItemResponse>(
     getToken,
@@ -97,7 +109,7 @@ export async function updateTransaction(
     {
       body: JSON.stringify(payload),
       method: "PATCH",
-    }
+    },
   )
 
   return response.data
@@ -105,7 +117,7 @@ export async function updateTransaction(
 
 export async function deleteTransaction(
   getToken: GetToken,
-  transactionId: string
+  transactionId: string,
 ): Promise<void> {
   await apiRequest(getToken, `/api/v1/transactions/${transactionId}`, {
     method: "DELETE",
@@ -114,14 +126,14 @@ export async function deleteTransaction(
 
 export async function reverseTransaction(
   getToken: GetToken,
-  transactionId: string
+  transactionId: string,
 ): Promise<Transaction> {
   const response = await apiRequest<TransactionItemResponse>(
     getToken,
     `/api/v1/transactions/${transactionId}/reverse`,
     {
       method: "POST",
-    }
+    },
   )
 
   return response.data
@@ -129,7 +141,7 @@ export async function reverseTransaction(
 
 export async function bulkUpdateTransactions(
   getToken: GetToken,
-  payload: BulkTransactionPayload
+  payload: BulkTransactionPayload,
 ): Promise<readonly string[]> {
   const response = await apiRequest<{
     readonly data: { readonly updatedIds: readonly string[] }
@@ -165,7 +177,7 @@ function buildListQuery(params: TransactionListParams): string {
 async function apiRequest<T>(
   getToken: GetToken,
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
 ): Promise<T> {
   const token = await getToken()
 
@@ -194,7 +206,7 @@ function getPublicApiBaseUrl(): string {
 
   if (!apiBaseUrl) {
     throw new Error(
-      "NEXT_PUBLIC_API_BASE_URL is required for authenticated transaction requests."
+      "NEXT_PUBLIC_API_BASE_URL is required for authenticated transaction requests.",
     )
   }
 

@@ -5,15 +5,25 @@ change.
 
 ## Current Phase
 
-- One-time wallet-record import completed and verified for
-  `hasanafridi38@gmail.com`; ready for balance reconciliation.
+- Account detail workspace and structured transaction categories implemented;
+  validation is complete.
 
 ## Current Goal
 
-- Reconcile the seven imported accounts with explicit balance adjustments once
-  current balances are provided.
+- Continue with the next account, transaction, or reporting enhancement.
 
 ## Completed
+
+- Added a persistent Back to accounts action at the top of account detail pages.
+- Added `/accounts/[accountId]` with stable balance metadata, default-this-month
+  activity cards, URL-persisted date/search/type/category/label/status/direction/
+  amount/note filters, sorting, pagination, account-relative transfer effects,
+  responsive transaction views, and account-scoped actions.
+- Added authenticated type-specific category discovery from defaults plus owned
+  history, enforced those choices on create/edit/bulk updates, made transaction
+  descriptions optional with display fallbacks, and added account/category API
+  coverage. Verified 146 API unit tests, 4 API end-to-end tests, 38 web tests,
+  both production builds, and scoped lint for all changed production files.
 
 - Verified balance adjustments with 136 API unit tests, 28 web tests, two API
   end-to-end tests (including balance-endpoint authentication), both

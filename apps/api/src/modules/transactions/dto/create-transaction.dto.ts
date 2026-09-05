@@ -70,12 +70,12 @@ export class CreateTransactionDto {
   category!: string;
 
   @IsString()
-  @MinLength(1)
+  @IsOptional()
   @MaxLength(255)
   @Transform(({ value }: { value: unknown }): string =>
     typeof value === 'string' ? value.trim() : '',
   )
-  description!: string;
+  description?: string;
 
   @IsOptional()
   @IsString()

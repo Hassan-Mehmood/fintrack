@@ -69,6 +69,18 @@ export interface TransactionsListResponse {
   };
 }
 
+export interface AccountTransactionResponse extends TransactionResponse {
+  readonly accountEffect: string;
+  readonly accountDirection: 'IN' | 'OUT' | 'NEUTRAL';
+}
+
+export interface AccountTransactionsListResponse extends Omit<
+  TransactionsListResponse,
+  'data'
+> {
+  readonly data: readonly AccountTransactionResponse[];
+}
+
 export interface TransactionItemResponse {
   readonly data: TransactionResponse;
 }

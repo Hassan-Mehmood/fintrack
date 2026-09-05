@@ -9,7 +9,12 @@ import {
 import { calculateInvestmentTransactionAmounts } from '../../common/financial/investment-transaction-calculations';
 import { convertUsdPkr } from '../../common/financial/fx-conversion';
 import { CurrencyConverter } from '../../common/financial/currency-converter';
+import {
+  getSourceAccountEffect,
+  hasDestinationBalanceEffect,
+} from '../../common/financial/transaction-effects';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CategoriesService } from '../categories/categories.service';
 import {
   createAccountNotFoundForTransactionException,
   createAssetNotFoundForTransactionException,
@@ -20,6 +25,7 @@ import {
   createInvalidBulkTransactionException,
   createInvalidTransactionAmountException,
   createInvalidTransferException,
+  createInvalidTransactionCategoryException,
   createInvestmentDetailRequiredException,
   createTransactionCurrencyMismatchException,
   createTransactionLockedException,
@@ -32,6 +38,8 @@ import type { BulkUpdateTransactionsDto } from './dto/bulk-update-transactions.d
 import type { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import type {
   InvestmentTransactionDetailResponse,
+  AccountTransactionsListResponse,
+  AccountTransactionResponse,
   TransactionResponse,
   TransactionsListResponse,
 } from './transactions.types';
@@ -167,10 +175,18 @@ const summaryOutgoingTypes = new Set<TransactionType>(['EXPENSE', 'FEE']);
 const categorisableTypes = new Set<TransactionType>([
   'INCOME',
   'EXPENSE',
+  'TRANSFER',
   'REFUND',
   'FEE',
+  'INVESTMENT_BUY',
+  'INVESTMENT_SELL',
   'DIVIDEND',
   'INTEREST',
+  'INVESTMENT_SPLIT',
+  'INVESTMENT_BONUS',
+  'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_DEPOSIT',
+  'INVESTMENT_WITHDRAWAL',
   'ADJUSTMENT',
 ]);
 
@@ -185,7 +201,10 @@ interface InvestmentPayload {
 
 @Injectable()
 export class TransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   async listTransactionsForUser(
     user: AuthenticatedUser,
@@ -267,6 +286,75 @@ export class TransactionsService {
     return this.toTransactionResponse(transaction);
   }
 
+  async listAccountTransactionsForUser(
+    user: AuthenticatedUser,
+    accountId: string,
+    query: ListTransactionsQueryDto,
+  ): Promise<AccountTransactionsListResponse> {
+    const account = await this.prisma.account.findFirst({
+      where: { id: accountId, userId: user.id },
+      select: { id: true, currency: true },
+    });
+    if (!account) {
+      throw createAccountNotFoundForTransactionException(accountId);
+    }
+
+    const where = this.buildListWhere(user.id, query, accountId);
+    const orderBy = this.buildListOrderBy(query);
+    const skip = (query.page - 1) * query.pageSize;
+    const [transactions, total, summaryRows, optionRows] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where,
+        orderBy,
+        skip,
+        take: query.pageSize,
+        select: transactionSelect,
+      }),
+      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.findMany({
+        where: { AND: [where, { status: 'CLEARED', deletedAt: null }] },
+        select: {
+          type: true,
+          accountId: true,
+          destinationAccountId: true,
+          amount: true,
+        },
+      }),
+      this.prisma.transaction.findMany({
+        where: { userId: user.id, deletedAt: null },
+        select: { category: true, currency: true, labels: true },
+      }),
+    ]);
+
+    let moneyIn = new Prisma.Decimal(0);
+    let moneyOut = new Prisma.Decimal(0);
+    for (const row of summaryRows) {
+      const effect = this.getAccountEffect(row, accountId);
+      if (effect.gt(0)) moneyIn = moneyIn.add(effect);
+      if (effect.lt(0)) moneyOut = moneyOut.add(effect.abs());
+    }
+
+    return {
+      data: transactions.map((transaction) =>
+        this.toAccountTransactionResponse(transaction, accountId),
+      ),
+      meta: {
+        total,
+        page: query.page,
+        pageSize: query.pageSize,
+        pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
+        baseCurrency: account.currency,
+        summary: {
+          moneyIn: moneyIn.toFixed(2),
+          moneyOut: moneyOut.toFixed(2),
+          netCashFlow: moneyIn.sub(moneyOut).toFixed(2),
+          transactionCount: total,
+        },
+        filterOptions: this.buildFilterOptions(optionRows),
+      },
+    };
+  }
+
   async bulkUpdateTransactionsForUser(
     user: AuthenticatedUser,
     payload: BulkUpdateTransactionsDto,
@@ -302,6 +390,21 @@ export class TransactionsService {
         throw createInvalidBulkTransactionException(
           'The selected transaction types cannot be categorized.',
         );
+      }
+
+      if (payload.category) {
+        const category = payload.category;
+        const categoryChecks = await Promise.all(
+          [...new Set(transactions.map((transaction) => transaction.type))].map(
+            (type) =>
+              this.categoriesService.isAllowedForUser(user.id, type, category),
+          ),
+        );
+        if (categoryChecks.some((allowed) => !allowed)) {
+          throw createInvalidBulkTransactionException(
+            'Select a category available for every selected transaction type.',
+          );
+        }
       }
 
       if (
@@ -363,6 +466,8 @@ export class TransactionsService {
       }
     }
 
+    await this.assertCategoryAllowed(user.id, payload.type, payload.category);
+
     await this.validateTransactionAccounts(user.id, {
       ...payload,
       currency: payload.currency,
@@ -418,7 +523,7 @@ export class TransactionsService {
         currency: payload.currency,
         occurredAt: new Date(payload.occurredAt),
         category: payload.category,
-        description: payload.description,
+        description: payload.description ?? '',
         merchant: payload.merchant,
         notes: payload.notes,
         reference: payload.reference,
@@ -462,6 +567,9 @@ export class TransactionsService {
           : undefined;
     const effectiveAmount =
       payload.amount ?? existingTransaction.amount.toString();
+    const effectiveCategory = payload.category ?? existingTransaction.category;
+
+    await this.assertCategoryAllowed(user.id, effectiveType, effectiveCategory);
 
     await this.validateTransactionAccounts(user.id, {
       type: effectiveType,
@@ -628,6 +736,7 @@ export class TransactionsService {
   private buildListWhere(
     userId: string,
     query: ListTransactionsQueryDto,
+    relativeAccountId?: string,
   ): Prisma.TransactionWhereInput {
     const conditions: Prisma.TransactionWhereInput[] = [];
 
@@ -663,7 +772,14 @@ export class TransactionsService {
       });
     }
 
-    if (query.accountIds?.length) {
+    if (relativeAccountId) {
+      conditions.push({
+        OR: [
+          { accountId: relativeAccountId },
+          { destinationAccountId: relativeAccountId },
+        ],
+      });
+    } else if (query.accountIds?.length) {
       conditions.push({
         OR: [
           { accountId: { in: query.accountIds } },
@@ -688,11 +804,15 @@ export class TransactionsService {
       conditions.push({ status: { in: query.statuses } });
     }
 
-    if (query.currencies?.length) {
+    if (!relativeAccountId && query.currencies?.length) {
       conditions.push({ currency: { in: query.currencies } });
     }
 
-    if (query.direction === 'IN') {
+    if (relativeAccountId && query.direction) {
+      conditions.push(
+        this.buildAccountDirectionWhere(relativeAccountId, query.direction),
+      );
+    } else if (query.direction === 'IN') {
       conditions.push({
         OR: [
           { type: { in: [...incomingTypes] } },
@@ -742,6 +862,53 @@ export class TransactionsService {
       deletedAt: null,
       AND: conditions,
     };
+  }
+
+  private buildAccountDirectionWhere(
+    accountId: string,
+    direction: 'IN' | 'OUT',
+  ): Prisma.TransactionWhereInput {
+    const positiveSourceTypes = [
+      ...incomingTypes,
+      'ADJUSTMENT',
+    ] as TransactionType[];
+    const negativeSourceTypes = [
+      ...outgoingTypes,
+      'TRANSFER',
+    ] as TransactionType[];
+    const incoming = direction === 'IN';
+
+    return {
+      OR: [
+        {
+          accountId,
+          type: { in: positiveSourceTypes },
+          amount: incoming ? { gt: 0 } : { lt: 0 },
+        },
+        {
+          accountId,
+          type: { in: negativeSourceTypes },
+          amount: incoming ? { lt: 0 } : { gt: 0 },
+        },
+        {
+          destinationAccountId: accountId,
+          type: { in: ['TRANSFER', 'INVESTMENT_BUY'] },
+          amount: incoming ? { gt: 0 } : { lt: 0 },
+        },
+      ],
+    };
+  }
+
+  private async assertCategoryAllowed(
+    userId: string,
+    type: TransactionType,
+    category: string,
+  ): Promise<void> {
+    if (
+      !(await this.categoriesService.isAllowedForUser(userId, type, category))
+    ) {
+      throw createInvalidTransactionCategoryException(type, category);
+    }
   }
 
   private buildListOrderBy(
@@ -1394,6 +1561,42 @@ export class TransactionsService {
     };
   }
 
+  private toAccountTransactionResponse(
+    transaction: TransactionRecord,
+    accountId: string,
+  ): AccountTransactionResponse {
+    const effect = this.getAccountEffect(transaction, accountId);
+    return {
+      ...this.toTransactionResponse(transaction),
+      accountEffect: effect.toString(),
+      accountDirection: effect.gt(0) ? 'IN' : effect.lt(0) ? 'OUT' : 'NEUTRAL',
+    };
+  }
+
+  private getAccountEffect(
+    transaction: {
+      readonly type: TransactionType;
+      readonly accountId: string;
+      readonly destinationAccountId: string | null;
+      readonly amount: Prisma.Decimal;
+    },
+    accountId: string,
+  ): Prisma.Decimal {
+    let effect = new Prisma.Decimal(0);
+    if (transaction.accountId === accountId) {
+      effect = effect.add(
+        getSourceAccountEffect(transaction.type, transaction.amount),
+      );
+    }
+    if (
+      transaction.destinationAccountId === accountId &&
+      hasDestinationBalanceEffect(transaction.type)
+    ) {
+      effect = effect.add(transaction.amount);
+    }
+    return effect;
+  }
+
   private toInvestmentDetailResponse(
     detail: Prisma.InvestmentTransactionDetailGetPayload<{
       select: typeof investmentDetailSelect;
@@ -1433,6 +1636,12 @@ function negateAmount(amount: string): string {
 function getTransactionDisplayText(transaction: {
   readonly category: string;
   readonly description: string;
+  readonly merchant: string | null;
 }): string {
-  return transaction.description || transaction.category;
+  return (
+    transaction.description ||
+    transaction.merchant ||
+    transaction.category ||
+    'Transaction'
+  );
 }

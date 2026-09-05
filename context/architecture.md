@@ -316,9 +316,13 @@ Store the following in PostgreSQL:
 Financial values must use PostgreSQL `NUMERIC` fields.
 
 Transactions store `category` as the required classification text and
-`description` as the separate required user-facing description. The migration
-that introduced this distinction preserved the former `description` values as
-categories and initialized descriptions on legacy rows to an empty string.
+`description` as a separate optional user-facing description represented by an
+empty string when omitted. The migration that introduced this distinction
+preserved the former `description` values as categories and initialized
+descriptions on legacy rows to an empty string. Category choices are served by
+the categories module as type-specific defaults merged with the authenticated
+user's existing non-deleted transaction categories. The transaction category
+remains a string so imported and legacy categories stay compatible.
 Transactions also store a processing status, transaction-owned string labels,
 an optional reference, and an optional soft-deletion timestamp. Only cleared,
 non-deleted transactions affect balances, dashboard summaries, and investment
@@ -532,12 +536,15 @@ Example operations:
 POST   /api/v1/accounts
 GET    /api/v1/accounts
 GET    /api/v1/accounts/:id
+GET    /api/v1/accounts/:id/transactions
 PATCH  /api/v1/accounts/:id
 DELETE /api/v1/accounts/:id
 
 POST   /api/v1/transactions
 GET    /api/v1/transactions
 GET    /api/v1/transactions/:id
+
+GET    /api/v1/categories
 
 POST   /api/v1/goals
 GET    /api/v1/goals

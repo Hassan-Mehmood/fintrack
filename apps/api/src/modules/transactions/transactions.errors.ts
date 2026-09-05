@@ -78,6 +78,19 @@ export function createInvalidTransferException(
   );
 }
 
+export function createInvalidTransactionCategoryException(
+  transactionType: string,
+  category: string,
+): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INVALID_TRANSACTION_CATEGORY',
+      'Select a category available for this transaction type.',
+      { transactionType, category },
+    ),
+  );
+}
+
 export function createTransactionCurrencyMismatchException(
   accountCurrency: string,
   transactionCurrency: string,

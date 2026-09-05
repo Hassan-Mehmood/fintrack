@@ -48,21 +48,43 @@ interface AccountsListResponse {
 }
 
 export const accountsQueryKey = ["accounts"] as const
+export const accountQueryKey = (accountId: string) =>
+  [...accountsQueryKey, accountId] as const
 
-export async function listAccounts(getToken: GetToken): Promise<readonly Account[]> {
-  const response = await apiRequest<AccountsListResponse>(getToken, "/api/v1/accounts")
+export async function listAccounts(
+  getToken: GetToken,
+): Promise<readonly Account[]> {
+  const response = await apiRequest<AccountsListResponse>(
+    getToken,
+    "/api/v1/accounts",
+  )
 
+  return response.data
+}
+
+export async function getAccount(
+  getToken: GetToken,
+  accountId: string,
+): Promise<Account> {
+  const response = await apiRequest<AccountItemResponse>(
+    getToken,
+    `/api/v1/accounts/${accountId}`,
+  )
   return response.data
 }
 
 export async function createAccount(
   getToken: GetToken,
-  payload: AccountPayload
+  payload: AccountPayload,
 ): Promise<Account> {
-  const response = await apiRequest<AccountItemResponse>(getToken, "/api/v1/accounts", {
-    body: JSON.stringify(payload),
-    method: "POST",
-  })
+  const response = await apiRequest<AccountItemResponse>(
+    getToken,
+    "/api/v1/accounts",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+  )
 
   return response.data
 }
@@ -70,7 +92,7 @@ export async function createAccount(
 export async function updateAccount(
   getToken: GetToken,
   accountId: string,
-  payload: AccountPayload
+  payload: AccountPayload,
 ): Promise<Account> {
   const response = await apiRequest<AccountItemResponse>(
     getToken,
@@ -78,7 +100,7 @@ export async function updateAccount(
     {
       body: JSON.stringify(payload),
       method: "PATCH",
-    }
+    },
   )
 
   return response.data
@@ -92,19 +114,19 @@ export async function adjustAccountBalance(
     readonly expectedBalance: string
     readonly currency: string
     readonly idempotencyKey: string
-  }
+  },
 ): Promise<Account> {
   const response = await apiRequest<AccountItemResponse>(
     getToken,
     `/api/v1/accounts/${accountId}/balance-adjustments`,
-    { body: JSON.stringify(payload), method: "POST" }
+    { body: JSON.stringify(payload), method: "POST" },
   )
   return response.data
 }
 
 export async function deleteAccount(
   getToken: GetToken,
-  accountId: string
+  accountId: string,
 ): Promise<void> {
   await apiRequest(getToken, `/api/v1/accounts/${accountId}`, {
     method: "DELETE",
@@ -114,7 +136,7 @@ export async function deleteAccount(
 async function apiRequest<T>(
   getToken: GetToken,
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
 ): Promise<T> {
   const token = await getToken()
 
@@ -143,7 +165,7 @@ function getPublicApiBaseUrl(): string {
 
   if (!apiBaseUrl) {
     throw new Error(
-      "NEXT_PUBLIC_API_BASE_URL is required for authenticated account requests."
+      "NEXT_PUBLIC_API_BASE_URL is required for authenticated account requests.",
     )
   }
 
