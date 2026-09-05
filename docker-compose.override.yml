@@ -1,0 +1,65 @@
+# Automatically loaded by `docker compose up --build --watch`.
+# Use `docker compose -f docker-compose.yml up --build -d` for production.
+services:
+  api:
+    build:
+      target: development
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/api
+          target: /app
+          initial_sync: true
+          ignore:
+            - package.json
+            - pnpm-lock.yaml
+            - pnpm-workspace.yaml
+            - Dockerfile
+            - prisma/
+            - prisma.config.ts
+            - nest-cli.json
+            - tsconfig*.json
+        - action: rebuild
+          path: ./apps/api/package.json
+        - action: rebuild
+          path: ./apps/api/pnpm-lock.yaml
+        - action: rebuild
+          path: ./apps/api/pnpm-workspace.yaml
+        - action: rebuild
+          path: ./apps/api/Dockerfile
+        - action: rebuild
+          path: ./apps/api/prisma
+        - action: rebuild
+          path: ./apps/api/prisma.config.ts
+        - action: rebuild
+          path: ./apps/api/nest-cli.json
+        - action: rebuild
+          path: ./apps/api/tsconfig.json
+        - action: rebuild
+          path: ./apps/api/tsconfig.build.json
+
+  web:
+    build:
+      target: development
+    environment:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3001}
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/web
+          target: /app
+          initial_sync: true
+          ignore:
+            - package.json
+            - pnpm-lock.yaml
+            - pnpm-workspace.yaml
+            - Dockerfile
+        - action: rebuild
+          path: ./apps/web/package.json
+        - action: rebuild
+          path: ./apps/web/pnpm-lock.yaml
+        - action: rebuild
+          path: ./apps/web/pnpm-workspace.yaml
+        - action: rebuild
+          path: ./apps/web/Dockerfile

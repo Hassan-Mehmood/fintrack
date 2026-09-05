@@ -15,6 +15,15 @@ change.
 
 ## Completed
 
+- Added development Dockerfile stages and an automatic Compose override for
+  Next.js Fast Refresh and NestJS watch mode. `docker compose up --build --watch`
+  syncs source edits and rebuilds services after dependency/configuration changes;
+  Prisma changes rebuild the API client without applying database migrations.
+- Documented Docker development and explicit production startup in the root README.
+- Verified development/production Compose validation, both development image
+  builds, server startup, web file synchronization, and automatic API
+  recompilation/restart after a temporary source edit (zero compiler errors).
+
 - Added a guarded one-time wallet CSV importer with strict format and target-user
   validation, deterministic idempotency keys, decimal-safe normalization, and
   dry-run/apply modes.

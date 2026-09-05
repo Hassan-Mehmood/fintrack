@@ -17,6 +17,17 @@ RUN --mount=type=cache,id=fintrack-pnpm,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile
 RUN DATABASE_URL=postgresql://placeholder:placeholder@localhost:5432/placeholder pnpm prisma generate
 
+FROM deps AS development
+
+ENV NODE_ENV=development
+ENV PORT=3001
+
+COPY . .
+
+EXPOSE 3001
+
+CMD ["pnpm", "start:dev"]
+
 FROM base AS build
 
 COPY --from=deps /app/node_modules ./node_modules

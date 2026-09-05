@@ -15,6 +15,17 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=fintrack-pnpm,target=/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile
 
+FROM deps AS development
+
+ENV NODE_ENV=development
+ENV PORT=3000
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["pnpm", "dev", "--hostname", "0.0.0.0"]
+
 FROM base AS build
 
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
