@@ -1,3 +1,4 @@
+import { Prisma } from '../../generated/prisma/client';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type {
   AccountType,
@@ -9,94 +10,6 @@ jest.mock('../../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
 }));
 
-jest.mock('../../generated/prisma/client', () => ({
-  Prisma: {
-    Decimal: class Decimal {
-      private readonly value: number;
-
-      constructor(input: number | string | Decimal = 0) {
-        if (input instanceof Decimal) {
-          this.value = input.value;
-        } else {
-          this.value = typeof input === 'number' ? input : Number(input);
-        }
-      }
-
-      add(other: Decimal): Decimal {
-        return new Decimal(this.value + other.value);
-      }
-
-      sub(other: Decimal): Decimal {
-        return new Decimal(this.value - other.value);
-      }
-
-      neg(): Decimal {
-        return new Decimal(-this.value);
-      }
-
-      isZero(): boolean {
-        return this.value === 0;
-      }
-
-      isPositive(): boolean {
-        return this.value > 0;
-      }
-
-      isNegative(): boolean {
-        return this.value < 0;
-      }
-
-      dividedBy(other: Decimal): Decimal {
-        return new Decimal(this.value / other.value);
-      }
-
-      times(factor: number): Decimal {
-        return new Decimal(this.value * factor);
-      }
-
-      toDecimalPlaces(places: number): Decimal {
-        const multiplier = 10 ** places;
-        return new Decimal(Math.round(this.value * multiplier) / multiplier);
-      }
-
-      toNumber(): number {
-        return this.value;
-      }
-
-      toFixed(places: number): string {
-        return this.value.toFixed(places);
-      }
-
-      toString(): string {
-        return String(this.value);
-      }
-    },
-  },
-}));
-
-interface DecimalInstance {
-  add(other: DecimalInstance): DecimalInstance;
-  sub(other: DecimalInstance): DecimalInstance;
-  neg(): DecimalInstance;
-  isZero(): boolean;
-  isPositive(): boolean;
-  isNegative(): boolean;
-  dividedBy(other: DecimalInstance): DecimalInstance;
-  times(factor: number): DecimalInstance;
-  toDecimalPlaces(places: number): DecimalInstance;
-  toNumber(): number;
-  toFixed(places: number): string;
-}
-
-interface MockPrismaModule {
-  Prisma: {
-    Decimal: new (input?: number | string | DecimalInstance) => DecimalInstance;
-  };
-}
-
-const { Prisma } = jest.requireMock<MockPrismaModule>(
-  '../../generated/prisma/client',
-);
 const Decimal = Prisma.Decimal;
 
 const authenticatedUser: AuthenticatedUser = {

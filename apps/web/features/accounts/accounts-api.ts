@@ -84,6 +84,24 @@ export async function updateAccount(
   return response.data
 }
 
+export async function adjustAccountBalance(
+  getToken: GetToken,
+  accountId: string,
+  payload: {
+    readonly currentBalance: string
+    readonly expectedBalance: string
+    readonly currency: string
+    readonly idempotencyKey: string
+  }
+): Promise<Account> {
+  const response = await apiRequest<AccountItemResponse>(
+    getToken,
+    `/api/v1/accounts/${accountId}/balance-adjustments`,
+    { body: JSON.stringify(payload), method: "POST" }
+  )
+  return response.data
+}
+
 export async function deleteAccount(
   getToken: GetToken,
   accountId: string

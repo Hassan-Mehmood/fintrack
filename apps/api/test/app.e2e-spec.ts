@@ -30,6 +30,20 @@ describe('AppController (e2e)', () => {
       .expect('Hello World!');
   });
 
+  it('requires authentication for account balance adjustments', () => {
+    return request(app.getHttpServer())
+      .post(
+        '/api/v1/accounts/ed32ab72-f77e-4eec-a090-db723db0b637/balance-adjustments',
+      )
+      .send({
+        currentBalance: '100',
+        expectedBalance: '0',
+        currency: 'USD',
+        idempotencyKey: 'ed32ab72-f77e-4eec-a090-db723db0b637',
+      })
+      .expect(401);
+  });
+
   afterEach(async () => {
     await app.close();
   });

@@ -54,6 +54,7 @@ import {
 
 import { formatAmount, formatDate } from "@/lib/formatting"
 
+import { AdjustBalanceDialog } from "./adjust-balance-dialog"
 import { AccountFormDialog } from "./account-form-dialog"
 import { type AccountFormPayload } from "./account-form-schema"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
@@ -77,6 +78,7 @@ export function AccountsPage() {
   const { getToken } = useAuth()
   const queryClient = useQueryClient()
   const [dialogState, setDialogState] = useState<AccountDialogState>(null)
+  const [accountToAdjust, setAccountToAdjust] = useState<Account | null>(null)
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null)
 
   const accountsQuery = useQuery({
@@ -254,6 +256,9 @@ export function AccountsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setAccountToAdjust(account)}>
+                            Adjust balance
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
@@ -282,6 +287,10 @@ export function AccountsPage() {
           </CardContent>
         </Card>
       </main>
+
+      {accountToAdjust ? (
+        <AdjustBalanceDialog account={accountToAdjust} onClose={() => setAccountToAdjust(null)} />
+      ) : null}
 
       <AccountFormDialog
         open={dialogState !== null}

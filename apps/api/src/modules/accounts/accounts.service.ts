@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { TransactionType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
@@ -6,8 +10,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { calculateAccountBalance } from '../../common/financial/transaction-effects';
 import { createAccountNotFoundException } from './accounts.errors';
 import type { CreateAccountDto } from './dto/create-account.dto';
+import type { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import type { UpdateAccountDto } from './dto/update-account.dto';
 import type { AccountResponse } from './accounts.types';
+
+const BalanceDecimal = Prisma.Decimal.clone({ precision: 40 });
 
 const accountSelect = {
   id: true,
@@ -160,6 +167,118 @@ export class AccountsService {
     });
 
     return this.toAccountResponse(account, transactions);
+  }
+
+  async adjustBalanceForUser(
+    user: AuthenticatedUser,
+    accountId: string,
+    payload: AdjustAccountBalanceDto,
+  ): Promise<AccountResponse> {
+    const conflict = () =>
+      new ConflictException({
+        error: {
+          code: 'ACCOUNT_BALANCE_CHANGED',
+          message:
+            'The account changed. Close this dialog and reopen Adjust balance to review its latest balance.',
+        },
+      });
+
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const account = await tx.account.findFirst({
+            where: { id: accountId, userId: user.id },
+            select: accountSelect,
+          });
+          if (!account) throw createAccountNotFoundException(accountId);
+
+          const transactions = await tx.transaction.findMany({
+            where: {
+              userId: user.id,
+              status: 'CLEARED',
+              deletedAt: null,
+              OR: [{ accountId }, { destinationAccountId: accountId }],
+            },
+            select: {
+              type: true,
+              accountId: true,
+              destinationAccountId: true,
+              amount: true,
+            },
+          });
+          const balance = calculateAccountBalance(
+            account.openingBalance,
+            accountId,
+            transactions,
+          );
+          const target = new BalanceDecimal(payload.currentBalance);
+          const expected = new BalanceDecimal(payload.expectedBalance);
+          const amount = target.sub(expected);
+          const description = `Balance adjusted from ${expected.toFixed()} to ${target.toFixed()} ${payload.currency}`;
+          const existing = await tx.transaction.findFirst({
+            where: { userId: user.id, idempotencyKey: payload.idempotencyKey },
+          });
+          if (existing) {
+            if (
+              existing.accountId !== accountId ||
+              existing.type !== 'ADJUSTMENT' ||
+              existing.category !== 'Balance adjustment' ||
+              existing.description !== description ||
+              existing.currency !== payload.currency ||
+              !existing.amount.eq(amount)
+            ) {
+              throw conflict();
+            }
+            return this.toAccountResponse(account, transactions);
+          }
+          if (account.currency !== payload.currency || !balance.eq(expected))
+            throw conflict();
+          if (amount.isZero())
+            return this.toAccountResponse(account, transactions);
+          if (amount.abs().gte('10000000000000000')) {
+            throw new BadRequestException({
+              error: {
+                code: 'BALANCE_ADJUSTMENT_TOO_LARGE',
+                message:
+                  'The balance difference exceeds the supported transaction amount.',
+              },
+            });
+          }
+          const adjustment = await tx.transaction.create({
+            data: {
+              userId: user.id,
+              accountId,
+              type: 'ADJUSTMENT',
+              status: 'CLEARED',
+              amount: new Prisma.Decimal(amount),
+              currency: account.currency,
+              occurredAt: new Date(),
+              category: 'Balance adjustment',
+              description,
+              idempotencyKey: payload.idempotencyKey,
+            },
+          });
+          return this.toAccountResponse(
+            {
+              ...account,
+              _count: {
+                ...account._count,
+                transactions: account._count.transactions + 1,
+              },
+            },
+            [...transactions, adjustment],
+          );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2034' || error.code === 'P2002')
+      )
+        throw conflict();
+      throw error;
+    }
   }
 
   async deleteAccountForUser(

@@ -17,6 +17,7 @@ import type {
   DeleteAccountResponse,
 } from './accounts.types';
 import { CreateAccountDto } from './dto/create-account.dto';
+import { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 
 @Controller('api/v1/accounts')
@@ -65,6 +66,21 @@ export class AccountsController {
   ): Promise<AccountItemResponse> {
     return {
       data: await this.accountsService.updateAccountForUser(
+        user,
+        accountId,
+        payload,
+      ),
+    };
+  }
+
+  @Post(':accountId/balance-adjustments')
+  async adjustBalance(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string,
+    @Body() payload: AdjustAccountBalanceDto,
+  ): Promise<AccountItemResponse> {
+    return {
+      data: await this.accountsService.adjustBalanceForUser(
         user,
         accountId,
         payload,

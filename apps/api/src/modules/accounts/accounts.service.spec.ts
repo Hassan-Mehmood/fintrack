@@ -1,3 +1,5 @@
+import { Prisma } from '../../generated/prisma/client';
+import { ConflictException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AccountsService } from './accounts.service';
 import { createAccountNotFoundException } from './accounts.errors';
@@ -28,6 +30,8 @@ describe('AccountsService', () => {
       update: jest.Mock;
     };
     transaction: {
+      create: jest.Mock;
+      findFirst: jest.Mock;
       count: jest.Mock;
       deleteMany: jest.Mock;
       findMany: jest.Mock;
@@ -46,6 +50,12 @@ describe('AccountsService', () => {
         update: jest.fn(),
       },
       transaction: {
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) =>
+            Promise.resolve({ ...data, destinationAccountId: null }),
+          ),
+        findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         findMany: jest.fn().mockResolvedValue([]),
@@ -139,6 +149,152 @@ describe('AccountsService', () => {
         currentBalance: '1500.25',
       }),
     );
+  });
+
+  describe('balance adjustments', () => {
+    const payload = {
+      currentBalance: '1600.35',
+      expectedBalance: '1500.25',
+      currency: 'USD',
+      idempotencyKey: 'ed32ab72-f77e-4eec-a090-db723db0b637',
+    };
+    beforeEach(() =>
+      prisma.account.findFirst.mockResolvedValue(createAccountRecord()),
+    );
+    it.each([
+      ['1600.35', '100.1'],
+      ['1400.15', '-100.1'],
+      ['0', '-1500.25'],
+      ['-0.00000001', '-1500.25000001'],
+    ])(
+      'sets the balance to %s with a signed, categorized transaction',
+      async (target, delta) => {
+        const result = await service.adjustBalanceForUser(
+          authenticatedUser,
+          'account-1',
+          { ...payload, currentBalance: target },
+        );
+        expect(new Prisma.Decimal(result.currentBalance).eq(target)).toBe(true);
+        expect(result.openingBalance).toBe('1500.25');
+        expect(result.transactionCount).toBe(1);
+        expect(prisma.account.update).not.toHaveBeenCalled();
+        expect(prisma.transaction.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            userId: 'user-1',
+            accountId: 'account-1',
+            amount: new Prisma.Decimal(delta),
+            type: 'ADJUSTMENT',
+            status: 'CLEARED',
+            category: 'Balance adjustment',
+            currency: 'USD',
+          }),
+        });
+        expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+          isolationLevel: 'Serializable',
+        });
+      },
+    );
+    it('includes cleared source and destination effects', async () => {
+      prisma.transaction.findMany.mockResolvedValue([
+        {
+          type: 'EXPENSE',
+          accountId: 'account-1',
+          destinationAccountId: null,
+          amount: new Prisma.Decimal('100'),
+        },
+        {
+          type: 'TRANSFER',
+          accountId: 'other',
+          destinationAccountId: 'account-1',
+          amount: new Prisma.Decimal('50'),
+        },
+      ]);
+      const result = await service.adjustBalanceForUser(
+        authenticatedUser,
+        'account-1',
+        { ...payload, expectedBalance: '1450.25' },
+      );
+      expect(result.currentBalance).toBe('1600.35');
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            userId: 'user-1',
+            status: 'CLEARED',
+            deletedAt: null,
+            OR: [
+              { accountId: 'account-1' },
+              { destinationAccountId: 'account-1' },
+            ],
+          },
+        }),
+      );
+    });
+    it('skips an unchanged balance', async () => {
+      await service.adjustBalanceForUser(authenticatedUser, 'account-1', {
+        ...payload,
+        currentBalance: '1500.25',
+      });
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+    it.each([{ expectedBalance: '1500' }, { currency: 'PKR' }])(
+      'rejects stale data %j',
+      async (change) => {
+        await expect(
+          service.adjustBalanceForUser(authenticatedUser, 'account-1', {
+            ...payload,
+            ...change,
+          }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(prisma.transaction.create).not.toHaveBeenCalled();
+      },
+    );
+    it('enforces ownership before reading history or writing', async () => {
+      prisma.account.findFirst.mockResolvedValue(null);
+      await expect(
+        service.adjustBalanceForUser(authenticatedUser, 'account-1', payload),
+      ).rejects.toEqual(createAccountNotFoundException('account-1'));
+      expect(prisma.account.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'account-1', userId: 'user-1' },
+        }),
+      );
+      expect(prisma.transaction.findMany).not.toHaveBeenCalled();
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+    it('does not duplicate retries after another balance change', async () => {
+      prisma.transaction.findFirst.mockResolvedValue({
+        accountId: 'account-1',
+        type: 'ADJUSTMENT',
+        category: 'Balance adjustment',
+        description: 'Balance adjusted from 1500.25 to 1600.35 USD',
+        currency: 'USD',
+        amount: new Prisma.Decimal('100.1'),
+      });
+      await service.adjustBalanceForUser(
+        authenticatedUser,
+        'account-1',
+        payload,
+      );
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+    it('rejects reused keys for different requests', async () => {
+      prisma.transaction.findFirst.mockResolvedValue({ accountId: 'other' });
+      await expect(
+        service.adjustBalanceForUser(authenticatedUser, 'account-1', payload),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+    it('handles concurrent adjustment conflicts', async () => {
+      prisma.$transaction.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('conflict', {
+          code: 'P2034',
+          clientVersion: '7',
+        }),
+      );
+      await expect(
+        service.adjustBalanceForUser(authenticatedUser, 'account-1', payload),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
   });
 
   it('deletes an account and all of its recorded transactions', async () => {

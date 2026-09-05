@@ -1,7 +1,7 @@
 import { Prisma } from '../../generated/prisma/client';
 import type { TransactionType } from '../../generated/prisma/enums';
 
-const Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal.clone({ precision: 40 });
 
 export function getSourceAccountEffect(
   type: TransactionType,
@@ -24,7 +24,7 @@ export function getSourceAccountEffect(
     case 'INVESTMENT_BONUS':
     case 'INVESTMENT_DEPOSIT':
     case 'INVESTMENT_WITHDRAWAL':
-      return new Decimal(0);
+      return new Prisma.Decimal(0);
     case 'ADJUSTMENT':
       return amount;
   }
@@ -61,5 +61,5 @@ export function calculateAccountBalance(
     }
   }
 
-  return balance;
+  return new Prisma.Decimal(balance);
 }

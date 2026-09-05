@@ -15,6 +15,27 @@ change.
 
 ## Completed
 
+- Verified balance adjustments with 136 API unit tests, 28 web tests, two API
+  end-to-end tests (including balance-endpoint authentication), both
+  production builds, web type-check, and scoped API/web lint. Full web lint
+  retains only the two pre-existing Settings-page warnings.
+- Verified signed amounts, category persistence, ownership, retry deduplication,
+  stale balances, and simultaneous adjustment conflicts against an isolated
+  PostgreSQL 17 database; removed the temporary database afterward.
+- Increased shared account-balance arithmetic precision to preserve the full
+  NUMERIC(24, 8) range, with a regression test and real Decimal arithmetic in
+  analytics tests. Documented the endpoint in
+  `specs/api/account-balance-adjustments.md`.
+
+- Added an Adjust balance action for every account, with exact signed preview,
+  automatic Balance adjustment categorization, retry-safe submission, and
+  account/dashboard/transaction/portfolio refresh after saving.
+
+- Added an owned account balance-adjustment endpoint that records the signed
+  difference as a cleared `ADJUSTMENT` with category `Balance adjustment`.
+  Uses decimal arithmetic, serializable writes, stale-balance validation,
+  and idempotency keys; leaves the opening balance unchanged.
+
 - Added development Dockerfile stages and an automatic Compose override for
   Next.js Fast Refresh and NestJS watch mode. `docker compose up --build --watch`
   syncs source edits and rebuilds services after dependency/configuration changes;
