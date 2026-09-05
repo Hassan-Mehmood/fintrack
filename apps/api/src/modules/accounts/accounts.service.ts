@@ -8,7 +8,10 @@ import type { TransactionType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import { calculateAccountBalance } from '../../common/financial/transaction-effects';
-import { createAccountNotFoundException } from './accounts.errors';
+import {
+  createAccountNotFoundException,
+  createInvalidAccountOrderException,
+} from './accounts.errors';
 import type { CreateAccountDto } from './dto/create-account.dto';
 import type { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import type { UpdateAccountDto } from './dto/update-account.dto';
@@ -22,6 +25,7 @@ const accountSelect = {
   type: true,
   currency: true,
   openingBalance: true,
+  displayOrder: true,
   openedAt: true,
   archivedAt: true,
   createdAt: true,
@@ -50,7 +54,7 @@ export class AccountsService {
         where: {
           userId: user.id,
         },
-        orderBy: [{ createdAt: 'desc' }],
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
         select: accountSelect,
       }),
       this.prisma.transaction.findMany({
@@ -100,6 +104,11 @@ export class AccountsService {
     user: AuthenticatedUser,
     payload: CreateAccountDto,
   ): Promise<AccountResponse> {
+    const lastAccount = await this.prisma.account.findFirst({
+      where: { userId: user.id },
+      orderBy: { displayOrder: 'desc' },
+      select: { displayOrder: true },
+    });
     const account = await this.prisma.account.create({
       data: {
         userId: user.id,
@@ -107,6 +116,7 @@ export class AccountsService {
         type: payload.type,
         currency: payload.currency,
         openingBalance: payload.openingBalance,
+        displayOrder: (lastAccount?.displayOrder ?? -1) + 1,
         openedAt: payload.openedAt ? new Date(payload.openedAt) : undefined,
       },
       select: accountSelect,
@@ -128,6 +138,34 @@ export class AccountsService {
     });
 
     return this.toAccountResponse(account, transactions);
+  }
+
+  async reorderAccountsForUser(
+    user: AuthenticatedUser,
+    accountIds: readonly string[],
+  ): Promise<readonly string[]> {
+    const ownedAccounts = await this.prisma.account.findMany({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    const ownedIds = new Set(ownedAccounts.map((account) => account.id));
+    if (
+      accountIds.length !== ownedIds.size ||
+      accountIds.some((accountId) => !ownedIds.has(accountId))
+    ) {
+      throw createInvalidAccountOrderException();
+    }
+
+    await this.prisma.$transaction(
+      accountIds.map((accountId, displayOrder) =>
+        this.prisma.account.update({
+          where: { id: accountId },
+          data: { displayOrder },
+          select: { id: true },
+        }),
+      ),
+    );
+    return accountIds;
   }
 
   async updateAccountForUser(

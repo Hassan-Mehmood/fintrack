@@ -2,7 +2,10 @@ import { Prisma } from '../../generated/prisma/client';
 import { ConflictException } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AccountsService } from './accounts.service';
-import { createAccountNotFoundException } from './accounts.errors';
+import {
+  createAccountNotFoundException,
+  createInvalidAccountOrderException,
+} from './accounts.errors';
 
 jest.mock('../../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -99,9 +102,15 @@ describe('AccountsService', () => {
         canDelete: false,
       }),
     ]);
+    expect(prisma.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+      }),
+    );
   });
 
   it('creates an account for the authenticated user', async () => {
+    prisma.account.findFirst.mockResolvedValue({ displayOrder: 2 });
     prisma.account.create.mockResolvedValue(createAccountRecord());
 
     await expect(
@@ -121,6 +130,52 @@ describe('AccountsService', () => {
     );
 
     expect(prisma.account.create).toHaveBeenCalledTimes(1);
+    expect(prisma.account.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ displayOrder: 3 }),
+      }),
+    );
+  });
+
+  it('persists a complete custom account order', async () => {
+    prisma.account.findMany.mockResolvedValue([
+      { id: 'account-1' },
+      { id: 'account-2' },
+      { id: 'account-3' },
+    ]);
+
+    await expect(
+      service.reorderAccountsForUser(authenticatedUser, [
+        'account-3',
+        'account-1',
+        'account-2',
+      ]),
+    ).resolves.toEqual(['account-3', 'account-1', 'account-2']);
+    expect(prisma.account.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'account-3' },
+      data: { displayOrder: 0 },
+      select: { id: true },
+    });
+    expect(prisma.account.update).toHaveBeenNthCalledWith(3, {
+      where: { id: 'account-2' },
+      data: { displayOrder: 2 },
+      select: { id: true },
+    });
+  });
+
+  it('rejects incomplete or unowned account orders', async () => {
+    prisma.account.findMany.mockResolvedValue([
+      { id: 'account-1' },
+      { id: 'account-2' },
+    ]);
+
+    await expect(
+      service.reorderAccountsForUser(authenticatedUser, [
+        'account-1',
+        'unowned-account',
+      ]),
+    ).rejects.toEqual(createInvalidAccountOrderException());
+    expect(prisma.account.update).not.toHaveBeenCalled();
   });
 
   it('throws when the requested account is not owned by the user', async () => {
@@ -360,6 +415,7 @@ function createAccountRecord({
     openingBalance: {
       toString: () => '1500.25',
     },
+    displayOrder: 0,
     openedAt: new Date('2026-06-01T00:00:00.000Z'),
     archivedAt: null,
     createdAt,

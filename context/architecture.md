@@ -315,6 +315,10 @@ Store the following in PostgreSQL:
 
 Financial values must use PostgreSQL `NUMERIC` fields.
 
+Accounts store a user-controlled display order. Reordering validates that the
+submitted identifiers match the authenticated user's complete account set and
+updates all positions together.
+
 Transactions store `category` as the required classification text and
 `description` as a separate optional user-facing description represented by an
 empty string when omitted. The migration that introduced this distinction
@@ -537,6 +541,7 @@ POST   /api/v1/accounts
 GET    /api/v1/accounts
 GET    /api/v1/accounts/:id
 GET    /api/v1/accounts/:id/transactions
+PUT    /api/v1/accounts/order
 PATCH  /api/v1/accounts/:id
 DELETE /api/v1/accounts/:id
 

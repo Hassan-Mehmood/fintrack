@@ -106,6 +106,19 @@ export async function updateAccount(
   return response.data
 }
 
+export async function reorderAccounts(
+  getToken: GetToken,
+  accountIds: readonly string[],
+): Promise<readonly string[]> {
+  const response = await apiRequest<{
+    readonly data: { readonly accountIds: readonly string[] }
+  }>(getToken, "/api/v1/accounts/order", {
+    body: JSON.stringify({ accountIds }),
+    method: "PUT",
+  })
+  return response.data.accountIds
+}
+
 export async function adjustAccountBalance(
   getToken: GetToken,
   accountId: string,

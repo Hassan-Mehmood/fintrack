@@ -95,6 +95,7 @@ model Account {
   type           AccountType
   currency       String             @db.VarChar(3)
   openingBalance Decimal            @default(0) @map("opening_balance") @db.Decimal(24, 8)
+  displayOrder   Int                @default(0) @map("display_order")
   openedAt       DateTime           @default(now()) @map("opened_at")
   archivedAt     DateTime?          @map("archived_at")
   transactions   Transaction[]      @relation("TransactionAccount")
@@ -105,6 +106,7 @@ model Account {
 
   @@index([userId])
   @@index([userId, type])
+  @@index([userId, displayOrder])
   @@map("accounts")
 }
 

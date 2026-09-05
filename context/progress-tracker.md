@@ -5,8 +5,7 @@ change.
 
 ## Current Phase
 
-- Account detail workspace and structured transaction categories implemented;
-  validation is complete.
+- Persistent custom account ordering is implemented and deployed.
 
 ## Current Goal
 
@@ -14,6 +13,12 @@ change.
 
 ## Completed
 
+- Added locally staged drag-and-drop account ordering with a keyboard-accessible
+  grip, explicit save/cancel controls, a single batched persistence request, an
+  ownership-checked atomic reorder endpoint, persistent database positions,
+  stable backfill for existing accounts, and append-at-end behavior for new
+  accounts. Applied the migration and verified 153 API unit tests, 41 web tests,
+  5 API end-to-end tests, scoped lint, type-checking, and both production builds.
 - Added a persistent Back to accounts action at the top of account detail pages.
 - Added `/accounts/[accountId]` with stable balance metadata, default-this-month
   activity cards, URL-persisted date/search/type/category/label/status/direction/

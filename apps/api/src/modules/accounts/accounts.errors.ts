@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 
 interface ApiErrorDetails {
   readonly [key: string]: unknown;
@@ -36,6 +40,15 @@ export function createAccountHasTransactionsException(
       'ACCOUNT_HAS_TRANSACTIONS',
       'Accounts with recorded transactions cannot be deleted.',
       { accountId },
+    ),
+  );
+}
+
+export function createInvalidAccountOrderException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'INVALID_ACCOUNT_ORDER',
+      'The account order must include every account you own exactly once.',
     ),
   );
 }

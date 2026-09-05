@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Body,
 } from '@nestjs/common';
@@ -16,10 +17,12 @@ import type {
   AccountItemResponse,
   AccountsListResponse,
   DeleteAccountResponse,
+  ReorderAccountsResponse,
 } from './accounts.types';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { ReorderAccountsDto } from './dto/reorder-accounts.dto';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ListTransactionsQueryDto } from '../transactions/dto/list-transactions-query.dto';
 import type { AccountTransactionsListResponse } from '../transactions/transactions.types';
@@ -76,6 +79,18 @@ export class AccountsController {
     return {
       data: await this.accountsService.createAccountForUser(user, payload),
     };
+  }
+
+  @Put('order')
+  async reorderAccounts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() payload: ReorderAccountsDto,
+  ): Promise<ReorderAccountsResponse> {
+    const accountIds = await this.accountsService.reorderAccountsForUser(
+      user,
+      payload.accountIds,
+    );
+    return { data: { accountIds } };
   }
 
   @Patch(':accountId')

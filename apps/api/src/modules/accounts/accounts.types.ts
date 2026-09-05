@@ -22,6 +22,12 @@ export interface AccountsListResponse {
   };
 }
 
+export interface ReorderAccountsResponse {
+  readonly data: {
+    readonly accountIds: readonly string[];
+  };
+}
+
 export interface AccountItemResponse {
   readonly data: AccountResponse;
 }

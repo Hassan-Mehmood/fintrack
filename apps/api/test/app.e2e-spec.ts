@@ -54,6 +54,15 @@ describe('AppController (e2e)', () => {
     return request(app.getHttpServer()).get('/api/v1/categories').expect(401);
   });
 
+  it('requires authentication for account reordering', () => {
+    return request(app.getHttpServer())
+      .put('/api/v1/accounts/order')
+      .send({
+        accountIds: ['ed32ab72-f77e-4eec-a090-db723db0b637'],
+      })
+      .expect(401);
+  });
+
   afterEach(async () => {
     await app.close();
   });

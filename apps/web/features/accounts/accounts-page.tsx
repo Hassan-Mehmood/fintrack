@@ -5,12 +5,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import Link from "next/link"
 import {
+  CheckIcon,
   CircleAlertIcon,
   EyeIcon,
+  GripVerticalIcon,
   PencilLineIcon,
   PlusIcon,
   Trash2Icon,
   WalletCardsIcon,
+  XIcon,
 } from "lucide-react"
 
 import { AppShell } from "@/components/app-shell"
@@ -30,6 +33,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -57,6 +61,7 @@ import {
 import { formatAmount, formatDate } from "@/lib/formatting"
 
 import { AdjustBalanceDialog } from "./adjust-balance-dialog"
+import { moveAccountId } from "./account-order"
 import { AccountFormDialog } from "./account-form-dialog"
 import { type AccountFormPayload } from "./account-form-schema"
 import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
@@ -67,6 +72,7 @@ import {
   createAccount,
   deleteAccount,
   listAccounts,
+  reorderAccounts,
   updateAccount,
 } from "./accounts-api"
 import { getAccountTypeLabel, type Account } from "./account-types"
@@ -82,6 +88,10 @@ export function AccountsPage() {
   const [dialogState, setDialogState] = useState<AccountDialogState>(null)
   const [accountToAdjust, setAccountToAdjust] = useState<Account | null>(null)
   const [accountToDelete, setAccountToDelete] = useState<Account | null>(null)
+  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null)
+  const [draftAccountIds, setDraftAccountIds] = useState<
+    readonly string[] | null
+  >(null)
 
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
@@ -118,8 +128,26 @@ export function AccountsPage() {
   const deleteAccountMutation = useMutation({
     mutationFn: async (accountId: string) => deleteAccount(getToken, accountId),
   })
+  const reorderAccountsMutation = useMutation({
+    mutationFn: (accountIds: readonly string[]) =>
+      reorderAccounts(getToken, accountIds),
+  })
 
-  const accounts = accountsQuery.data ?? []
+  const savedAccounts = accountsQuery.data ?? []
+  const savedAccountIds = savedAccounts.map((account) => account.id)
+  const accounts = draftAccountIds
+    ? [
+        ...draftAccountIds
+          .map((accountId) =>
+            savedAccounts.find((account) => account.id === accountId),
+          )
+          .filter((account): account is Account => Boolean(account)),
+        ...savedAccounts.filter(
+          (account) => !draftAccountIds.includes(account.id),
+        ),
+      ]
+    : savedAccounts
+  const hasDraftAccountOrder = draftAccountIds !== null
   const totalAccounts = accounts.length
   const currenciesCount = new Set(accounts.map((account) => account.currency))
     .size
@@ -137,6 +165,7 @@ export function AccountsPage() {
     })
 
     setDialogState(null)
+    setDraftAccountIds(null)
     await invalidateAccountData()
   }
 
@@ -154,7 +183,41 @@ export function AccountsPage() {
 
     await deleteAccountMutation.mutateAsync(accountToDelete.id)
     setAccountToDelete(null)
+    setDraftAccountIds(null)
     await invalidateAccountData()
+  }
+
+  async function persistAccountOrder() {
+    if (!draftAccountIds) return
+
+    const accountIds = accounts.map((account) => account.id)
+    const persistedAccountIds =
+      await reorderAccountsMutation.mutateAsync(accountIds)
+    queryClient.setQueryData(
+      accountsQueryKey,
+      persistedAccountIds
+        .map((accountId) =>
+          accounts.find((account) => account.id === accountId),
+        )
+        .filter((account): account is Account => Boolean(account)),
+    )
+    setDraftAccountIds(null)
+    await queryClient.invalidateQueries({ queryKey: accountsQueryKey })
+  }
+
+  function moveAccount(accountId: string, targetIndex: number) {
+    if (reorderAccountsMutation.isPending) return
+    const currentAccountIds = accounts.map((account) => account.id)
+    const accountIds = moveAccountId(currentAccountIds, accountId, targetIndex)
+    if (accountIds === currentAccountIds) return
+    setDraftAccountIds(
+      accountIds.every(
+        (accountId, index) => accountId === savedAccountIds[index],
+      )
+        ? null
+        : accountIds,
+    )
+    reorderAccountsMutation.reset()
   }
 
   return (
@@ -175,6 +238,15 @@ export function AccountsPage() {
             <CircleAlertIcon aria-hidden="true" />
             <AlertTitle>Unable to load accounts</AlertTitle>
             <AlertDescription>{accountsQuery.error.message}</AlertDescription>
+          </Alert>
+        ) : null}
+        {reorderAccountsMutation.isError ? (
+          <Alert variant="destructive">
+            <CircleAlertIcon aria-hidden="true" />
+            <AlertTitle>Unable to reorder accounts</AlertTitle>
+            <AlertDescription>
+              {reorderAccountsMutation.error.message}
+            </AlertDescription>
           </Alert>
         ) : null}
 
@@ -198,6 +270,36 @@ export function AccountsPage() {
               Manage your bank accounts, wallets, and investment accounts from
               one place.
             </CardDescription>
+            {hasDraftAccountOrder ? (
+              <CardAction className="flex items-center gap-1">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  disabled={reorderAccountsMutation.isPending}
+                  aria-label="Cancel account order changes"
+                  title="Cancel order changes"
+                  onClick={() => {
+                    setDraftAccountIds(null)
+                    reorderAccountsMutation.reset()
+                  }}
+                >
+                  <XIcon />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  disabled={reorderAccountsMutation.isPending}
+                  aria-label="Save account order"
+                  title="Save account order"
+                  onClick={() => void persistAccountOrder()}
+                >
+                  {reorderAccountsMutation.isPending ? (
+                    <Spinner />
+                  ) : (
+                    <CheckIcon />
+                  )}
+                </Button>
+              </CardAction>
+            ) : null}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {accountsQuery.isLoading ? (
@@ -225,6 +327,9 @@ export function AccountsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <span className="sr-only">Reorder</span>
+                    </TableHead>
                     <TableHead>Account</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Currency</TableHead>
@@ -238,7 +343,54 @@ export function AccountsPage() {
                 </TableHeader>
                 <TableBody>
                   {accounts.map((account) => (
-                    <TableRow key={account.id}>
+                    <TableRow
+                      key={account.id}
+                      data-dragging={
+                        draggedAccountId === account.id || undefined
+                      }
+                      className="data-[dragging=true]:opacity-50"
+                      onDragOver={(event) => {
+                        if (draggedAccountId) event.preventDefault()
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        if (!draggedAccountId) return
+                        moveAccount(
+                          draggedAccountId,
+                          accounts.findIndex((item) => item.id === account.id),
+                        )
+                        setDraggedAccountId(null)
+                      }}
+                    >
+                      <TableCell>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          draggable={!reorderAccountsMutation.isPending}
+                          aria-label={`Drag ${account.name} to reorder. Use the up and down arrow keys to move it.`}
+                          className="cursor-grab active:cursor-grabbing"
+                          onDragStart={(event) => {
+                            setDraggedAccountId(account.id)
+                            event.dataTransfer.effectAllowed = "move"
+                            event.dataTransfer.setData("text/plain", account.id)
+                          }}
+                          onDragEnd={() => setDraggedAccountId(null)}
+                          onKeyDown={(event) => {
+                            const currentIndex = accounts.findIndex(
+                              (item) => item.id === account.id,
+                            )
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault()
+                              moveAccount(account.id, currentIndex - 1)
+                            } else if (event.key === "ArrowDown") {
+                              event.preventDefault()
+                              moveAccount(account.id, currentIndex + 1)
+                            }
+                          }}
+                        >
+                          <GripVerticalIcon />
+                        </Button>
+                      </TableCell>
                       <TableCell>
                         <div className="flex min-w-0 flex-col gap-1">
                           <Link

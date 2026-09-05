@@ -80,6 +80,7 @@ This application is a personal finance and investment management platform for in
 * Users can enter an opening balance for each account.
 * Users can view the current balance of each account.
 * Users can edit financial accounts.
+* Users can arrange accounts in a persistent custom order.
 * Users can delete financial accounts that do not have recorded transactions.
 
 ### Transactions
