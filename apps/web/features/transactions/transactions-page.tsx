@@ -1574,12 +1574,14 @@ function TransactionRow({
 }
 function MobileCard({ transaction, ...actions }: RowActions) {
   return (
-    <button
-      type="button"
-      className="grid w-full gap-3 rounded-lg border p-4 text-left"
-      onClick={() => actions.onView(transaction)}
-    >
-      <div className="flex items-start justify-between gap-3">
+    <div className="relative grid w-full gap-3 rounded-lg border p-4 text-left">
+      <button
+        type="button"
+        className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        aria-label={`View ${displayText(transaction)}`}
+        onClick={() => actions.onView(transaction)}
+      />
+      <div className="pointer-events-none relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-medium">{displayText(transaction)}</p>
           <p className="truncate text-xs text-muted-foreground">
@@ -1595,16 +1597,16 @@ function MobileCard({ transaction, ...actions }: RowActions) {
           {transactionAmount(transaction)}
         </span>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="pointer-events-none relative flex items-center gap-2">
         <Badge variant="secondary">
           {getTransactionTypeLabel(transaction.type)}
         </Badge>
         <Status status={transaction.status} />
-        <span className="ml-auto" onClick={(event) => event.stopPropagation()}>
+        <span className="pointer-events-auto relative z-10 ml-auto">
           <Actions transaction={transaction} {...actions} />
         </span>
       </div>
-    </button>
+    </div>
   );
 }
 function Actions({

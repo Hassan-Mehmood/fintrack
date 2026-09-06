@@ -299,6 +299,9 @@ change.
 - Verified Prisma validation/generation, both production builds, 114 API Jest
   tests, scoped API source lint, web lint, and 21 Vitest tests after completing
   the Transactions-page improvements.
+- Fixed the mobile transaction card hydration error by making the full-card
+  view control and overflow-menu trigger sibling buttons instead of nesting the
+  menu trigger inside the card button.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 
