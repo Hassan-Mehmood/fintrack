@@ -55,6 +55,7 @@ interface AddHoldingDialogProps {
   readonly lockAccount?: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly open: boolean;
+  readonly portfolioSetup?: boolean;
 }
 
 type SelectedAsset = {
@@ -64,6 +65,7 @@ type SelectedAsset = {
   readonly marketType: "STOCK" | "CRYPTO" | null;
   readonly priceCurrency: "USD" | "PKR";
   readonly currentPrice?: string | null;
+  readonly providerBacked: boolean;
 };
 
 export function AddHoldingDialog({
@@ -74,6 +76,7 @@ export function AddHoldingDialog({
   lockAccount = false,
   onOpenChange,
   open,
+  portfolioSetup = false,
 }: AddHoldingDialogProps) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
@@ -90,18 +93,23 @@ export function AddHoldingDialog({
   const [manualCurrency, setManualCurrency] = useState<"USD" | "PKR">("USD");
   const [manualPrice, setManualPrice] = useState("");
   const [mode, setMode] = useState<"OPENING" | "BUY">("OPENING");
-  const [accountChoice, setAccountChoice] = useState(initialAccountId ?? "");
+  const [accountChoice, setAccountChoice] = useState(
+    initialAccountId ?? (portfolioSetup ? "NEW" : ""),
+  );
   const [newAccountName, setNewAccountName] = useState("");
   const [accountCurrency, setAccountCurrency] = useState<"USD" | "PKR">("USD");
   const [accountCash, setAccountCash] = useState("0");
   const [quantity, setQuantity] = useState("");
   const [costInput, setCostInput] = useState<"UNIT" | "TOTAL">("UNIT");
   const [price, setPrice] = useState("");
+  const [currentValue, setCurrentValue] = useState("");
   const [fees, setFees] = useState("0");
   const [settlementAssetId, setSettlementAssetId] = useState("");
   const [date, setDate] = useState(today());
   const [fxRate, setFxRate] = useState("");
-  const [portfolioChoice, setPortfolioChoice] = useState("NONE");
+  const [portfolioChoice, setPortfolioChoice] = useState(
+    portfolioSetup ? "NEW" : "NONE",
+  );
   const [newPortfolioName, setNewPortfolioName] = useState("");
 
   useEffect(() => {
@@ -179,7 +187,9 @@ export function AddHoldingDialog({
   const mutation = useMutation({
     mutationFn: (payload: CreatePositionPayload) =>
       createPosition(getToken, payload),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      setAccountChoice(result.accountId);
+      setPortfolioChoice(result.portfolioId ?? "NONE");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["investments"] }),
         queryClient.invalidateQueries({ queryKey: ["accounts"] }),
@@ -244,10 +254,30 @@ export function AddHoldingDialog({
     setManualSymbol("");
     setQuantity("");
     setPrice("");
+    setCurrentValue("");
     setFees("0");
     setSettlementAssetId("");
-    setAccountChoice(initialAccountId ?? "");
-    setPortfolioChoice("NONE");
+    setAccountChoice(initialAccountId ?? (portfolioSetup ? "NEW" : ""));
+    setPortfolioChoice(portfolioSetup ? "NEW" : "NONE");
+    setNewAccountName("");
+    setNewPortfolioName("");
+    mutation.reset();
+  }
+
+  function addAnotherHolding() {
+    setStep(1);
+    setQuery("");
+    setSelected(null);
+    setManual(false);
+    setManualName("");
+    setManualSymbol("");
+    setManualPrice("");
+    setQuantity("");
+    setPrice("");
+    setCurrentValue("");
+    setFees("0");
+    setSettlementAssetId("");
+    setMode("OPENING");
     mutation.reset();
   }
 
@@ -263,6 +293,7 @@ export function AddHoldingDialog({
       symbol: result.symbol,
       marketType: result.type,
       priceCurrency: result.quoteCurrency,
+      providerBacked: true,
     });
     setAccountCurrency(result.quoteCurrency);
     if (cashEquivalentOnly) {
@@ -282,6 +313,7 @@ export function AddHoldingDialog({
       marketType: asset.marketType,
       priceCurrency: asset.priceCurrency as "USD" | "PKR",
       currentPrice: asset.currentPrice,
+      providerBacked: asset.provider !== null,
     });
     setPrice(cashEquivalentOnly ? "1" : "");
     preselectAccount(asset.marketType);
@@ -304,6 +336,7 @@ export function AddHoldingDialog({
       marketType: null,
       priceCurrency: manualCurrency,
       currentPrice: manualPrice || null,
+      providerBacked: false,
     });
     setPrice("");
     setAccountCurrency(manualCurrency);
@@ -312,6 +345,7 @@ export function AddHoldingDialog({
   }
 
   function preselectAccount(marketType: "STOCK" | "CRYPTO" | null) {
+    if (portfolioSetup) return;
     const matches = (accountsQuery.data ?? []).filter((account) =>
       isCompatible(account, marketType),
     );
@@ -350,13 +384,18 @@ export function AddHoldingDialog({
       totalCost:
         mode === "OPENING" && costInput === "TOTAL" ? price : undefined,
       unitPrice: mode === "BUY" ? price : undefined,
+      currentValue:
+        mode === "OPENING" && currentValue ? currentValue : undefined,
       fees: mode === "BUY" ? fees || "0" : "0",
       historicalFxRate: effectiveFxRate || undefined,
       settlementAsset: isCryptoPurchase
         ? { kind: "EXISTING", assetId: settlementAssetId }
         : undefined,
       occurredAt: new Date(`${date}T12:00:00`).toISOString(),
-      portfolio,
+      portfolio:
+        portfolioSetup && portfolioChoice === "NEW"
+          ? { kind: "NEW", name: newAccountName.trim() }
+          : portfolio,
     });
   }
 
@@ -366,10 +405,14 @@ export function AddHoldingDialog({
         <DialogHeader>
           <DialogTitle>
             {step === 4
-              ? "Holding added"
+              ? portfolioSetup
+                ? "Opening balance saved"
+                : "Holding added"
               : cashEquivalentOnly
                 ? "Add stablecoin balance"
-                : "Add holding"}
+                : portfolioSetup
+                  ? "Set up existing portfolio"
+                  : "Add holding"}
           </DialogTitle>
           <DialogDescription>
             {step < 4
@@ -447,14 +490,16 @@ export function AddHoldingDialog({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field>
-                  <FieldLabel>Current price (optional)</FieldLabel>
-                  <Input
-                    inputMode="decimal"
-                    value={manualPrice}
-                    onChange={(e) => setManualPrice(e.target.value)}
-                  />
-                </Field>
+                {!portfolioSetup ? (
+                  <Field>
+                    <FieldLabel>Current price (optional)</FieldLabel>
+                    <Input
+                      inputMode="decimal"
+                      value={manualPrice}
+                      onChange={(e) => setManualPrice(e.target.value)}
+                    />
+                  </Field>
+                ) : null}
                 <div className="flex items-end">
                   <Button
                     className="w-full"
@@ -563,7 +608,7 @@ export function AddHoldingDialog({
                 {selected.priceCurrency}
               </p>
             </div>
-            {!cashEquivalentOnly ? (
+            {!cashEquivalentOnly && !portfolioSetup ? (
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant={mode === "OPENING" ? "default" : "outline"}
@@ -578,52 +623,68 @@ export function AddHoldingDialog({
                   Record a new purchase
                 </Button>
               </div>
+            ) : portfolioSetup ? (
+              <p className="text-sm text-muted-foreground">
+                Enter this asset as an opening balance. It will not create a
+                historical buy or change wallet cash.
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">
                 Enter the stablecoin amount currently remaining in this wallet.
                 This opening balance does not change fiat cash.
               </p>
             )}
-            <Field>
-              <FieldLabel>Investment account</FieldLabel>
-              <Select
-                disabled={lockAccount}
-                value={accountChoice}
-                onValueChange={(value) => {
-                  setAccountChoice(value);
-                  const account = compatibleAccounts.find(
-                    (item) => item.id === value,
-                  );
-                  if (account)
-                    setAccountCurrency(account.currency as "USD" | "PKR");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select or create account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {compatibleAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name} · {account.currency}
-                    </SelectItem>
-                  ))}
-                  {!lockAccount ? (
-                    <SelectItem value="NEW">+ Create account</SelectItem>
-                  ) : null}
-                </SelectContent>
-              </Select>
-            </Field>
+            {!portfolioSetup ? (
+              <Field>
+                <FieldLabel>Investment account</FieldLabel>
+                <Select
+                  disabled={lockAccount}
+                  value={accountChoice}
+                  onValueChange={(value) => {
+                    setAccountChoice(value);
+                    const account = compatibleAccounts.find(
+                      (item) => item.id === value,
+                    );
+                    if (account)
+                      setAccountCurrency(account.currency as "USD" | "PKR");
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select or create account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {compatibleAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name} · {account.currency}
+                      </SelectItem>
+                    ))}
+                    {!lockAccount ? (
+                      <SelectItem value="NEW">+ Create account</SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
             {accountChoice === "NEW" ? (
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div
+                className={cn(
+                  "grid gap-3",
+                  portfolioSetup ? "sm:grid-cols-2" : "sm:grid-cols-3",
+                )}
+              >
                 <Field>
-                  <FieldLabel>Account name</FieldLabel>
+                  <FieldLabel>
+                    {portfolioSetup ? "Portfolio name" : "Account name"}
+                  </FieldLabel>
                   <Input
                     value={newAccountName}
                     onChange={(e) => setNewAccountName(e.target.value)}
                   />
                 </Field>
                 <Field>
-                  <FieldLabel>Currency</FieldLabel>
+                  <FieldLabel>
+                    {portfolioSetup ? "Base currency" : "Currency"}
+                  </FieldLabel>
                   <Select
                     value={accountCurrency}
                     onValueChange={(v) =>
@@ -639,14 +700,16 @@ export function AddHoldingDialog({
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field>
-                  <FieldLabel>Uninvested cash</FieldLabel>
-                  <Input
-                    inputMode="decimal"
-                    value={accountCash}
-                    onChange={(e) => setAccountCash(e.target.value)}
-                  />
-                </Field>
+                {!portfolioSetup ? (
+                  <Field>
+                    <FieldLabel>Uninvested cash</FieldLabel>
+                    <Input
+                      inputMode="decimal"
+                      value={accountCash}
+                      onChange={(e) => setAccountCash(e.target.value)}
+                    />
+                  </Field>
+                ) : null}
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
@@ -663,8 +726,8 @@ export function AddHoldingDialog({
                   {mode === "BUY"
                     ? `Unit price (${selected.priceCurrency})`
                     : costInput === "UNIT"
-                      ? `Average unit cost (${selected.priceCurrency})`
-                      : `Total cost (${selected.priceCurrency})`}
+                      ? `Average purchase price (optional, ${selected.priceCurrency})`
+                      : `Total purchase cost (optional, ${selected.priceCurrency})`}
                 </FieldLabel>
                 <Input
                   inputMode="decimal"
@@ -674,21 +737,40 @@ export function AddHoldingDialog({
               </Field>
             </div>
             {mode === "OPENING" ? (
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={costInput === "UNIT" ? "secondary" : "outline"}
-                  onClick={() => setCostInput("UNIT")}
-                >
-                  Average cost
-                </Button>
-                <Button
-                  size="sm"
-                  variant={costInput === "TOTAL" ? "secondary" : "outline"}
-                  onClick={() => setCostInput("TOTAL")}
-                >
-                  Total cost
-                </Button>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={costInput === "UNIT" ? "secondary" : "outline"}
+                    onClick={() => setCostInput("UNIT")}
+                  >
+                    Average cost
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={costInput === "TOTAL" ? "secondary" : "outline"}
+                    onClick={() => setCostInput("TOTAL")}
+                  >
+                    Total cost
+                  </Button>
+                </div>
+                {!selected.providerBacked ? (
+                  <Field>
+                    <FieldLabel>
+                      Current total value (optional, {selected.priceCurrency})
+                    </FieldLabel>
+                    <Input
+                      inputMode="decimal"
+                      value={currentValue}
+                      onChange={(event) => setCurrentValue(event.target.value)}
+                    />
+                  </Field>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Current value will be calculated from the provider market
+                    price after saving.
+                  </p>
+                )}
               </div>
             ) : (
               <Field>
@@ -751,7 +833,7 @@ export function AddHoldingDialog({
                 onChange={(e) => setDate(e.target.value)}
               />
             </Field>
-            {selected.priceCurrency !== effectiveAccountCurrency ? (
+            {price && selected.priceCurrency !== effectiveAccountCurrency ? (
               <Field>
                 <FieldLabel>Historical USD/PKR rate</FieldLabel>
                 <Input
@@ -774,19 +856,25 @@ export function AddHoldingDialog({
               <Summary label="Resulting quantity" value={quantity || "—"} />
               <Summary
                 label="Cost basis"
-                value={formatAmount(String(nativeCost), selected.priceCurrency)}
+                value={
+                  price
+                    ? formatAmount(String(nativeCost), selected.priceCurrency)
+                    : "Not provided"
+                }
               />
               <Summary
                 label="Current value"
                 value={
-                  selected.currentPrice
-                    ? formatAmount(
-                        String(
-                          number(quantity) * number(selected.currentPrice),
-                        ),
-                        selected.priceCurrency,
-                      )
-                    : "Price unavailable"
+                  currentValue
+                    ? formatAmount(currentValue, selected.priceCurrency)
+                    : selected.currentPrice
+                      ? formatAmount(
+                          String(
+                            number(quantity) * number(selected.currentPrice),
+                          ),
+                          selected.priceCurrency,
+                        )
+                      : "Price unavailable"
                 }
               />
               <Summary
@@ -816,27 +904,34 @@ export function AddHoldingDialog({
                 />
               )}
             </div>
-            <Field>
-              <FieldLabel>Portfolio (optional)</FieldLabel>
-              <Select
-                value={portfolioChoice}
-                onValueChange={setPortfolioChoice}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NONE">No custom portfolio</SelectItem>
-                  {portfoliosQuery.data?.map((portfolio) => (
-                    <SelectItem key={portfolio.id} value={portfolio.id}>
-                      {portfolio.name}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="NEW">+ Create portfolio</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            {portfolioChoice === "NEW" ? (
+            {!portfolioSetup ? (
+              <Field>
+                <FieldLabel>Portfolio (optional)</FieldLabel>
+                <Select
+                  value={portfolioChoice}
+                  onValueChange={setPortfolioChoice}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NONE">No custom portfolio</SelectItem>
+                    {portfoliosQuery.data?.map((portfolio) => (
+                      <SelectItem key={portfolio.id} value={portfolio.id}>
+                        {portfolio.name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="NEW">+ Create portfolio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : (
+              <div className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
+                <Summary label="Portfolio" value={newAccountName} />
+                <Summary label="Base currency" value={accountCurrency} />
+              </div>
+            )}
+            {!portfolioSetup && portfolioChoice === "NEW" ? (
               <Field>
                 <FieldLabel>Portfolio name</FieldLabel>
                 <Input
@@ -859,7 +954,11 @@ export function AddHoldingDialog({
             <span className="flex size-12 items-center justify-center rounded-full bg-success/10 text-success">
               <CheckIcon />
             </span>
-            <p className="text-lg font-medium">Holding added successfully</p>
+            <p className="text-lg font-medium">
+              {portfolioSetup
+                ? "Opening balance saved"
+                : "Holding added successfully"}
+            </p>
             <p className="text-muted-foreground">
               Balances, performance, and portfolio membership have been
               refreshed.
@@ -870,8 +969,8 @@ export function AddHoldingDialog({
         <DialogFooter className={cn(step === 4 && "sm:justify-between")}>
           {step === 4 ? (
             <>
-              <Button variant="outline" onClick={reset}>
-                Add another holding
+              <Button variant="outline" onClick={addAnotherHolding}>
+                {portfolioSetup ? "Add another asset" : "Add another holding"}
               </Button>
               <Button onClick={() => close(false)}>
                 View {domain === "CRYPTO" ? "crypto" : "stocks"}
@@ -893,9 +992,12 @@ export function AddHoldingDialog({
                       newAccountName,
                       quantity,
                       price,
+                      priceRequired: mode === "BUY",
+                      currentValue,
                       fxRequired:
                         selected?.priceCurrency !== effectiveAccountCurrency &&
-                        !isCryptoPurchase,
+                        !isCryptoPurchase &&
+                        Boolean(price),
                       fxRate: effectiveFxRate,
                       settlementRequired: isCryptoPurchase,
                       settlementAssetId,
@@ -909,7 +1011,10 @@ export function AddHoldingDialog({
                 <Button
                   disabled={
                     mutation.isPending ||
-                    (portfolioChoice === "NEW" && !newPortfolioName.trim())
+                    (portfolioSetup && !newAccountName.trim()) ||
+                    (!portfolioSetup &&
+                      portfolioChoice === "NEW" &&
+                      !newPortfolioName.trim())
                   }
                   onClick={submit}
                 >
@@ -977,6 +1082,8 @@ function canContinuePosition(input: {
   newAccountName: string;
   quantity: string;
   price: string;
+  priceRequired: boolean;
+  currentValue: string;
   fxRequired: boolean;
   fxRate: string;
   settlementRequired: boolean;
@@ -986,7 +1093,9 @@ function canContinuePosition(input: {
     input.accountChoice &&
     (input.accountChoice !== "NEW" || input.newAccountName.trim()) &&
     number(input.quantity) > 0 &&
-    number(input.price) > 0 &&
+    (!input.priceRequired || number(input.price) > 0) &&
+    (!input.price || number(input.price) > 0) &&
+    (!input.currentValue || number(input.currentValue) > 0) &&
     (!input.fxRequired || number(input.fxRate) > 0) &&
     (!input.settlementRequired || input.settlementAssetId),
   );

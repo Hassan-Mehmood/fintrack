@@ -75,7 +75,11 @@ import type {
 const ALL = "ALL";
 const EMPTY_HOLDINGS: readonly Holding[] = [];
 
-export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain }) {
+export function InvestmentsPage({
+  domain,
+}: {
+  readonly domain: InvestmentDomain;
+}) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -84,12 +88,15 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
   const [reportingCurrency, setReportingCurrency] =
     useState<ReportingCurrency>("USD");
   const [groupBy, setGroupBy] = useState<HoldingGroupBy>("NONE");
-  const [accountId, setAccountId] = useState(searchParams.get("accountId") ?? ALL);
+  const [accountId, setAccountId] = useState(
+    searchParams.get("accountId") ?? ALL,
+  );
   const [portfolioId, setPortfolioId] = useState(ALL);
   const [assetType, setAssetType] = useState(ALL);
   const [currency, setCurrency] = useState(ALL);
   const [showExposure, setShowExposure] = useState(false);
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
+  const [portfolioSetupOpen, setPortfolioSetupOpen] = useState(false);
   const [addStablecoinOpen, setAddStablecoinOpen] = useState(false);
   const [addWatchlistItemOpen, setAddWatchlistItemOpen] = useState(false);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
@@ -115,7 +122,12 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
     queryFn: () => listHoldings(getToken, reportingCurrency, filters, groupBy),
   });
   const holdingOptionsQuery = useQuery({
-    queryKey: [...holdingsQueryKey, domain, reportingCurrency, "filter-options"],
+    queryKey: [
+      ...holdingsQueryKey,
+      domain,
+      reportingCurrency,
+      "filter-options",
+    ],
     queryFn: () => listHoldings(getToken, reportingCurrency, { domain }),
   });
   const summaryQuery = useQuery({
@@ -139,7 +151,8 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
     queryFn: () => listAccounts(getToken, domain),
   });
   const createAccountMutation = useMutation({
-    mutationFn: (payload: AccountFormPayload) => createAccount(getToken, payload),
+    mutationFn: (payload: AccountFormPayload) =>
+      createAccount(getToken, payload),
     onSuccess: async () => {
       setAddAccountOpen(false);
       await Promise.all([
@@ -177,7 +190,11 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
     <AppShell
       currentSection={domain === "CRYPTO" ? "crypto" : "stocks"}
       title={domain === "CRYPTO" ? "Crypto" : "Stocks"}
-      description={domain === "CRYPTO" ? "Track crypto wallets, stablecoins, and digital assets." : "Track broker accounts, stocks, ETFs, mutual funds, and other securities."}
+      description={
+        domain === "CRYPTO"
+          ? "Track crypto wallets, stablecoins, and digital assets."
+          : "Track broker accounts, stocks, ETFs, mutual funds, and other securities."
+      }
       primaryAction={
         <div className="flex gap-2">
           <Button
@@ -198,6 +215,15 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
           <Button size="sm" onClick={() => setAddHoldingOpen(true)}>
             Add holding
           </Button>
+          {domain === "CRYPTO" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPortfolioSetupOpen(true)}
+            >
+              Set up existing portfolio
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
@@ -235,7 +261,9 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
           <Tabs
             value={tab}
             onValueChange={(value) =>
-              router.replace(`/${domain === "CRYPTO" ? "crypto" : "stocks"}?tab=${value}`)
+              router.replace(
+                `/${domain === "CRYPTO" ? "crypto" : "stocks"}?tab=${value}`,
+              )
             }
           >
             <TabsList variant="line" className="max-w-full overflow-x-auto">
@@ -247,7 +275,9 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
             </TabsList>
           </Tabs>
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/${domain === "CRYPTO" ? "crypto" : "stocks"}/assets`}>Manage asset library</Link>
+            <Link href={`/${domain === "CRYPTO" ? "crypto" : "stocks"}/assets`}>
+              Manage asset library
+            </Link>
           </Button>
         </div>
 
@@ -283,6 +313,9 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
                   : ""}
                 {summary.missingHistoricalFxCount > 0
                   ? `${summary.missingHistoricalFxCount} holding${summary.missingHistoricalFxCount === 1 ? " is" : "s are"} missing a historical FX snapshot.`
+                  : ""}
+                {summary.unknownCostBasisCount > 0
+                  ? ` ${summary.unknownCostBasisCount} holding${summary.unknownCostBasisCount === 1 ? " has" : "s have"} no opening cost basis, so dependent profit/loss is unavailable.`
                   : ""}
               </AlertDescription>
             </Alert>
@@ -498,6 +531,14 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
                       <Button onClick={() => setAddHoldingOpen(true)}>
                         Add holding
                       </Button>
+                      {domain === "CRYPTO" ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => setPortfolioSetupOpen(true)}
+                        >
+                          Set up existing portfolio
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
                         onClick={() => setAddWatchlistItemOpen(true)}
@@ -585,6 +626,15 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
         open={addHoldingOpen}
         onOpenChange={setAddHoldingOpen}
       />
+      {domain === "CRYPTO" ? (
+        <AddHoldingDialog
+          domain="CRYPTO"
+          getToken={getToken}
+          open={portfolioSetupOpen}
+          portfolioSetup
+          onOpenChange={setPortfolioSetupOpen}
+        />
+      ) : null}
       <AddHoldingDialog
         domain="CRYPTO"
         cashEquivalentOnly
@@ -599,9 +649,7 @@ export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain 
         onOpenChange={setAddWatchlistItemOpen}
       />
       <AccountFormDialog
-        allowedAccountTypes={[
-          domain === "CRYPTO" ? "CRYPTO_WALLET" : "BROKER",
-        ]}
+        allowedAccountTypes={[domain === "CRYPTO" ? "CRYPTO_WALLET" : "BROKER"]}
         defaultCurrency="USD"
         errorMessage={
           createAccountMutation.isError
@@ -819,9 +867,11 @@ function SummaryValue({
     <span className="flex flex-col gap-1">
       {summary.totalsByCurrency.map((total) => (
         <span key={total.currency}>
-          {signed
-            ? formatSignedAmount(total[field], total.currency)
-            : formatAmount(total[field], total.currency)}
+          {total[field] === null
+            ? "Unavailable"
+            : signed
+              ? formatSignedAmount(total[field], total.currency)
+              : formatAmount(total[field], total.currency)}
         </span>
       ))}
     </span>

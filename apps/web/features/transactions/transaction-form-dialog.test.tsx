@@ -107,6 +107,7 @@ const holding: Holding = {
   accountCurrency: investmentAccount.currency,
   portfolios: [],
   quantity: "1.25",
+  isCostBasisKnown: true,
   nativeCurrency: "USD",
   nativeAverageCost: "8",
   nativeCurrentPrice: "10",

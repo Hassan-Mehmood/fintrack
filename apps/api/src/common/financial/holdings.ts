@@ -28,6 +28,7 @@ export interface HoldingCalculationInput {
 
 export interface HoldingCalculationResult {
   readonly quantity: Decimal;
+  readonly isCostBasisKnown: boolean;
   readonly averageCost: Decimal | null;
   readonly costBasis: Decimal;
   readonly currentValue: Decimal | null;
@@ -42,6 +43,7 @@ export function calculateHolding(
   let quantity = new Decimal(0);
   let costBasis = new Decimal(0);
   let realizedGain = new Decimal(0);
+  let isCostBasisKnown = true;
 
   for (const transaction of input.transactions) {
     switch (transaction.type) {
@@ -49,6 +51,13 @@ export function calculateHolding(
       case 'OPENING':
       case 'REINVESTMENT':
       case 'DEPOSIT':
+        if (
+          transaction.type === 'OPENING' &&
+          transaction.quantity.isPositive() &&
+          transaction.price.isZero()
+        ) {
+          isCostBasisKnown = false;
+        }
         costBasis = costBasis.add(
           transaction.quantity.times(transaction.price).add(transaction.fees),
         );
@@ -105,6 +114,7 @@ export function calculateHolding(
 
   return {
     quantity,
+    isCostBasisKnown,
     averageCost,
     costBasis,
     currentValue,

@@ -97,7 +97,7 @@ export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: Inve
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
               <div><p className="text-xs text-muted-foreground">Total value</p><p className="font-mono font-medium">{formatAmount(portfolio.metrics.totalValue, portfolio.metrics.baseCurrency)}</p></div>
-              <div><p className="text-xs text-muted-foreground">Unrealized</p><p className="font-mono font-medium">{formatSignedAmount(portfolio.metrics.totalUnrealizedGain, portfolio.metrics.baseCurrency)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Unrealized</p><p className="font-mono font-medium">{portfolio.metrics.totalUnrealizedGain ? formatSignedAmount(portfolio.metrics.totalUnrealizedGain, portfolio.metrics.baseCurrency) : "Unavailable"}</p></div>
             </CardContent>
           </Card>
         ))}

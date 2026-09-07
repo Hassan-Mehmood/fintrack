@@ -55,9 +55,10 @@ interface InvestmentDetailRecord {
 
 interface PortfolioHolding {
   readonly currentValue: Decimal | null;
-  readonly costBasis: Decimal;
+  readonly costBasis: Decimal | null;
   readonly unrealizedGain: Decimal | null;
-  readonly realizedGain: Decimal;
+  readonly realizedGain: Decimal | null;
+  readonly isCostBasisKnown: boolean;
   readonly categoryName: string;
   readonly riskScore: number | null;
 }
@@ -585,6 +586,9 @@ export class PortfoliosService {
       );
     const currentValue = sum('currentValue');
     const totalValue = currentValue.add(allocatedCash);
+    const unknownCostBasisCount = holdings.filter(
+      (holding) => holding.holdingKind === 'ASSET' && !holding.isCostBasisKnown,
+    ).length;
     const riskByAsset = new Map(
       riskProfiles.map((asset) => [asset.id, asset.riskProfile?.score ?? null]),
     );
@@ -626,9 +630,12 @@ export class PortfoliosService {
       })),
       metrics: {
         totalValue: totalValue.toFixed(2),
-        totalCostBasis: sum('costBasis').toFixed(2),
-        totalUnrealizedGain: sum('unrealizedGain').toFixed(2),
-        totalRealizedGain: sum('realizedGain').toFixed(2),
+        totalCostBasis:
+          unknownCostBasisCount > 0 ? null : sum('costBasis').toFixed(2),
+        totalUnrealizedGain:
+          unknownCostBasisCount > 0 ? null : sum('unrealizedGain').toFixed(2),
+        totalRealizedGain:
+          unknownCostBasisCount > 0 ? null : sum('realizedGain').toFixed(2),
         weightedRiskScore: riskDenominator.isZero()
           ? null
           : riskWeightedValue
@@ -636,10 +643,13 @@ export class PortfoliosService {
               .toDecimalPlaces(1)
               .toNumber(),
         baseCurrency: converter.baseCurrency,
-        isPartial: holdings.some((holding) => holding.currentValue === null),
+        isPartial:
+          unknownCostBasisCount > 0 ||
+          holdings.some((holding) => holding.currentValue === null),
         unpricedAssetCount: holdings.filter(
           (holding) => holding.currentValue === null,
         ).length,
+        unknownCostBasisCount,
       },
       allocation: [...categories.entries()].map(([category, value]) => ({
         category,
@@ -807,8 +817,11 @@ export class PortfoliosService {
         holding.currentValue ? sum.add(holding.currentValue) : sum,
       new Decimal(0),
     );
+    const unknownCostBasisCount = holdings.filter(
+      (holding) => !holding.isCostBasisKnown,
+    ).length;
     const totalCostBasis = holdings.reduce(
-      (sum, holding) => sum.add(holding.costBasis),
+      (sum, holding) => (holding.costBasis ? sum.add(holding.costBasis) : sum),
       new Decimal(0),
     );
     const totalUnrealizedGain = holdings.reduce(
@@ -817,7 +830,8 @@ export class PortfoliosService {
       new Decimal(0),
     );
     const totalRealizedGain = holdings.reduce(
-      (sum, holding) => sum.add(holding.realizedGain),
+      (sum, holding) =>
+        holding.realizedGain ? sum.add(holding.realizedGain) : sum,
       new Decimal(0),
     );
 
@@ -844,15 +858,21 @@ export class PortfoliosService {
 
     return {
       totalValue: cashTotal.add(totalHoldingsValue).toFixed(2),
-      totalCostBasis: totalCostBasis.toFixed(2),
-      totalUnrealizedGain: totalUnrealizedGain.toFixed(2),
-      totalRealizedGain: totalRealizedGain.toFixed(2),
+      totalCostBasis:
+        unknownCostBasisCount > 0 ? null : totalCostBasis.toFixed(2),
+      totalUnrealizedGain:
+        unknownCostBasisCount > 0 ? null : totalUnrealizedGain.toFixed(2),
+      totalRealizedGain:
+        unknownCostBasisCount > 0 ? null : totalRealizedGain.toFixed(2),
       weightedRiskScore,
       baseCurrency: converter.baseCurrency,
-      isPartial: holdings.some((holding) => holding.currentValue === null),
+      isPartial:
+        unknownCostBasisCount > 0 ||
+        holdings.some((holding) => holding.currentValue === null),
       unpricedAssetCount: holdings.filter(
         (holding) => holding.currentValue === null,
       ).length,
+      unknownCostBasisCount,
     };
   }
 
@@ -964,11 +984,17 @@ export class PortfoliosService {
         currentValue: calculation.currentValue
           ? converter.convert(calculation.currentValue, currency)
           : null,
-        costBasis: converter.convert(calculation.costBasis, currency),
-        unrealizedGain: calculation.unrealizedGain
-          ? converter.convert(calculation.unrealizedGain, currency)
+        costBasis: calculation.isCostBasisKnown
+          ? converter.convert(calculation.costBasis, currency)
           : null,
-        realizedGain: converter.convert(calculation.realizedGain, currency),
+        unrealizedGain:
+          calculation.isCostBasisKnown && calculation.unrealizedGain
+            ? converter.convert(calculation.unrealizedGain, currency)
+            : null,
+        realizedGain: calculation.isCostBasisKnown
+          ? converter.convert(calculation.realizedGain, currency)
+          : null,
+        isCostBasisKnown: calculation.isCostBasisKnown,
         categoryName: firstDetail.asset.category.name,
         riskScore: firstDetail.asset.riskProfile?.score ?? null,
       });

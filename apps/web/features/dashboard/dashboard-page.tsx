@@ -154,14 +154,18 @@ export function DashboardPage() {
               label="Stocks"
               value={data.stocksSummary.totalAccountValue ?? "0"}
               currency={data.baseCurrency}
-              detail={`${formatSignedAmount(data.stocksSummary.totalUnrealizedGain ?? "0", data.baseCurrency)} unrealized`}
+              detail={data.stocksSummary.totalUnrealizedGain
+                ? `${formatSignedAmount(data.stocksSummary.totalUnrealizedGain, data.baseCurrency)} unrealized`
+                : "Unrealized gain unavailable"}
               href="/stocks"
             />
             <InvestmentMetricCard
               label="Crypto"
               value={data.cryptoSummary.totalAccountValue ?? "0"}
               currency={data.baseCurrency}
-              detail={`${formatSignedAmount(data.cryptoSummary.totalUnrealizedGain ?? "0", data.baseCurrency)} unrealized`}
+              detail={data.cryptoSummary.totalUnrealizedGain
+                ? `${formatSignedAmount(data.cryptoSummary.totalUnrealizedGain, data.baseCurrency)} unrealized`
+                : "Unrealized gain unavailable"}
               href="/crypto"
             />
           </section>

@@ -386,6 +386,16 @@ and no account-cash, income, or expense effect. Both an original reversed
 investment transaction and its linked reversal are excluded from holding
 calculations.
 
+Existing-portfolio onboarding creates a cryptocurrency-wallet account and a
+same-domain custom portfolio, then records each supplied asset quantity as an
+opening position. The selected portfolio base currency is the wallet account
+currency; the custom portfolio remains an organizational view over positions
+and does not become a second balance ledger. If the user omits average purchase
+price, the opening detail retains a zero internal price sentinel and investment
+reports expose cost basis and dependent profit/loss values as unavailable. An
+optional current value for a manual asset derives its current unit price only;
+it must never be substituted for historical cost.
+
 Assets carry an explicit liquidity classification of `INVESTMENT` or
 `CASH_EQUIVALENT` and record whether it came from automatic canonical-
 stablecoin classification or a user override. Cash equivalents remain asset

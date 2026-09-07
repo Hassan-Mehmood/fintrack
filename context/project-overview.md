@@ -176,8 +176,10 @@ the two investment summaries visually separate.
 - Expense categories and monthly budgets.
 - A centralized financial dashboard.
 - Manual investment holdings and market-price updates.
-- Ledger-backed opening positions that establish quantity and cost basis
-  without changing account cash, income, expenses, or net worth.
+- Ledger-backed opening positions that establish quantity and, when supplied,
+  average cost without changing account cash, income, expenses, or net worth.
+  An omitted average cost remains explicitly unavailable rather than being
+  inferred from current market value.
 - Explicit broker-cash and same-wallet stablecoin settlement for new
   investment purchases and sales.
 - Multiple investment watchlists and position-level custom portfolios.

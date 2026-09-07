@@ -5,15 +5,34 @@ change.
 
 ## Current Phase
 
-- Money, Stocks, and Crypto domain separation is implemented and deployed.
+- Existing crypto portfolio onboarding is implemented on top of the separated
+  Money, Stocks, and Crypto domains.
 
 ## Current Goal
 
-- Discuss onboarding for users with existing holdings versus users starting
-  without holdings; onboarding implementation remains intentionally deferred.
+- Manually verify existing-portfolio onboarding with authenticated provider and
+  manual assets after the required local environment variables are configured.
 
 ## Completed
 
+- Added a dedicated **Set up existing portfolio** path in Crypto. The first
+  opening asset creates a same-named cryptocurrency wallet and custom portfolio
+  with the selected base currency; subsequent assets retain that context so the
+  user can add all current balances without reselecting it.
+- Made average purchase price optional for opening positions. Quantity-only
+  openings retain a zero cash impact and report cost basis and dependent P&L as
+  unavailable instead of fabricating history; aggregate investment reports are
+  marked partial and disclose the number of affected holdings.
+- Added optional current-total-value capture for manual opening assets, deriving
+  only the current unit price while provider-backed assets continue to use
+  provider prices. Added API and web regression coverage for the setup flow,
+  unknown cost basis, and current-value derivation.
+- Verified the onboarding change with the API and web production builds, all
+  174 API Jest tests, all 46 web Vitest tests, scoped API production lint, web
+  type-checking, and web lint. Web lint retains only the two pre-existing
+  Settings-page warnings.
+- Documented the existing-crypto-portfolio domain mapping and onboarding rules
+  in `specs/web/009-existing-crypto-portfolio-onboarding.md`.
 - Separated the product into Money, Stocks, and Crypto navigation and routes.
   Accounts and general Transactions now show everyday finance only; Stocks and
   Crypto have independent overview, holdings, activity, portfolios, watchlists,
@@ -419,9 +438,8 @@ change.
 
 ## Next Up
 
-- Discuss separate onboarding paths for users who already hold stocks or crypto
-  and users who have no holdings yet. No import, sync, or first-holding wizard
-  has been included in the domain-separation work.
+- Manually verify a portfolio containing USDT, BTC, and ETH, including an
+  omitted BTC cost basis and a later BTC/USDT buy and sell.
 - Collect current balances for the seven imported accounts and record explicit
   adjustment transactions to reconcile their zero-based derived balances.
 - Manually verify USD, PKR, and Native Currencies modes with holdings spread

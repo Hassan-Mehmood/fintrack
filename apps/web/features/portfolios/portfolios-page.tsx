@@ -333,30 +333,30 @@ function PortfolioCard({ portfolio, onEdit, onDelete }: PortfolioCardProps) {
             value={formatAmount(portfolio.metrics.totalValue, baseCurrency)}
             detail={
               portfolio.metrics.isPartial
-                ? `Known subtotal · ${portfolio.metrics.unpricedAssetCount} unpriced`
+                ? `Known subtotal · ${portfolio.metrics.unpricedAssetCount} unpriced · ${portfolio.metrics.unknownCostBasisCount} unknown cost`
                 : "Cash + holdings"
             }
           />
           <SummaryCard
             label="Cost basis"
-            value={formatAmount(portfolio.metrics.totalCostBasis, baseCurrency)}
+            value={portfolio.metrics.totalCostBasis ? formatAmount(portfolio.metrics.totalCostBasis, baseCurrency) : "Unavailable"}
             detail="Amount invested"
           />
           <SummaryCard
             label="Unrealized gain"
-            value={formatSignedAmount(
+            value={portfolio.metrics.totalUnrealizedGain ? formatSignedAmount(
               portfolio.metrics.totalUnrealizedGain,
               baseCurrency
-            )}
+            ) : "Unavailable"}
             detail="Open P&L"
             tone={getTone(portfolio.metrics.totalUnrealizedGain)}
           />
           <SummaryCard
             label="Realized gain"
-            value={formatSignedAmount(
+            value={portfolio.metrics.totalRealizedGain ? formatSignedAmount(
               portfolio.metrics.totalRealizedGain,
               baseCurrency
-            )}
+            ) : "Unavailable"}
             detail="Closed P&L"
             tone={getTone(portfolio.metrics.totalRealizedGain)}
           />
@@ -433,7 +433,7 @@ function SummaryCard({
   )
 }
 
-function getTone(amount: string): "positive" | "negative" | "neutral" {
+function getTone(amount: string | null): "positive" | "negative" | "neutral" {
   const value = Number(amount)
 
   if (value > 0) {

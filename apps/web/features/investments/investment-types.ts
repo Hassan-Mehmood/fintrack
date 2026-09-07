@@ -20,6 +20,7 @@ export interface Holding {
     readonly percentage?: string;
   }>;
   readonly quantity: string;
+  readonly isCostBasisKnown: boolean;
   readonly nativeCurrency: string;
   readonly nativeAverageCost: string | null;
   readonly nativeCurrentPrice: string | null;
@@ -51,10 +52,10 @@ export interface Holding {
 
 export interface CurrencyTotal {
   readonly currency: string;
-  readonly totalCostBasis: string;
+  readonly totalCostBasis: string | null;
   readonly totalCurrentValue: string;
-  readonly totalRealizedGain: string;
-  readonly totalUnrealizedGain: string;
+  readonly totalRealizedGain: string | null;
+  readonly totalUnrealizedGain: string | null;
   readonly totalAccountValue: string;
   readonly fiatCashValue: string;
   readonly cashEquivalentValue: string;
@@ -83,6 +84,7 @@ export interface InvestmentSummary {
   readonly isPartial: boolean;
   readonly unpricedAssetCount: number;
   readonly missingHistoricalFxCount: number;
+  readonly unknownCostBasisCount: number;
   readonly exchangeRate: {
     readonly baseCurrency: "USD";
     readonly quoteCurrency: "PKR";
@@ -137,6 +139,7 @@ export interface CreatePositionPayload {
   readonly unitCost?: string;
   readonly totalCost?: string;
   readonly unitPrice?: string;
+  readonly currentValue?: string;
   readonly fees?: string;
   readonly historicalFxRate?: string;
   readonly settlementAsset?:
@@ -150,4 +153,12 @@ export interface CreatePositionPayload {
   readonly portfolio?:
     | { readonly kind: "EXISTING"; readonly portfolioId: string }
     | { readonly kind: "NEW"; readonly name: string };
+}
+
+export interface PositionCommandResult {
+  readonly assetId: string;
+  readonly accountId: string;
+  readonly portfolioId: string | null;
+  readonly transactionId: string;
+  readonly holding: Holding;
 }

@@ -450,6 +450,122 @@ describe('InvestmentsService', () => {
       }),
     );
   });
+
+  it('creates a quantity-only opening and derives a manual current price from current value', async () => {
+    const tx = {
+      transaction: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'transaction-1' }),
+      },
+      asset: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'asset-1',
+          name: 'Bitcoin',
+          symbol: 'BTC',
+          priceCurrency: 'USD',
+          marketType: 'CRYPTO',
+          domain: 'CRYPTO',
+          provider: null,
+        }),
+        update: jest.fn().mockResolvedValue({ id: 'asset-1' }),
+      },
+      account: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'account-1',
+          currency: 'PKR',
+          type: 'CRYPTO_WALLET',
+        }),
+      },
+    };
+    const positionPrisma = {
+      $transaction: jest.fn(
+        async (operation: (client: typeof tx) => Promise<unknown>) =>
+          operation(tx),
+      ),
+    };
+    const positionService = new InvestmentsService(positionPrisma as never);
+    jest.spyOn(positionService, 'getHoldingsForUser').mockResolvedValue({
+      holdings: [{ assetId: 'asset-1' } as never],
+      baseCurrency: 'USD',
+      reportingCurrency: 'USD',
+    });
+
+    await positionService.createPositionForUser(authenticatedUser, {
+      idempotencyKey: '00000000-0000-4000-8000-000000000011',
+      domain: 'CRYPTO',
+      mode: 'OPENING',
+      asset: {
+        kind: 'EXISTING',
+        assetId: '00000000-0000-4000-8000-000000000012',
+      },
+      account: {
+        kind: 'EXISTING',
+        accountId: '00000000-0000-4000-8000-000000000013',
+      },
+      quantity: '0.05',
+      costInput: 'UNIT',
+      currentValue: '3500',
+      occurredAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(tx.asset.update).toHaveBeenCalledWith({
+      where: { id: 'asset-1' },
+      data: { currentPrice: new Decimal(70000) },
+    });
+    expect(tx.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: new Decimal(0),
+          investmentDetail: {
+            create: expect.objectContaining({
+              price: new Decimal(0),
+              grossAmount: new Decimal(0),
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('keeps quantity and current value while hiding unknown opening cost basis', async () => {
+    prisma.asset.findMany.mockResolvedValue([
+      createAssetRecord({
+        id: 'asset-1',
+        name: 'Bitcoin',
+        currentPrice: '70000',
+      }),
+    ]);
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      createDetailRecord({
+        assetId: 'asset-1',
+        tradeType: 'OPENING',
+        quantity: '0.05',
+        price: '0',
+      }),
+    ]);
+
+    const { holdings } = await service.getHoldingsForUser(authenticatedUser);
+    const summary = await service.getSummaryForUser(authenticatedUser);
+
+    expect(holdings[0]).toEqual(
+      expect.objectContaining({
+        quantity: '0.05',
+        currentValue: '3500.00',
+        isCostBasisKnown: false,
+        averageCost: null,
+        costBasis: null,
+        unrealizedGain: null,
+      }),
+    );
+    expect(summary.data).toEqual(
+      expect.objectContaining({
+        isPartial: true,
+        unknownCostBasisCount: 1,
+        totalCostBasis: null,
+        totalUnrealizedGain: null,
+      }),
+    );
+  });
 });
 
 function createAssetRecord({

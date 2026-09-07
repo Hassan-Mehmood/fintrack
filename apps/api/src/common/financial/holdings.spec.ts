@@ -294,4 +294,23 @@ describe('calculateHolding', () => {
     expect(result.currentValue).toBeNull();
     expect(result.unrealizedGain).toBeNull();
   });
+
+  it('marks an opening position without a purchase price as unknown cost basis', () => {
+    const result = calculateHolding({
+      currentPrice: new Decimal(70000),
+      priceCurrency: 'USD',
+      transactions: [
+        {
+          type: 'OPENING',
+          quantity: new Decimal('0.05'),
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        },
+      ],
+    });
+
+    expect(result.quantity.toString()).toBe('0.05');
+    expect(result.currentValue?.toString()).toBe('3500');
+    expect(result.isCostBasisKnown).toBe(false);
+  });
 });

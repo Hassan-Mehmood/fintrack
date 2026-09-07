@@ -13,13 +13,14 @@ export interface PortfolioAllocationItem {
 
 export interface PortfolioMetrics {
   readonly totalValue: string;
-  readonly totalCostBasis: string;
-  readonly totalUnrealizedGain: string;
-  readonly totalRealizedGain: string;
+  readonly totalCostBasis: string | null;
+  readonly totalUnrealizedGain: string | null;
+  readonly totalRealizedGain: string | null;
   readonly weightedRiskScore: number | null;
   readonly baseCurrency: string;
   readonly isPartial: boolean;
   readonly unpricedAssetCount: number;
+  readonly unknownCostBasisCount: number;
 }
 
 export interface PortfolioResponse {

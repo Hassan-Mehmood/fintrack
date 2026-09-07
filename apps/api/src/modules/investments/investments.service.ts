@@ -212,6 +212,9 @@ export class InvestmentsService {
     );
     const cashEquivalentValue = sum(cashEquivalents, 'currentValue');
     const investedValue = sum(investments, 'currentValue');
+    const hasUnknownCostBasis = holdings.some(
+      (holding) => holding.holdingKind === 'ASSET' && !holding.isCostBasisKnown,
+    );
     return {
       accountId: account.id,
       accountName: account.name,
@@ -226,9 +229,15 @@ export class InvestmentsService {
       totalAccountValue: cashReporting
         ? cashReporting.add(cashEquivalentValue).add(investedValue).toFixed(2)
         : null,
-      costBasis: sum(holdings, 'costBasis').toFixed(2),
-      realizedGain: sum(holdings, 'realizedGain').toFixed(2),
-      unrealizedGain: sum(holdings, 'unrealizedGain').toFixed(2),
+      costBasis: hasUnknownCostBasis
+        ? null
+        : sum(holdings, 'costBasis').toFixed(2),
+      realizedGain: hasUnknownCostBasis
+        ? null
+        : sum(holdings, 'realizedGain').toFixed(2),
+      unrealizedGain: hasUnknownCostBasis
+        ? null
+        : sum(holdings, 'unrealizedGain').toFixed(2),
       holdings,
     };
   }
@@ -303,6 +312,32 @@ export class InvestmentsService {
             throw new BadRequestException('Asset price currency is required.');
           }
           const price = this.resolvePositionPrice(payload, quantity);
+          if (payload.currentValue) {
+            if (payload.mode !== 'OPENING') {
+              throw new BadRequestException(
+                'Current value is supported only for opening positions.',
+              );
+            }
+            if (asset.provider) {
+              throw new BadRequestException(
+                'Provider-backed assets use provider market prices.',
+              );
+            }
+            const currentValue = new Decimal(payload.currentValue);
+            if (!currentValue.isPositive()) {
+              throw new BadRequestException(
+                'Current value must be greater than zero.',
+              );
+            }
+            await tx.asset.update({
+              where: { id: asset.id },
+              data: {
+                currentPrice: currentValue
+                  .dividedBy(quantity)
+                  .toDecimalPlaces(8),
+              },
+            });
+          }
           const fees = new Decimal(payload.fees ?? '0');
           if (payload.mode === 'OPENING' && !fees.isZero()) {
             throw new BadRequestException(
@@ -326,6 +361,7 @@ export class InvestmentsService {
               : null;
           if (
             !settlementAsset &&
+            !price.isZero() &&
             priceCurrency !== account.currency &&
             (!fxRate || !fxRate.isPositive())
           ) {
@@ -334,14 +370,17 @@ export class InvestmentsService {
             );
           }
           const grossAmount = quantity.times(price).toDecimalPlaces(8);
-          const convertedGross = settlementAsset
-            ? grossAmount
-            : this.convertPositionAmount(
-                grossAmount,
-                priceCurrency,
-                account.currency,
-                fxRate,
-              );
+          const convertedGross =
+            payload.mode === 'OPENING'
+              ? new Decimal(0)
+              : settlementAsset
+                ? grossAmount
+                : this.convertPositionAmount(
+                    grossAmount,
+                    priceCurrency,
+                    account.currency,
+                    fxRate,
+                  );
           const amount =
             payload.mode === 'OPENING'
               ? new Decimal(0)
@@ -519,6 +558,7 @@ export class InvestmentsService {
           priceCurrency: true,
           marketType: true,
           domain: true,
+          provider: true,
         },
       });
       if (!asset) throw new NotFoundException('Asset not found.');
@@ -546,6 +586,7 @@ export class InvestmentsService {
           priceCurrency: true,
           marketType: true,
           domain: true,
+          provider: true,
         },
       });
       if (existing?.priceCurrency) {
@@ -612,6 +653,7 @@ export class InvestmentsService {
           priceCurrency: true,
           marketType: true,
           domain: true,
+          provider: true,
         },
       });
     }
@@ -642,6 +684,7 @@ export class InvestmentsService {
         priceCurrency: true,
         marketType: true,
         domain: true,
+        provider: true,
       },
     });
   }
@@ -897,10 +940,10 @@ export class InvestmentsService {
         : payload.costInput === 'TOTAL'
           ? payload.totalCost
           : payload.unitCost;
-    if (!raw)
-      throw new BadRequestException(
-        'Position cost or purchase price is required.',
-      );
+    if (!raw) {
+      if (payload.mode === 'OPENING') return new Decimal(0);
+      throw new BadRequestException('Purchase price is required.');
+    }
     const value = new Decimal(raw);
     const price =
       payload.mode === 'OPENING' && payload.costInput === 'TOTAL'
@@ -1118,6 +1161,9 @@ export class InvestmentsService {
     const missingHistoricalFxCount = holdings.filter(
       (holding) => holding.hasMissingHistoricalFx,
     ).length;
+    const unknownCostBasisCount = assetHoldings.filter(
+      (holding) => !holding.isCostBasisKnown,
+    ).length;
 
     return {
       data: {
@@ -1140,9 +1186,13 @@ export class InvestmentsService {
           holdings,
           reportingCurrency,
         ),
-        isPartial: unpricedAssetCount > 0 || missingHistoricalFxCount > 0,
+        isPartial:
+          unpricedAssetCount > 0 ||
+          missingHistoricalFxCount > 0 ||
+          unknownCostBasisCount > 0,
         unpricedAssetCount,
         missingHistoricalFxCount,
+        unknownCostBasisCount,
         exchangeRate: {
           baseCurrency: 'USD',
           quoteCurrency: 'PKR',
@@ -1222,22 +1272,40 @@ export class InvestmentsService {
       accountCurrency: firstDetail.transaction.account.currency,
       portfolios,
       quantity: stripTrailingZeros(quantityCalculation.quantity.toFixed(8)),
+      isCostBasisKnown: nativeCalculation?.isCostBasisKnown ?? false,
       nativeCurrency,
-      nativeAverageCost: toDecimalString(nativeCalculation?.averageCost),
+      nativeAverageCost: nativeCalculation?.isCostBasisKnown
+        ? toDecimalString(nativeCalculation.averageCost)
+        : null,
       nativeCurrentPrice: toDecimalString(effectivePrice),
-      nativeCostBasis: toMoneyString(nativeCalculation?.costBasis),
+      nativeCostBasis: nativeCalculation?.isCostBasisKnown
+        ? toMoneyString(nativeCalculation.costBasis)
+        : null,
       nativeCurrentValue: toMoneyString(nativeCalculation?.currentValue),
-      nativeRealizedGain: toMoneyString(nativeCalculation?.realizedGain),
-      nativeUnrealizedGain: toMoneyString(nativeCalculation?.unrealizedGain),
+      nativeRealizedGain: nativeCalculation?.isCostBasisKnown
+        ? toMoneyString(nativeCalculation.realizedGain)
+        : null,
+      nativeUnrealizedGain: nativeCalculation?.isCostBasisKnown
+        ? toMoneyString(nativeCalculation.unrealizedGain)
+        : null,
       reportingCurrency: outputCurrency,
-      averageCost: toDecimalString(reportingCalculation?.averageCost),
+      averageCost: reportingCalculation?.isCostBasisKnown
+        ? toDecimalString(reportingCalculation.averageCost)
+        : null,
       currentPrice: toDecimalString(reportingPrice),
-      costBasis: toMoneyString(reportingCalculation?.costBasis),
+      costBasis: reportingCalculation?.isCostBasisKnown
+        ? toMoneyString(reportingCalculation.costBasis)
+        : null,
       currentValue: toMoneyString(reportingCalculation?.currentValue),
-      realizedGain: toMoneyString(reportingCalculation?.realizedGain),
-      unrealizedGain: toMoneyString(reportingCalculation?.unrealizedGain),
-      unrealizedGainPercent:
-        reportingCalculation?.unrealizedGainPercent?.toNumber() ?? null,
+      realizedGain: reportingCalculation?.isCostBasisKnown
+        ? toMoneyString(reportingCalculation.realizedGain)
+        : null,
+      unrealizedGain: reportingCalculation?.isCostBasisKnown
+        ? toMoneyString(reportingCalculation.unrealizedGain)
+        : null,
+      unrealizedGainPercent: reportingCalculation?.isCostBasisKnown
+        ? (reportingCalculation.unrealizedGainPercent?.toNumber() ?? null)
+        : null,
       priceProvider: marketPrice?.provider ?? null,
       priceStatus:
         marketPrice?.status ??
@@ -1419,12 +1487,16 @@ export class InvestmentsService {
     const invested = currentValueFor(
       (holding) => holding.liquidityClass === 'INVESTMENT',
     );
+    const hasUnknownAssetCost = holdings.some(
+      (holding) =>
+        holding.holdingKind === 'ASSET' && holding.costBasis === null,
+    );
     return {
       currency,
-      totalCostBasis: sum('costBasis'),
+      totalCostBasis: hasUnknownAssetCost ? null : sum('costBasis'),
       totalCurrentValue: sum('currentValue'),
-      totalRealizedGain: sum('realizedGain'),
-      totalUnrealizedGain: sum('unrealizedGain'),
+      totalRealizedGain: hasUnknownAssetCost ? null : sum('realizedGain'),
+      totalUnrealizedGain: hasUnknownAssetCost ? null : sum('unrealizedGain'),
       totalAccountValue: currentValueFor(() => true).toFixed(2),
       fiatCashValue: fiatCash.toFixed(2),
       cashEquivalentValue: cashEquivalents.toFixed(2),
@@ -1647,6 +1719,7 @@ export class InvestmentsService {
       accountCurrency: account.currency,
       portfolios,
       quantity: stripTrailingZeros(balance.toFixed(8)),
+      isCostBasisKnown: true,
       nativeCurrency: account.currency,
       nativeAverageCost: null,
       nativeCurrentPrice: '1',

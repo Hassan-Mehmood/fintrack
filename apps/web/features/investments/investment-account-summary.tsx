@@ -52,14 +52,23 @@ export function InvestmentAccountSummaryPanel({
         ? formatAmount(data.totalLiquidity, data.reportingCurrency)
         : "Unavailable",
     ],
-    ["Cost basis", formatAmount(data.costBasis, data.reportingCurrency)],
+    [
+      "Cost basis",
+      data.costBasis
+        ? formatAmount(data.costBasis, data.reportingCurrency)
+        : "Unavailable",
+    ],
     [
       "Unrealized gain",
-      formatSignedAmount(data.unrealizedGain, data.reportingCurrency),
+      data.unrealizedGain
+        ? formatSignedAmount(data.unrealizedGain, data.reportingCurrency)
+        : "Unavailable",
     ],
     [
       "Realized gain",
-      formatSignedAmount(data.realizedGain, data.reportingCurrency),
+      data.realizedGain
+        ? formatSignedAmount(data.realizedGain, data.reportingCurrency)
+        : "Unavailable",
     ],
   ] as const;
   const holdings = [...data.holdings].sort(

@@ -19,6 +19,7 @@ export interface HoldingResponse {
     readonly percentage?: string;
   }>;
   readonly quantity: string;
+  readonly isCostBasisKnown: boolean;
   readonly nativeCurrency: string;
   readonly nativeAverageCost: string | null;
   readonly nativeCurrentPrice: string | null;
@@ -50,10 +51,10 @@ export interface HoldingResponse {
 
 export interface CurrencyTotal {
   readonly currency: string;
-  readonly totalCostBasis: string;
+  readonly totalCostBasis: string | null;
   readonly totalCurrentValue: string;
-  readonly totalRealizedGain: string;
-  readonly totalUnrealizedGain: string;
+  readonly totalRealizedGain: string | null;
+  readonly totalUnrealizedGain: string | null;
   readonly totalAccountValue: string;
   readonly fiatCashValue: string;
   readonly cashEquivalentValue: string;
@@ -82,6 +83,7 @@ export interface InvestmentSummaryData {
   readonly isPartial: boolean;
   readonly unpricedAssetCount: number;
   readonly missingHistoricalFxCount: number;
+  readonly unknownCostBasisCount: number;
   readonly exchangeRate: {
     readonly baseCurrency: 'USD';
     readonly quoteCurrency: 'PKR';

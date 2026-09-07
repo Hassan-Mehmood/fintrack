@@ -5,6 +5,7 @@ import type {
   InvestmentSummary,
   ReportingCurrency,
   CreatePositionPayload,
+  PositionCommandResult,
 } from "./investment-types";
 
 interface GetToken {
@@ -57,14 +58,14 @@ export const investmentSummaryQueryKey = ["investments", "summary"] as const;
 export async function createPosition(
   getToken: GetToken,
   payload: CreatePositionPayload,
-): Promise<Holding> {
+): Promise<PositionCommandResult> {
   const response = await apiRequest<{
-    readonly data: { readonly holding: Holding };
+    readonly data: PositionCommandResult;
   }>(getToken, "/api/v1/investments/positions", {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  return response.data.holding;
+  return response.data;
 }
 
 export interface InvestmentAccountSummary {
@@ -76,9 +77,9 @@ export interface InvestmentAccountSummary {
   readonly investedValue: string;
   readonly totalLiquidity: string | null;
   readonly totalAccountValue: string | null;
-  readonly costBasis: string;
-  readonly realizedGain: string;
-  readonly unrealizedGain: string;
+  readonly costBasis: string | null;
+  readonly realizedGain: string | null;
+  readonly unrealizedGain: string | null;
   readonly holdings: readonly Holding[];
 }
 
@@ -98,7 +99,11 @@ export async function listHoldings(
   filters: InvestmentFilters,
   groupBy: HoldingGroupBy = "NONE",
 ): Promise<readonly Holding[]> {
-  const query = new URLSearchParams({ reportingCurrency, groupBy, domain: filters.domain });
+  const query = new URLSearchParams({
+    reportingCurrency,
+    groupBy,
+    domain: filters.domain,
+  });
   appendFilter(query, "accountId", filters.accountId);
   appendFilter(query, "portfolioId", filters.portfolioId);
   appendFilter(query, "assetType", filters.assetType);
@@ -116,7 +121,10 @@ export async function getInvestmentSummary(
   reportingCurrency: ReportingCurrency,
   filters: InvestmentFilters,
 ): Promise<InvestmentSummary> {
-  const query = new URLSearchParams({ reportingCurrency, domain: filters.domain });
+  const query = new URLSearchParams({
+    reportingCurrency,
+    domain: filters.domain,
+  });
   appendFilter(query, "accountId", filters.accountId);
   appendFilter(query, "portfolioId", filters.portfolioId);
   appendFilter(query, "assetType", filters.assetType);

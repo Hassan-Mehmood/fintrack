@@ -41,4 +41,26 @@ describe("AddHoldingDialog", () => {
     expect(screen.getByText("Current price (optional)")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled()
   })
+
+  it("starts an existing crypto portfolio with a name and base currency", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AddHoldingDialog
+          domain="CRYPTO"
+          getToken={vi.fn().mockResolvedValue("token")}
+          open
+          portfolioSetup
+          onOpenChange={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+
+    expect(screen.getByRole("heading", { name: "Set up existing portfolio" })).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText("Search name or symbol"), { target: { value: "Apple" } })
+    fireEvent.click(await screen.findByRole("button", { name: /Apple Inc/i }, { timeout: 1500 }))
+
+    expect(screen.getByText("Portfolio name")).toBeInTheDocument()
+    expect(screen.getByText("Base currency")).toBeInTheDocument()
+    expect(screen.getByText(/Average purchase price \(optional/i)).toBeInTheDocument()
+  })
 })

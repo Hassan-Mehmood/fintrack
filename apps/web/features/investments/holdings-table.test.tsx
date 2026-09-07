@@ -78,6 +78,7 @@ const holding: Holding = {
   accountCurrency: "PKR",
   portfolios: [],
   quantity: "1",
+  isCostBasisKnown: true,
   nativeCurrency: "USD",
   nativeAverageCost: "100",
   nativeCurrentPrice: "120",

@@ -77,6 +77,7 @@ export class CreatePositionDto {
   @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) unitCost?: string;
   @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) totalCost?: string;
   @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) unitPrice?: string;
+  @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) currentValue?: string;
   @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) fees?: string;
   @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) historicalFxRate?: string;
 
