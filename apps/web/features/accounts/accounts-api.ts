@@ -53,10 +53,12 @@ export const accountQueryKey = (accountId: string) =>
 
 export async function listAccounts(
   getToken: GetToken,
+  scope?: "MONEY" | "SECURITIES" | "CRYPTO",
 ): Promise<readonly Account[]> {
+  const query = scope ? `?scope=${scope}` : ""
   const response = await apiRequest<AccountsListResponse>(
     getToken,
-    "/api/v1/accounts",
+    `/api/v1/accounts${query}`,
   )
 
   return response.data

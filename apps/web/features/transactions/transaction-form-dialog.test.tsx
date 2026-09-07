@@ -57,6 +57,7 @@ const investmentAccount: Account = {
 };
 
 const asset: Asset = {
+  domain: "SECURITIES",
   id: "00000000-0000-4000-8000-000000000001",
   name: "Acme",
   symbol: "ACME",
@@ -94,6 +95,7 @@ const asset: Asset = {
 };
 
 const holding: Holding = {
+  domain: "SECURITIES",
   holdingKind: "ASSET",
   assetId: asset.id,
   assetName: asset.name,

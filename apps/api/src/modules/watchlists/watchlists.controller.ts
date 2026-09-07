@@ -7,17 +7,22 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { InvestmentDomainQueryDto } from '../../common/dto/investment-domain-query.dto';
 import { AddWatchlistItemDto, WatchlistNameDto } from './dto/watchlist.dto';
 import { WatchlistsService } from './watchlists.service';
 
 @Controller('api/v1/watchlists')
 export class WatchlistsController {
   constructor(private readonly service: WatchlistsService) {}
-  @Get() async list(@CurrentUser() user: AuthenticatedUser) {
-    return { data: await this.service.list(user) };
+  @Get() async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: InvestmentDomainQueryDto,
+  ) {
+    return { data: await this.service.list(user, query.domain) };
   }
   @Post() async create(
     @CurrentUser() user: AuthenticatedUser,

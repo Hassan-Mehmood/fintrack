@@ -32,31 +32,27 @@ const performanceChartConfig = {
     label: "Expenses",
     color: "var(--state-error)",
   },
-  investments: {
-    label: "Investments",
-    color: "var(--state-success)",
-  },
 } satisfies ChartConfig
 
 const allocationChartConfig = {
-  cash: {
-    label: "Cash & bank",
+  bank: {
+    label: "Bank accounts",
     color: "var(--accent-primary)",
   },
-  brokerage: {
-    label: "Brokerage",
+  "cash-wallet": {
+    label: "Cash wallets",
     color: "var(--state-success)",
   },
-  crypto: {
-    label: "Crypto",
+  "digital-wallet": {
+    label: "Digital wallets",
     color: "var(--state-warning)",
   },
 } satisfies ChartConfig
 
 const allocationFills: Record<string, string> = {
-  cash: "var(--color-cash)",
-  brokerage: "var(--color-brokerage)",
-  crypto: "var(--color-crypto)",
+  bank: "var(--color-bank)",
+  "cash-wallet": "var(--color-cash-wallet)",
+  "digital-wallet": "var(--color-digital-wallet)",
 }
 
 interface IncomeExpenseInvestmentChartProps {
@@ -70,7 +66,6 @@ export function IncomeExpenseInvestmentChart({
     month: item.month,
     income: Number(item.income),
     expenses: Number(item.expenses),
-    investments: Number(item.investments),
   }))
 
   return (
@@ -99,11 +94,6 @@ export function IncomeExpenseInvestmentChart({
         />
         <Bar dataKey="income" fill="var(--color-income)" radius={[4, 4, 0, 0]} />
         <Bar dataKey="expenses" fill="var(--color-expenses)" radius={[4, 4, 0, 0]} />
-        <Bar
-          dataKey="investments"
-          fill="var(--color-investments)"
-          radius={[4, 4, 0, 0]}
-        />
       </BarChart>
     </ChartContainer>
   )

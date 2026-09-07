@@ -12,6 +12,7 @@ describe('WatchlistsService', () => {
         findMany: jest.fn().mockResolvedValue([
           {
             id: 'list-1',
+            domain: 'SECURITIES',
             name: 'Ideas',
             displayOrder: 0,
             items: [{ assetId: 'asset-1' }],
@@ -37,18 +38,22 @@ describe('WatchlistsService', () => {
         items: [expect.objectContaining({ id: 'asset-1' })],
       }),
     ]);
-    expect(assets.listAssetsForUser).toHaveBeenCalledWith(user);
+    expect(assets.listAssetsForUser).toHaveBeenCalledWith(user, undefined);
   });
 
   it('adds an owned asset to a watchlist independently of holdings', async () => {
     const prisma = {
       watchlist: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'list-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'list-1', domain: 'SECURITIES' }),
       },
       watchlistItem: { create: jest.fn().mockResolvedValue({}) },
     };
     const assets = {
-      getAssetForUser: jest.fn().mockResolvedValue({ id: 'asset-1' }),
+      getAssetForUser: jest
+        .fn()
+        .mockResolvedValue({ id: 'asset-1', domain: 'SECURITIES' }),
     };
     const service = new WatchlistsService(prisma as never, assets as never);
 

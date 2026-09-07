@@ -72,16 +72,19 @@ export class PortfoliosService {
 
   async listPortfoliosForUser(
     user: AuthenticatedUser,
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<readonly PortfolioResponse[]> {
     const portfolios = await this.prisma.portfolio.findMany({
       where: {
         userId: user.id,
+        domain,
       },
       orderBy: [{ createdAt: 'desc' }],
       select: {
         id: true,
         name: true,
         description: true,
+        domain: true,
         accounts: {
           select: {
             accountId: true,
@@ -117,13 +120,28 @@ export class PortfoliosService {
     user: AuthenticatedUser,
     payload: CreatePortfolioDto,
   ): Promise<PortfolioResponse> {
-    await this.assertAccountsOwnedByUser(user.id, payload.accountIds ?? []);
-    await this.assertPositionInputs(user.id, payload.holdings ?? []);
-    await this.assertCashAllocations(user.id, payload.cashAllocations ?? []);
+    await this.assertAccountsOwnedByUser(
+      user.id,
+      payload.accountIds ?? [],
+      payload.domain,
+    );
+    await this.assertPositionInputs(
+      user.id,
+      payload.holdings ?? [],
+      undefined,
+      payload.domain,
+    );
+    await this.assertCashAllocations(
+      user.id,
+      payload.cashAllocations ?? [],
+      undefined,
+      payload.domain,
+    );
 
     const portfolio = await this.prisma.portfolio.create({
       data: {
         userId: user.id,
+        domain: payload.domain,
         name: payload.name,
         description: payload.description,
         accounts: {
@@ -154,6 +172,7 @@ export class PortfoliosService {
         id: true,
         name: true,
         description: true,
+        domain: true,
         accounts: {
           select: {
             accountId: true,
@@ -174,19 +193,32 @@ export class PortfoliosService {
     portfolioId: string,
     payload: UpdatePortfolioDto,
   ): Promise<PortfolioResponse> {
-    await this.findOwnedPortfolioOrThrow(user.id, portfolioId);
+    const existingPortfolio = await this.findOwnedPortfolioOrThrow(
+      user.id,
+      portfolioId,
+    );
 
     if (payload.accountIds !== undefined) {
-      await this.assertAccountsOwnedByUser(user.id, payload.accountIds);
+      await this.assertAccountsOwnedByUser(
+        user.id,
+        payload.accountIds,
+        existingPortfolio.domain,
+      );
     }
     if (payload.holdings !== undefined) {
-      await this.assertPositionInputs(user.id, payload.holdings, portfolioId);
+      await this.assertPositionInputs(
+        user.id,
+        payload.holdings,
+        portfolioId,
+        existingPortfolio.domain,
+      );
     }
     if (payload.cashAllocations !== undefined) {
       await this.assertCashAllocations(
         user.id,
         payload.cashAllocations,
         portfolioId,
+        existingPortfolio.domain,
       );
     }
 
@@ -237,6 +269,7 @@ export class PortfoliosService {
         id: true,
         name: true,
         description: true,
+        domain: true,
         accounts: {
           select: {
             accountId: true,
@@ -272,6 +305,7 @@ export class PortfoliosService {
     readonly id: string;
     readonly name: string;
     readonly description: string | null;
+    readonly domain: 'SECURITIES' | 'CRYPTO';
     readonly accounts: ReadonlyArray<{
       readonly accountId: string;
     }>;
@@ -295,6 +329,7 @@ export class PortfoliosService {
         id: true,
         name: true,
         description: true,
+        domain: true,
         accounts: {
           select: {
             accountId: true,
@@ -317,6 +352,7 @@ export class PortfoliosService {
   private async assertAccountsOwnedByUser(
     userId: string,
     accountIds: readonly string[],
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<void> {
     if (accountIds.length === 0) {
       return;
@@ -328,6 +364,12 @@ export class PortfoliosService {
           in: [...accountIds],
         },
         userId,
+        type:
+          domain === 'CRYPTO'
+            ? 'CRYPTO_WALLET'
+            : domain === 'SECURITIES'
+              ? 'BROKER'
+              : undefined,
       },
       select: {
         id: true,
@@ -350,16 +392,17 @@ export class PortfoliosService {
       readonly assetId: string;
     }[],
     portfolioId?: string,
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<void> {
     for (const holding of holdings) {
       const [account, asset, history, membership] = await Promise.all([
         this.prisma.account.findFirst({
           where: { id: holding.accountId, userId },
-          select: { id: true },
+          select: { id: true, type: true },
         }),
         this.prisma.asset.findFirst({
           where: { id: holding.assetId, userId },
-          select: { id: true },
+          select: { id: true, domain: true },
         }),
         this.prisma.investmentTransactionDetail.findFirst({
           where: {
@@ -380,6 +423,15 @@ export class PortfoliosService {
       ]);
       if (!account || !asset || !history)
         throw createAccountNotFoundForPortfolioException(holding.accountId);
+      const expectedAccountType =
+        domain === 'CRYPTO' ? 'CRYPTO_WALLET' : 'BROKER';
+      if (
+        domain &&
+        (asset.domain !== domain || account.type !== expectedAccountType)
+      )
+        throw new Error(
+          'Portfolio positions must belong to the same investment domain.',
+        );
       if (membership && membership.portfolioId !== portfolioId)
         throw new Error('A position can belong to only one portfolio.');
     }
@@ -392,10 +444,11 @@ export class PortfoliosService {
       readonly percentage: string;
     }[],
     portfolioId?: string,
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<void> {
     if (!allocations.length) return;
     const accountIds = allocations.map((item) => item.accountId);
-    await this.assertAccountsOwnedByUser(userId, accountIds);
+    await this.assertAccountsOwnedByUser(userId, accountIds, domain);
     const existing = await this.prisma.portfolioCashAllocation.findMany({
       where: {
         accountId: { in: accountIds },
@@ -426,6 +479,7 @@ export class PortfoliosService {
       readonly id: string;
       readonly name: string;
       readonly description: string | null;
+      readonly domain: 'SECURITIES' | 'CRYPTO';
       readonly accounts: ReadonlyArray<{
         readonly accountId: string;
       }>;
@@ -454,6 +508,7 @@ export class PortfoliosService {
 
     return {
       id: portfolio.id,
+      domain: portfolio.domain,
       name: portfolio.name,
       description: portfolio.description,
       accountCount: accounts.length,
@@ -476,6 +531,7 @@ export class PortfoliosService {
       readonly id: string;
       readonly name: string;
       readonly description: string | null;
+      readonly domain: 'SECURITIES' | 'CRYPTO';
       readonly holdings?: ReadonlyArray<{
         readonly accountId: string;
         readonly assetId: string;
@@ -490,6 +546,7 @@ export class PortfoliosService {
   ): Promise<PortfolioResponse> {
     const { holdings } = await this.investments!.getHoldingsForUser(user, {
       portfolioId: portfolio.id,
+      domain: portfolio.domain,
       reportingCurrency: user.baseCurrency === 'PKR' ? 'PKR' : 'USD',
     });
     const allocations = portfolio.cashAllocations ?? [];
@@ -557,6 +614,7 @@ export class PortfoliosService {
 
     return {
       id: portfolio.id,
+      domain: portfolio.domain,
       name: portfolio.name,
       description: portfolio.description,
       accountCount: accounts.length,

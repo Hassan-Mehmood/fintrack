@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -27,6 +28,9 @@ export class PortfolioCashAllocationDto {
 }
 
 export class CreatePortfolioDto {
+  @IsIn(['SECURITIES', 'CRYPTO'])
+  domain!: 'SECURITIES' | 'CRYPTO';
+
   @IsString()
   @MinLength(1)
   @MaxLength(120)

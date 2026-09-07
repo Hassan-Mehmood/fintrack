@@ -3,6 +3,7 @@
 import Link from "next/link"
 import {
   BarChart3Icon,
+  BitcoinIcon,
   GaugeIcon,
   LandmarkIcon,
   LayoutDashboardIcon,
@@ -34,9 +35,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-type AppSection = "dashboard" | "accounts" | "assets" | "transactions" | "investments" | "portfolios" | "settings"
+type AppSection = "dashboard" | "accounts" | "assets" | "transactions" | "stocks" | "crypto" | "portfolios" | "settings"
 
-const navigationItems = [
+const moneyNavigationItems = [
   {
     label: "Dashboard",
     href: "/",
@@ -56,18 +57,27 @@ const navigationItems = [
     section: "transactions" as const,
   },
   { label: "Budgets", icon: GaugeIcon },
-  {
-    label: "Investments",
-    href: "/investments",
-    icon: BarChart3Icon,
-    section: "investments" as const,
-  },
   { label: "Goals", icon: TargetIcon },
   {
     label: "Settings",
     href: "/settings",
     icon: SettingsIcon,
     section: "settings" as const,
+  },
+] as const
+
+const investingNavigationItems = [
+  {
+    label: "Stocks",
+    href: "/stocks",
+    icon: BarChart3Icon,
+    section: "stocks" as const,
+  },
+  {
+    label: "Crypto",
+    href: "/crypto",
+    icon: BitcoinIcon,
+    section: "crypto" as const,
   },
 ] as const
 
@@ -105,10 +115,10 @@ export function AppShell({
 
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarGroupLabel>Money</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {navigationItems.map((item) => (
+                {moneyNavigationItems.map((item) => (
                   <SidebarMenuItem key={item.label}>
                     {"href" in item ? (
                       <SidebarMenuButton
@@ -133,6 +143,31 @@ export function AppShell({
                         <span>{item.label}</span>
                       </SidebarMenuButton>
                     )}
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarSeparator />
+
+          <SidebarGroup>
+            <SidebarGroupLabel>Investing</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {investingNavigationItems.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.label}
+                      isActive={item.section === currentSection}
+                      aria-current={item.section === currentSection ? "page" : undefined}
+                    >
+                      <Link href={item.href}>
+                        <item.icon aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

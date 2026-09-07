@@ -12,6 +12,10 @@ export class WatchlistNameDto {
   @MinLength(1)
   @MaxLength(120)
   name!: string;
+
+  @IsOptional()
+  @IsIn(['SECURITIES', 'CRYPTO'])
+  domain?: 'SECURITIES' | 'CRYPTO';
 }
 
 export class AddWatchlistItemDto {

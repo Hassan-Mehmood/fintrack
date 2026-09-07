@@ -4,6 +4,10 @@
 
 The application is a personal finance management platform that allows users to manage financial accounts, record transactions, track expenses and investments, create savings goals, and view financial analytics.
 
+The web application separates those capabilities into Money, Stocks, and Crypto
+domains. This is an information and authorization boundary layered over the
+existing shared ledger: it does not duplicate transactions or balances.
+
 The system uses:
 
 - **Next.js** for the web interface
@@ -294,6 +298,11 @@ If introduced later, this package may own:
 
 ### PostgreSQL
 
+Assets, portfolios, and watchlists carry a required investment domain of
+`SECURITIES` or `CRYPTO`. Securities records may use broker accounts only;
+crypto records may use cryptocurrency-wallet accounts only. Domain membership
+is authoritative and must not be inferred from display labels or category text.
+
 PostgreSQL is the main and authoritative data store.
 
 Store the following in PostgreSQL:
@@ -570,6 +579,16 @@ A user must only be able to access:
 ---
 
 ## API Model
+
+Collection APIs accept explicit scopes where a cross-domain result would be
+ambiguous: accounts use `MONEY`, `SECURITIES`, or `CRYPTO`; transaction lists use
+the same scopes; investment reports, portfolios, watchlists, and asset-library
+queries use an investment domain. Account-detail history remains complete for
+that account, including a bank-side funding transfer into an investment account.
+
+The dashboard response keeps combined net worth, returns everyday-money
+analytics separately, and exposes compact `stocksSummary` and `cryptoSummary`
+objects. It does not expose a combined investment activity or allocation panel.
 
 The NestJS backend exposes REST endpoints.
 

@@ -502,6 +502,10 @@ export class TransactionsService {
     const investmentAsset = payload.investment
       ? await this.validateInvestmentAsset(user.id, payload.investment.assetId)
       : null;
+    this.assertInvestmentDomainAccountCompatibility(
+      investmentAsset?.domain,
+      transactionAccount.type,
+    );
     if (
       investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
       transactionAccount.type !== 'CRYPTO_WALLET'
@@ -734,6 +738,10 @@ export class TransactionsService {
     const investmentAsset = effectiveInvestment
       ? await this.validateInvestmentAsset(user.id, effectiveInvestment.assetId)
       : null;
+    this.assertInvestmentDomainAccountCompatibility(
+      investmentAsset?.domain,
+      transactionAccount.type,
+    );
     if (
       investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
       transactionAccount.type !== 'CRYPTO_WALLET'
@@ -1035,6 +1043,40 @@ export class TransactionsService {
     relativeAccountId?: string,
   ): Prisma.TransactionWhereInput {
     const conditions: Prisma.TransactionWhereInput[] = [];
+
+    if (!relativeAccountId && query.scope === 'MONEY') {
+      conditions.push({
+        type: { notIn: [...investmentTypes] as TransactionType[] },
+      });
+      conditions.push({
+        account: { type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] } },
+      });
+      conditions.push({
+        OR: [
+          { destinationAccountId: null },
+          {
+            destinationAccount: {
+              type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
+            },
+          },
+        ],
+      });
+    } else if (!relativeAccountId && query.scope) {
+      const domain = query.scope === 'CRYPTO' ? 'CRYPTO' : 'SECURITIES';
+      const accountType = domain === 'CRYPTO' ? 'CRYPTO_WALLET' : 'BROKER';
+      conditions.push({
+        OR: [
+          { investmentDetail: { asset: { domain } } },
+          {
+            type: 'TRANSFER',
+            OR: [
+              { account: { type: accountType } },
+              { destinationAccount: { type: accountType } },
+            ],
+          },
+        ],
+      });
+    }
 
     if (query.search) {
       conditions.push({
@@ -1713,6 +1755,7 @@ export class TransactionsService {
     readonly priceCurrency: string | null;
     readonly marketType: string | null;
     readonly liquidityClass: string;
+    readonly domain: 'SECURITIES' | 'CRYPTO';
   }> {
     const asset = await this.prisma.asset.findFirst({
       where: {
@@ -1724,6 +1767,7 @@ export class TransactionsService {
         priceCurrency: true,
         marketType: true,
         liquidityClass: true,
+        domain: true,
       },
     });
 
@@ -1732,6 +1776,18 @@ export class TransactionsService {
     }
 
     return asset;
+  }
+
+  private assertInvestmentDomainAccountCompatibility(
+    domain: 'SECURITIES' | 'CRYPTO' | undefined,
+    accountType: string | undefined,
+  ): void {
+    if (
+      (domain === 'SECURITIES' && accountType !== 'BROKER') ||
+      (domain === 'CRYPTO' && accountType !== 'CRYPTO_WALLET')
+    ) {
+      throw createInvalidInvestmentAccountException();
+    }
   }
 
   private async resolveSettlementAsset(

@@ -15,14 +15,14 @@ vi.mock("@/features/assets/assets-api", () => ({
 vi.mock("./investments-api", () => ({ createPosition: vi.fn(), listHoldings: vi.fn().mockResolvedValue([]) }))
 
 function renderDialog() {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AddHoldingDialog getToken={vi.fn().mockResolvedValue("token")} open onOpenChange={vi.fn()} /></QueryClientProvider>)
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AddHoldingDialog domain="SECURITIES" getToken={vi.fn().mockResolvedValue("token")} open onOpenChange={vi.fn()} /></QueryClientProvider>)
 }
 
 describe("AddHoldingDialog", () => {
   afterEach(cleanup)
 
   it("offers a dedicated stablecoin opening-balance flow", () => {
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AddHoldingDialog cashEquivalentOnly getToken={vi.fn().mockResolvedValue("token")} open onOpenChange={vi.fn()} /></QueryClientProvider>)
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><AddHoldingDialog domain="CRYPTO" cashEquivalentOnly getToken={vi.fn().mockResolvedValue("token")} open onOpenChange={vi.fn()} /></QueryClientProvider>)
     expect(screen.getByRole("heading", { name: "Add stablecoin balance" })).toBeInTheDocument()
     expect(screen.getByText("Crypto stablecoins")).toBeInTheDocument()
   })

@@ -38,9 +38,10 @@ import {
   type AccountFormPayload,
   type AccountFormValues,
 } from "./account-form-schema"
-import { accountTypeOptions, type Account } from "./account-types"
+import { accountTypeOptions, type Account, type AccountType } from "./account-types"
 
 interface AccountFormDialogProps {
+  readonly allowedAccountTypes?: readonly AccountType[]
   readonly account?: Account | null
   readonly defaultCurrency?: (typeof currencyValues)[number]
   readonly errorMessage?: string | null
@@ -52,6 +53,7 @@ interface AccountFormDialogProps {
 }
 
 export function AccountFormDialog({
+  allowedAccountTypes,
   account,
   defaultCurrency = "USD",
   errorMessage,
@@ -61,15 +63,18 @@ export function AccountFormDialog({
   onSubmit,
   open,
 }: AccountFormDialogProps) {
+  const defaultAccountType = allowedAccountTypes?.[0] ?? "BANK"
   const form = useForm<AccountFormValues>({
-    defaultValues: getDefaultValues(account, defaultCurrency),
+    defaultValues: getDefaultValues(account, defaultCurrency, defaultAccountType),
   })
 
   useEffect(() => {
     if (open) {
-      form.reset(getDefaultValues(account, defaultCurrency))
+      form.reset(
+        getDefaultValues(account, defaultCurrency, defaultAccountType),
+      )
     }
-  }, [account, defaultCurrency, form, open])
+  }, [account, defaultAccountType, defaultCurrency, form, open])
 
   const {
     control,
@@ -114,6 +119,14 @@ export function AccountFormDialog({
               return
             }
 
+            if (
+              allowedAccountTypes?.length &&
+              !allowedAccountTypes.includes(parsedValues.data.type)
+            ) {
+              setError("type", { message: "Select an available account type." })
+              return
+            }
+
             await onSubmit(parsedValues.data)
           })}
           className="flex flex-col gap-4"
@@ -154,7 +167,11 @@ export function AccountFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {accountTypeOptions.map((option) => (
+                        {accountTypeOptions.filter((option) =>
+                          allowedAccountTypes?.length
+                            ? allowedAccountTypes.includes(option.value)
+                            : true,
+                        ).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>
@@ -243,12 +260,13 @@ export function AccountFormDialog({
 
 function getDefaultValues(
   account: Account | null | undefined,
-  defaultCurrency: (typeof currencyValues)[number]
+  defaultCurrency: (typeof currencyValues)[number],
+  defaultAccountType: AccountType = "BANK",
 ): AccountFormValues {
   if (!account) {
     return {
       name: "",
-      type: "BANK",
+      type: defaultAccountType,
       currency: defaultCurrency,
       openingBalance: "0",
       openedAt: "",

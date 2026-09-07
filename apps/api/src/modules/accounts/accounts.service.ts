@@ -16,6 +16,10 @@ import type { CreateAccountDto } from './dto/create-account.dto';
 import type { AdjustAccountBalanceDto } from './dto/adjust-account-balance.dto';
 import type { UpdateAccountDto } from './dto/update-account.dto';
 import type { AccountResponse } from './accounts.types';
+import {
+  accountTypesByScope,
+  type FinanceScope,
+} from '../../common/types/finance-domain';
 
 const BalanceDecimal = Prisma.Decimal.clone({ precision: 40 });
 
@@ -48,11 +52,13 @@ export class AccountsService {
 
   async listAccountsForUser(
     user: AuthenticatedUser,
+    scope?: FinanceScope,
   ): Promise<readonly AccountResponse[]> {
     const [accounts, transactions] = await Promise.all([
       this.prisma.account.findMany({
         where: {
           userId: user.id,
+          type: scope ? { in: [...accountTypesByScope[scope]] } : undefined,
         },
         orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
         select: accountSelect,
@@ -145,7 +151,10 @@ export class AccountsService {
     accountIds: readonly string[],
   ): Promise<readonly string[]> {
     const ownedAccounts = await this.prisma.account.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
+      },
       select: { id: true },
     });
     const ownedIds = new Set(ownedAccounts.map((account) => account.id));

@@ -4,6 +4,7 @@ import type { PositionAssetInput } from "./investment-types"
 type GetToken = () => Promise<string | null>
 
 export interface Watchlist {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly id: string
   readonly name: string
   readonly displayOrder: number
@@ -12,12 +13,12 @@ export interface Watchlist {
 
 export const watchlistsQueryKey = ["watchlists"] as const
 
-export async function listWatchlists(getToken: GetToken): Promise<readonly Watchlist[]> {
-  return (await request<{ readonly data: readonly Watchlist[] }>(getToken, "/api/v1/watchlists")).data
+export async function listWatchlists(getToken: GetToken, domain: "SECURITIES" | "CRYPTO"): Promise<readonly Watchlist[]> {
+  return (await request<{ readonly data: readonly Watchlist[] }>(getToken, `/api/v1/watchlists?domain=${domain}`)).data
 }
 
-export async function createWatchlist(getToken: GetToken, name: string) {
-  return (await request<{ readonly data: Watchlist }>(getToken, "/api/v1/watchlists", { method: "POST", body: JSON.stringify({ name }) })).data
+export async function createWatchlist(getToken: GetToken, name: string, domain: "SECURITIES" | "CRYPTO") {
+  return (await request<{ readonly data: Watchlist }>(getToken, "/api/v1/watchlists", { method: "POST", body: JSON.stringify({ name, domain }) })).data
 }
 
 export async function renameWatchlist(getToken: GetToken, id: string, name: string) {

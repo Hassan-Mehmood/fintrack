@@ -50,6 +50,9 @@ export class PositionPortfolioDto {
 }
 
 export class CreatePositionDto {
+  @IsIn(['SECURITIES', 'CRYPTO'])
+  domain!: 'SECURITIES' | 'CRYPTO';
+
   @IsUUID()
   idempotencyKey!: string;
 

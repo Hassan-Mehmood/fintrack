@@ -73,6 +73,15 @@ export interface DashboardUnavailableSection {
   readonly reason: string
 }
 
+export interface DashboardInvestmentSummary {
+  readonly domain: "SECURITIES" | "CRYPTO"
+  readonly totalAccountValue: string | null
+  readonly totalCostBasis: string | null
+  readonly totalUnrealizedGain: string | null
+  readonly totalRealizedGain: string | null
+  readonly isPartial: boolean
+}
+
 export interface DashboardData {
   readonly baseCurrency: string
   readonly metrics: DashboardMetrics
@@ -81,5 +90,7 @@ export interface DashboardData {
   readonly recentActivity: readonly RecentActivityItem[]
   readonly assetAllocation: readonly AssetAllocationItem[]
   readonly investmentAllocation: readonly InvestmentAllocationItem[]
+  readonly stocksSummary: DashboardInvestmentSummary
+  readonly cryptoSummary: DashboardInvestmentSummary
   readonly unavailable: readonly DashboardUnavailableSection[]
 }

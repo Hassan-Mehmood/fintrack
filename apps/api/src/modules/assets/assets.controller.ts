@@ -7,9 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { InvestmentDomainQueryDto } from '../../common/dto/investment-domain-query.dto';
 import { AssetsService } from './assets.service';
 import type {
   AssetItemResponse,
@@ -43,8 +45,12 @@ export class AssetsController {
   @Get()
   async listAssets(
     @CurrentUser() user: AuthenticatedUser,
+    @Query() query: InvestmentDomainQueryDto,
   ): Promise<AssetsListResponse> {
-    const assets = await this.assetsService.listAssetsForUser(user);
+    const assets = await this.assetsService.listAssetsForUser(
+      user,
+      query.domain,
+    );
 
     return {
       data: assets,

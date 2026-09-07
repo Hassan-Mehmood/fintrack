@@ -73,8 +73,12 @@ export async function getAssetMetadata(
   return response.data
 }
 
-export async function listAssets(getToken: GetToken): Promise<readonly Asset[]> {
-  const response = await apiRequest<AssetsListResponse>(getToken, "/api/v1/assets")
+export async function listAssets(
+  getToken: GetToken,
+  domain?: "SECURITIES" | "CRYPTO",
+): Promise<readonly Asset[]> {
+  const query = domain ? `?domain=${domain}` : ""
+  const response = await apiRequest<AssetsListResponse>(getToken, `/api/v1/assets${query}`)
 
   return response.data
 }
@@ -154,6 +158,7 @@ export async function deleteAsset(
 }
 
 export type AssetPayload = {
+  readonly domain?: "SECURITIES" | "CRYPTO"
   readonly name: string
   readonly symbol?: string
   readonly categoryId: string

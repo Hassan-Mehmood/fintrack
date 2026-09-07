@@ -55,6 +55,11 @@ enum AssetMarketType {
   CRYPTO
 }
 
+enum InvestmentDomain {
+  SECURITIES
+  CRYPTO
+}
+
 enum TradeType {
   OPENING
   BUY
@@ -132,6 +137,7 @@ model Portfolio {
   user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   description     String?
+  domain          InvestmentDomain
   accounts        PortfolioAccount[]
   holdings        PortfolioHolding[]
   cashAllocations PortfolioCashAllocation[]
@@ -255,6 +261,7 @@ model Asset {
   symbol               String?
   provider             AssetProvider?
   marketType           AssetMarketType?              @map("market_type")
+  domain               InvestmentDomain
   providerAssetId      String?                       @map("provider_asset_id")
   exchange             String?
   imageUrl             String?                       @map("image_url")
@@ -276,22 +283,24 @@ model Asset {
 
   @@unique([userId, provider, providerAssetId])
   @@index([userId])
+  @@index([userId, domain])
   @@index([userId, categoryId])
   @@index([categoryId])
   @@map("assets")
 }
 
 model Watchlist {
-  id           String          @id @default(uuid()) @db.Uuid
-  userId       String          @map("user_id") @db.Uuid
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String           @id @default(uuid()) @db.Uuid
+  userId       String           @map("user_id") @db.Uuid
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   name         String
-  displayOrder Int             @default(0) @map("display_order")
+  displayOrder Int              @default(0) @map("display_order")
+  domain       InvestmentDomain
   items        WatchlistItem[]
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
 
-  @@unique([userId, name])
+  @@unique([userId, domain, name])
   @@index([userId, displayOrder])
   @@map("watchlists")
 }

@@ -17,6 +17,7 @@ export interface AssetResponse {
   readonly symbol: string | null;
   readonly provider: 'FINNHUB' | 'COINGECKO' | 'EODHD' | null;
   readonly marketType: 'STOCK' | 'CRYPTO' | null;
+  readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly providerAssetId: string | null;
   readonly exchange: string | null;
   readonly imageUrl: string | null;

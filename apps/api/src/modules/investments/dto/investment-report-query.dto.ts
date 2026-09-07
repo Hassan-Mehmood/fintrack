@@ -7,6 +7,9 @@ function uppercase(value: unknown): string {
 }
 
 export class InvestmentReportQueryDto {
+  @IsIn(['SECURITIES', 'CRYPTO'])
+  domain!: 'SECURITIES' | 'CRYPTO';
+
   @IsOptional()
   @IsIn(['USD', 'PKR', 'NATIVE'])
   @Transform(({ value }: { value: unknown }): string => uppercase(value))

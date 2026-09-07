@@ -12,6 +12,7 @@ export interface RiskProfile {
 }
 
 export interface Asset {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly id: string
   readonly name: string
   readonly symbol: string | null

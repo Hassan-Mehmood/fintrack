@@ -43,10 +43,12 @@ import {
 import { createPosition, listHoldings } from "./investments-api";
 import type {
   CreatePositionPayload,
+  InvestmentDomain,
   PositionAssetInput,
 } from "./investment-types";
 
 interface AddHoldingDialogProps {
+  readonly domain: InvestmentDomain;
   readonly cashEquivalentOnly?: boolean;
   readonly getToken: () => Promise<string | null>;
   readonly initialAccountId?: string;
@@ -66,6 +68,7 @@ type SelectedAsset = {
 
 export function AddHoldingDialog({
   cashEquivalentOnly = false,
+  domain,
   getToken,
   initialAccountId,
   lockAccount = false,
@@ -77,7 +80,7 @@ export function AddHoldingDialog({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [market, setMarket] = useState<"US" | "PSX" | "CRYPTO">(
-    cashEquivalentOnly ? "CRYPTO" : "US",
+    domain === "CRYPTO" || cashEquivalentOnly ? "CRYPTO" : "US",
   );
   const [manual, setManual] = useState(false);
   const [selected, setSelected] = useState<SelectedAsset | null>(null);
@@ -108,12 +111,12 @@ export function AddHoldingDialog({
 
   const accountsQuery = useQuery({
     queryKey: ["accounts"],
-    queryFn: () => listAccounts(getToken),
+    queryFn: () => listAccounts(getToken, domain),
     enabled: open,
   });
   const assetsQuery = useQuery({
     queryKey: ["assets"],
-    queryFn: () => listAssets(getToken),
+    queryFn: () => listAssets(getToken, domain),
     enabled: open,
   });
   const metadataQuery = useQuery({
@@ -123,7 +126,7 @@ export function AddHoldingDialog({
   });
   const portfoliosQuery = useQuery({
     queryKey: ["portfolios"],
-    queryFn: () => listPortfolios(getToken),
+    queryFn: () => listPortfolios(getToken, domain),
     enabled: open,
   });
   const settingsQuery = useQuery({
@@ -133,7 +136,7 @@ export function AddHoldingDialog({
   });
   const holdingsQuery = useQuery({
     queryKey: ["investments", "holdings", "NATIVE"],
-    queryFn: () => listHoldings(getToken, "NATIVE"),
+    queryFn: () => listHoldings(getToken, "NATIVE", { domain }),
     enabled: open,
   });
   const searchQuery = useQuery({
@@ -234,7 +237,7 @@ export function AddHoldingDialog({
   function reset() {
     setStep(1);
     setQuery("");
-    setMarket(cashEquivalentOnly ? "CRYPTO" : "US");
+    setMarket(domain === "CRYPTO" || cashEquivalentOnly ? "CRYPTO" : "US");
     setSelected(null);
     setManual(false);
     setManualName("");
@@ -336,6 +339,7 @@ export function AddHoldingDialog({
           ? { kind: "NEW", name: newPortfolioName.trim() }
           : { kind: "EXISTING", portfolioId: portfolioChoice };
     mutation.mutate({
+      domain,
       idempotencyKey: crypto.randomUUID(),
       mode,
       asset: selected.input,
@@ -477,9 +481,14 @@ export function AddHoldingDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="US">US stocks</SelectItem>
-                        <SelectItem value="PSX">PSX stocks/ETFs</SelectItem>
-                        <SelectItem value="CRYPTO">Crypto</SelectItem>
+                        {domain === "SECURITIES" ? (
+                          <>
+                            <SelectItem value="US">US stocks</SelectItem>
+                            <SelectItem value="PSX">PSX stocks/ETFs</SelectItem>
+                          </>
+                        ) : (
+                          <SelectItem value="CRYPTO">Crypto</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   )}
@@ -864,7 +873,9 @@ export function AddHoldingDialog({
               <Button variant="outline" onClick={reset}>
                 Add another holding
               </Button>
-              <Button onClick={() => close(false)}>View investments</Button>
+              <Button onClick={() => close(false)}>
+                View {domain === "CRYPTO" ? "crypto" : "stocks"}
+              </Button>
             </>
           ) : (
             <>

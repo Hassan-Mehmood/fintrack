@@ -81,6 +81,7 @@ interface TransactionFormDialogProps {
   readonly initialType?: TransactionType;
   readonly isPending?: boolean;
   readonly mode: "create" | "edit";
+  readonly scope?: "MONEY" | "SECURITIES" | "CRYPTO";
   readonly onOpenChange: (open: boolean) => void;
   readonly onSubmit: (payload: TransactionFormPayload) => Promise<void>;
   readonly open: boolean;
@@ -100,6 +101,7 @@ export function TransactionFormDialog({
   initialType,
   isPending = false,
   mode,
+  scope,
   onOpenChange,
   onSubmit,
   open,
@@ -497,7 +499,13 @@ export function TransactionFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {transactionTypeOptions.map((option) => (
+                        {transactionTypeOptions.filter((option) =>
+                          scope === "MONEY"
+                            ? !option.value.startsWith("INVESTMENT_") && option.value !== "DIVIDEND" && option.value !== "INTEREST"
+                            : scope
+                              ? option.value === "TRANSFER" || option.value.startsWith("INVESTMENT_") || option.value === "DIVIDEND" || option.value === "INTEREST"
+                              : true,
+                        ).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
                           </SelectItem>

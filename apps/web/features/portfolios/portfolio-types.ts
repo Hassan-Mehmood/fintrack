@@ -23,6 +23,7 @@ export interface PortfolioMetrics {
 }
 
 export interface Portfolio {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly id: string
   readonly name: string
   readonly description: string | null
@@ -37,6 +38,7 @@ export interface Portfolio {
 }
 
 export interface PortfolioPayload {
+  readonly domain?: "SECURITIES" | "CRYPTO"
   readonly name: string
   readonly description?: string
   readonly accountIds?: readonly string[]

@@ -20,22 +20,23 @@ export class WatchlistsService {
     private readonly assets: AssetsService,
   ) {}
 
-  async list(user: AuthenticatedUser) {
+  async list(user: AuthenticatedUser, domain?: 'SECURITIES' | 'CRYPTO') {
     const lists = await this.prisma.watchlist.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, domain },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
         items: { orderBy: { createdAt: 'asc' }, select: { assetId: true } },
       },
     });
     const pricedAssets = new Map(
-      (await this.assets.listAssetsForUser(user)).map((asset) => [
+      (await this.assets.listAssetsForUser(user, domain)).map((asset) => [
         asset.id,
         asset,
       ]),
     );
     return lists.map((list) => ({
       id: list.id,
+      domain: list.domain,
       name: list.name,
       displayOrder: list.displayOrder,
       items: list.items.flatMap(({ assetId }) => {
@@ -48,9 +49,15 @@ export class WatchlistsService {
   }
 
   async create(user: AuthenticatedUser, payload: WatchlistNameDto) {
+    if (!payload.domain)
+      throw new BadRequestException('Investment domain is required.');
     try {
       return await this.prisma.watchlist.create({
-        data: { userId: user.id, name: payload.name.trim() },
+        data: {
+          userId: user.id,
+          name: payload.name.trim(),
+          domain: payload.domain,
+        },
       });
     } catch (error) {
       if (
@@ -82,7 +89,7 @@ export class WatchlistsService {
     id: string,
     payload: AddWatchlistItemDto,
   ) {
-    await this.owned(user.id, id);
+    const list = await this.owned(user.id, id);
     let assetId: string;
     if (payload.kind === 'EXISTING') {
       if (!payload.assetId) throw new BadRequestException('Select an asset.');
@@ -90,6 +97,12 @@ export class WatchlistsService {
     } else if (payload.kind === 'PROVIDER') {
       if (!payload.type || !payload.provider || !payload.providerAssetId)
         throw new BadRequestException('Provider asset details are incomplete.');
+      const providerDomain =
+        payload.type === 'CRYPTO' ? 'CRYPTO' : 'SECURITIES';
+      if (providerDomain !== list.domain)
+        throw new BadRequestException(
+          'Asset belongs to another investment domain.',
+        );
       const existing = (await this.assets.listAssetsForUser(user)).find(
         (asset) =>
           asset.provider === payload.provider &&
@@ -109,6 +122,7 @@ export class WatchlistsService {
         throw new BadRequestException('Manual asset details are incomplete.');
       assetId = (
         await this.assets.createAssetForUser(user, {
+          domain: list.domain,
           name: payload.name,
           symbol: payload.symbol,
           categoryId: payload.categoryId,
@@ -118,6 +132,11 @@ export class WatchlistsService {
         })
       ).id;
     }
+    const selectedAsset = await this.assets.getAssetForUser(user, assetId);
+    if (selectedAsset.domain !== list.domain)
+      throw new BadRequestException(
+        'Asset belongs to another investment domain.',
+      );
     try {
       await this.prisma.watchlistItem.create({
         data: { watchlistId: id, assetId },
@@ -145,7 +164,7 @@ export class WatchlistsService {
   private async owned(userId: string, id: string) {
     const list = await this.prisma.watchlist.findFirst({
       where: { id, userId },
-      select: { id: true },
+      select: { id: true, domain: true },
     });
     if (!list) throw new NotFoundException('Watchlist not found.');
     return list;

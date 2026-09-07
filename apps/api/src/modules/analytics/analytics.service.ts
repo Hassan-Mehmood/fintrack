@@ -21,6 +21,7 @@ import type {
   InvestmentAllocationItem,
   MonthlySummaryItem,
   RecentActivityItem,
+  DashboardInvestmentSummary,
 } from './analytics.types';
 
 type Decimal = Prisma.Decimal;
@@ -43,6 +44,20 @@ const liquidAccountTypes = new Set<AccountType>([
 const investmentAccountTypes = new Set<AccountType>([
   'BROKER',
   'CRYPTO_WALLET',
+]);
+
+const investmentTransactionTypes = new Set<TransactionType>([
+  'INVESTMENT_BUY',
+  'INVESTMENT_SELL',
+  'DIVIDEND',
+  'INTEREST',
+  'INVESTMENT_SPLIT',
+  'INVESTMENT_BONUS',
+  'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_DEPOSIT',
+  'INVESTMENT_WITHDRAWAL',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
 ]);
 
 const monthNames = [
@@ -91,11 +106,19 @@ export class AnalyticsService {
   ) {}
 
   async getDashboardForUser(user: AuthenticatedUser): Promise<DashboardData> {
-    const [accounts, transactions, holdingsResult] = await Promise.all([
-      this.fetchAccounts(user.id),
-      this.fetchTransactions(user.id),
-      this.investmentsService.getHoldingsForUser(user),
-    ]);
+    const [accounts, transactions, stocksResult, cryptoResult] =
+      await Promise.all([
+        this.fetchAccounts(user.id),
+        this.fetchTransactions(user.id),
+        this.investmentsService.getSummaryForUser(user, {
+          domain: 'SECURITIES',
+          reportingCurrency: user.baseCurrency === 'PKR' ? 'PKR' : 'USD',
+        }),
+        this.investmentsService.getSummaryForUser(user, {
+          domain: 'CRYPTO',
+          reportingCurrency: user.baseCurrency === 'PKR' ? 'PKR' : 'USD',
+        }),
+      ]);
 
     const converter = new CurrencyConverter(
       user.baseCurrency,
@@ -107,28 +130,87 @@ export class AnalyticsService {
       transactions,
       converter,
     );
-    const metrics = this.calculateMetrics(
+    const moneyAccounts = accounts.filter((account) =>
+      liquidAccountTypes.has(account.type),
+    );
+    const moneyAccountIds = new Set(moneyAccounts.map((account) => account.id));
+    const moneyTransactions = transactions.filter(
+      (transaction) =>
+        !investmentTransactionTypes.has(transaction.type) &&
+        moneyAccountIds.has(transaction.accountId) &&
+        (!transaction.destinationAccountId ||
+          moneyAccountIds.has(transaction.destinationAccountId)),
+    );
+    const calculatedMetrics = this.calculateMetrics(
       accounts,
       convertedBalances,
-      transactions,
-      holdingsResult.holdings,
+      moneyTransactions,
+      [],
       converter,
     );
+    const stocksSummary = this.toDashboardInvestmentSummary(stocksResult.data);
+    const cryptoSummary = this.toDashboardInvestmentSummary(cryptoResult.data);
+    const moneyValue = moneyAccounts.reduce(
+      (total, account) =>
+        total.add(convertedBalances.get(account.id) ?? new Decimal(0)),
+      new Decimal(0),
+    );
+    const investmentValue = new Decimal(
+      stocksSummary.totalAccountValue ?? 0,
+    ).add(cryptoSummary.totalAccountValue ?? 0);
+    const investmentCostBasis = new Decimal(
+      stocksSummary.totalCostBasis ?? 0,
+    ).add(cryptoSummary.totalCostBasis ?? 0);
+    const unrealizedGain = new Decimal(
+      stocksSummary.totalUnrealizedGain ?? 0,
+    ).add(cryptoSummary.totalUnrealizedGain ?? 0);
+    const realizedGain = new Decimal(stocksSummary.totalRealizedGain ?? 0).add(
+      cryptoSummary.totalRealizedGain ?? 0,
+    );
+    const combinedNetWorth = moneyValue.add(investmentValue);
+    const metrics: DashboardMetrics = {
+      ...calculatedMetrics,
+      totalNetWorth: combinedNetWorth.toFixed(2),
+      liquidCash: moneyValue.toFixed(2),
+      liquidCashPercent: combinedNetWorth.isZero()
+        ? 0
+        : moneyValue
+            .dividedBy(combinedNetWorth)
+            .times(100)
+            .toDecimalPlaces(1)
+            .toNumber(),
+      investedCash: investmentValue.toFixed(2),
+      totalInvestmentValue: investmentValue.toFixed(2),
+      totalInvestmentCostBasis: investmentCostBasis.toFixed(2),
+      totalUnrealizedGain: unrealizedGain.toFixed(2),
+      totalUnrealizedGainPercent: investmentCostBasis.isZero()
+        ? null
+        : unrealizedGain
+            .dividedBy(investmentCostBasis)
+            .times(100)
+            .toDecimalPlaces(2)
+            .toNumber(),
+      totalRealizedGain: realizedGain.toFixed(2),
+    };
     const accountItems = this.buildAccountItems(
-      accounts,
+      moneyAccounts,
       convertedBalances,
       metrics,
       converter,
     );
-    const monthlySummary = this.buildMonthlySummary(transactions, converter);
-    const recentActivity = this.buildRecentActivity(transactions, converter);
+    const monthlySummary = this.buildMonthlySummary(
+      moneyTransactions,
+      converter,
+    );
+    const recentActivity = this.buildRecentActivity(
+      moneyTransactions,
+      converter,
+    );
     const assetAllocation = this.buildAssetAllocation(
-      accounts,
+      moneyAccounts,
       convertedBalances,
     );
-    const investmentAllocation = this.buildInvestmentAllocation(
-      holdingsResult.holdings,
-    );
+    const investmentAllocation: readonly InvestmentAllocationItem[] = [];
 
     return {
       baseCurrency: user.baseCurrency,
@@ -138,7 +220,27 @@ export class AnalyticsService {
       recentActivity,
       assetAllocation,
       investmentAllocation,
+      stocksSummary,
+      cryptoSummary,
       unavailable: this.buildUnavailableSections(),
+    };
+  }
+
+  private toDashboardInvestmentSummary(summary: {
+    readonly domain: 'SECURITIES' | 'CRYPTO';
+    readonly totalAccountValue: string | null;
+    readonly totalCostBasis: string | null;
+    readonly totalUnrealizedGain: string | null;
+    readonly totalRealizedGain: string | null;
+    readonly isPartial: boolean;
+  }): DashboardInvestmentSummary {
+    return {
+      domain: summary.domain,
+      totalAccountValue: summary.totalAccountValue,
+      totalCostBasis: summary.totalCostBasis,
+      totalUnrealizedGain: summary.totalUnrealizedGain,
+      totalRealizedGain: summary.totalRealizedGain,
+      isPartial: summary.isPartial,
     };
   }
 
@@ -511,9 +613,9 @@ export class AnalyticsService {
     }
 
     const groups: AssetAllocationItem[] = [
-      { name: 'cash', label: 'Cash & bank', value: 0 },
-      { name: 'brokerage', label: 'Brokerage', value: 0 },
-      { name: 'crypto', label: 'Crypto', value: 0 },
+      { name: 'bank', label: 'Bank accounts', value: 0 },
+      { name: 'cash-wallet', label: 'Cash wallets', value: 0 },
+      { name: 'digital-wallet', label: 'Digital wallets', value: 0 },
     ];
 
     return groups.map((group) => {
@@ -613,13 +715,13 @@ function getActivityTone(
 }
 
 function getAssetAllocationGroup(type: AccountType): string {
-  if (type === 'BROKER') {
-    return 'brokerage';
-  }
+  const groups: Record<AccountType, string> = {
+    BANK: 'bank',
+    CASH_WALLET: 'cash-wallet',
+    DIGITAL_WALLET: 'digital-wallet',
+    BROKER: 'bank',
+    CRYPTO_WALLET: 'digital-wallet',
+  };
 
-  if (type === 'CRYPTO_WALLET') {
-    return 'crypto';
-  }
-
-  return 'cash';
+  return groups[type];
 }

@@ -66,6 +66,7 @@ describe("HoldingsTable", () => {
 });
 
 const holding: Holding = {
+  domain: "SECURITIES",
   holdingKind: "ASSET",
   assetId: "asset-1",
   assetName: "Acme",

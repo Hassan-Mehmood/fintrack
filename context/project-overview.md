@@ -4,6 +4,13 @@
 
 This application is a personal finance and investment management platform for individuals who keep money across multiple bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets. It brings all of these accounts into one centralized dashboard where users can manually track income, expenses, transfers, investments, portfolio performance, and savings goals while receiving immediate balance updates and clear financial insights. It solves the problem of fragmented financial information by giving users a single place to understand their net worth, spending habits, available cash, investment returns, goal progress, and overall financial health.
 
+The product presents three explicit user-facing domains over one authoritative
+ledger. Everyday Money owns bank accounts, cash wallets, digital wallets,
+income, expenses, and budgets. Stocks owns broker accounts and all non-crypto
+securities. Crypto owns cryptocurrency wallets, crypto assets, and stablecoins.
+The dashboard preserves combined net worth while keeping everyday analytics and
+the two investment summaries visually separate.
+
 ## Goals
 
 1. **Centralize financial accounts:** Enable users to add and manage five asset account types, including bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets, from one dashboard.
@@ -74,6 +81,9 @@ This application is a personal finance and investment management platform for in
 ### Financial Accounts
 
 - Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
+- The Accounts workspace displays only bank accounts, cash wallets, and digital
+  wallets. Broker accounts are managed from Stocks and cryptocurrency wallets
+  are managed from Crypto.
 - Users can enter an opening balance for each account.
 - Users can view the current balance of each account.
 - Users can edit financial accounts.
@@ -113,6 +123,8 @@ This application is a personal finance and investment management platform for in
 ### Investment Tracking
 
 - Users can add stocks, ETFs, mutual funds, and cryptocurrency holdings.
+- Stocks and Crypto are separate workspaces with independently scoped holdings,
+  activity, portfolios, watchlists, asset libraries, and investment accounts.
 - Users can add either an existing position or a new purchase from one guided
   flow, including creating the investment account and portfolio inline.
 - Users can record investment purchases and sales.

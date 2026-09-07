@@ -7,9 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import { InvestmentDomainQueryDto } from '../../common/dto/investment-domain-query.dto';
 import { CreatePortfolioDto } from './dto/create-portfolio.dto';
 import { UpdatePortfolioDto } from './dto/update-portfolio.dto';
 import { PortfoliosService } from './portfolios.service';
@@ -26,8 +28,12 @@ export class PortfoliosController {
   @Get()
   async listPortfolios(
     @CurrentUser() user: AuthenticatedUser,
+    @Query() query: InvestmentDomainQueryDto,
   ): Promise<PortfoliosListResponse> {
-    const portfolios = await this.portfoliosService.listPortfoliosForUser(user);
+    const portfolios = await this.portfoliosService.listPortfoliosForUser(
+      user,
+      query.domain,
+    );
 
     return {
       data: portfolios,

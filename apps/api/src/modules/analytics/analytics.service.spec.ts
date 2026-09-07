@@ -35,7 +35,7 @@ describe('AnalyticsService', () => {
   };
 
   let investmentsService: {
-    getHoldingsForUser: jest.Mock;
+    getSummaryForUser: jest.Mock;
   };
 
   beforeEach(() => {
@@ -49,10 +49,24 @@ describe('AnalyticsService', () => {
     };
 
     investmentsService = {
-      getHoldingsForUser: jest.fn().mockResolvedValue({
-        holdings: [],
-        baseCurrency: 'USD',
-      }),
+      getSummaryForUser: jest
+        .fn()
+        .mockImplementation(
+          (
+            _user: AuthenticatedUser,
+            options: { domain: 'SECURITIES' | 'CRYPTO' },
+          ) =>
+            Promise.resolve({
+              data: {
+                domain: options.domain,
+                totalAccountValue: '0.00',
+                totalCostBasis: '0.00',
+                totalUnrealizedGain: '0.00',
+                totalRealizedGain: '0.00',
+                isPartial: false,
+              },
+            }),
+        ),
     };
 
     service = new AnalyticsService(
@@ -78,9 +92,9 @@ describe('AnalyticsService', () => {
     expect(dashboard.metrics.totalRealizedGain).toBe('0.00');
     expect(dashboard.accounts).toEqual([]);
     expect(dashboard.assetAllocation).toEqual([
-      { name: 'cash', label: 'Cash & bank', value: 0 },
-      { name: 'brokerage', label: 'Brokerage', value: 0 },
-      { name: 'crypto', label: 'Crypto', value: 0 },
+      { name: 'bank', label: 'Bank accounts', value: 0 },
+      { name: 'cash-wallet', label: 'Cash wallets', value: 0 },
+      { name: 'digital-wallet', label: 'Digital wallets', value: 0 },
     ]);
     expect(dashboard.investmentAllocation).toEqual([]);
   });
@@ -96,6 +110,7 @@ describe('AnalyticsService', () => {
       createTransaction('buy-1', 'INVESTMENT_BUY', 'bank-1', null, '1500'),
       createTransaction('transfer-1', 'TRANSFER', 'bank-1', 'broker-1', '1000'),
     ]);
+    mockInvestmentValue(investmentsService, 'SECURITIES', '6000.00');
 
     const dashboard = await service.getDashboardForUser(authenticatedUser);
 
@@ -109,12 +124,10 @@ describe('AnalyticsService', () => {
     const bankBalance = dashboard.accounts.find(
       (account) => account.id === 'bank-1',
     );
-    const brokerBalance = dashboard.accounts.find(
-      (account) => account.id === 'broker-1',
-    );
-
     expect(bankBalance?.balance).toBe('0.00');
-    expect(brokerBalance?.balance).toBe('6000.00');
+    expect(
+      dashboard.accounts.some((account) => account.id === 'broker-1'),
+    ).toBe(false);
   });
 
   it('treats transfers as internal movements that do not change net worth', async () => {
@@ -146,6 +159,7 @@ describe('AnalyticsService', () => {
         '3000',
       ),
     ]);
+    mockInvestmentValue(investmentsService, 'SECURITIES', '3000.00');
 
     const dashboard = await service.getDashboardForUser(authenticatedUser);
 
@@ -222,7 +236,7 @@ describe('AnalyticsService', () => {
       month: currentMonthLabel,
       income: '5000.00',
       expenses: '1250.00',
-      investments: '1500.00',
+      investments: '0.00',
     });
   });
 
@@ -349,4 +363,24 @@ function createTransaction(
       name: 'Account',
     },
   };
+}
+
+function mockInvestmentValue(
+  investmentsService: { getSummaryForUser: jest.Mock },
+  targetDomain: 'SECURITIES' | 'CRYPTO',
+  value: string,
+) {
+  investmentsService.getSummaryForUser.mockImplementation(
+    (_user: AuthenticatedUser, options: { domain: 'SECURITIES' | 'CRYPTO' }) =>
+      Promise.resolve({
+        data: {
+          domain: options.domain,
+          totalAccountValue: options.domain === targetDomain ? value : '0.00',
+          totalCostBasis: options.domain === targetDomain ? value : '0.00',
+          totalUnrealizedGain: '0.00',
+          totalRealizedGain: '0.00',
+          isPartial: false,
+        },
+      }),
+  );
 }

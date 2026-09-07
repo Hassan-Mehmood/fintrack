@@ -82,7 +82,7 @@ type AssetDialogState =
   | { readonly asset: Asset; readonly mode: "edit" }
   | null
 
-export function AssetsPage() {
+export function AssetsPage({ domain }: { readonly domain: "SECURITIES" | "CRYPTO" }) {
   const { getToken } = useAuth()
   const queryClient = useQueryClient()
   const [dialogState, setDialogState] = useState<AssetDialogState>(null)
@@ -90,8 +90,8 @@ export function AssetsPage() {
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null)
 
   const assetsQuery = useQuery({
-    queryKey: assetsQueryKey,
-    queryFn: () => listAssets(getToken),
+    queryKey: [...assetsQueryKey, domain],
+    queryFn: () => listAssets(getToken, domain),
   })
 
   const metadataQuery = useQuery({
@@ -115,7 +115,7 @@ export function AssetsPage() {
       readonly payload: AssetFormPayload
     }) => {
       if (mode === "create") {
-        return createAsset(getToken, payload)
+        return createAsset(getToken, { ...payload, domain })
       }
 
       if (!assetId) {
@@ -199,9 +199,9 @@ export function AssetsPage() {
 
   return (
     <AppShell
-      currentSection="assets"
-      title="Assets"
-      description="Manage the investment assets you track across accounts."
+      currentSection={domain === "CRYPTO" ? "crypto" : "stocks"}
+      title={domain === "CRYPTO" ? "Crypto assets" : "Securities"}
+      description={domain === "CRYPTO" ? "Manage crypto assets and stablecoins." : "Manage stocks, ETFs, mutual funds, and other securities."}
       primaryAction={
         <div className="flex gap-2">
           <Button
@@ -363,6 +363,7 @@ export function AssetsPage() {
       </main>
 
       <AddAssetDialog
+        domain={domain}
         open={isAddDialogOpen}
         getToken={getToken}
         isPending={createProviderAssetMutation.isPending}

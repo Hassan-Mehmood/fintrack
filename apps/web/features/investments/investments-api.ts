@@ -95,10 +95,10 @@ export async function getInvestmentAccountSummary(
 export async function listHoldings(
   getToken: GetToken,
   reportingCurrency: ReportingCurrency,
-  filters: InvestmentFilters = {},
+  filters: InvestmentFilters,
   groupBy: HoldingGroupBy = "NONE",
 ): Promise<readonly Holding[]> {
-  const query = new URLSearchParams({ reportingCurrency, groupBy });
+  const query = new URLSearchParams({ reportingCurrency, groupBy, domain: filters.domain });
   appendFilter(query, "accountId", filters.accountId);
   appendFilter(query, "portfolioId", filters.portfolioId);
   appendFilter(query, "assetType", filters.assetType);
@@ -116,7 +116,7 @@ export async function getInvestmentSummary(
   reportingCurrency: ReportingCurrency,
   filters: InvestmentFilters,
 ): Promise<InvestmentSummary> {
-  const query = new URLSearchParams({ reportingCurrency });
+  const query = new URLSearchParams({ reportingCurrency, domain: filters.domain });
   appendFilter(query, "accountId", filters.accountId);
   appendFilter(query, "portfolioId", filters.portfolioId);
   appendFilter(query, "assetType", filters.assetType);

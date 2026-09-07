@@ -50,11 +50,13 @@ interface PortfoliosListResponse {
 export const portfoliosQueryKey = ["portfolios"] as const
 
 export async function listPortfolios(
-  getToken: GetToken
+  getToken: GetToken,
+  domain?: "SECURITIES" | "CRYPTO",
 ): Promise<readonly Portfolio[]> {
+  const query = domain ? `?domain=${domain}` : ""
   const response = await apiRequest<PortfoliosListResponse>(
     getToken,
-    "/api/v1/portfolios"
+    `/api/v1/portfolios${query}`
   )
 
   return response.data

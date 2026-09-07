@@ -5,15 +5,34 @@ change.
 
 ## Current Phase
 
-- Investment cash/stablecoin holdings and source-aware funding are implemented
-  and deployed.
+- Money, Stocks, and Crypto domain separation is implemented and deployed.
 
 ## Current Goal
 
-- Continue with the next account, transaction, or reporting enhancement.
+- Discuss onboarding for users with existing holdings versus users starting
+  without holdings; onboarding implementation remains intentionally deferred.
 
 ## Completed
 
+- Separated the product into Money, Stocks, and Crypto navigation and routes.
+  Accounts and general Transactions now show everyday finance only; Stocks and
+  Crypto have independent overview, holdings, activity, portfolios, watchlists,
+  asset libraries, account creation, filters, and domain-specific actions.
+- Added required `InvestmentDomain` persistence, validated API scopes, account
+  compatibility enforcement, domain-specific response contracts, and a
+  deterministic migration that classifies assets and splits mixed portfolios
+  and watchlists while preserving compatible records and original Securities
+  IDs. Legacy investment URLs redirect to Stocks with compatible query tabs.
+- Separated dashboard everyday analytics from independent Stocks and Crypto
+  value/P&L cards while preserving combined net worth and the authoritative
+  ledger. Investment funding remains visible in account-relative and domain
+  activity without becoming income or expense.
+- Applied `20260907180000_separate_investment_domains` to the configured Neon
+  database and validated the full 17-migration chain against isolated
+  PostgreSQL. Verified 171 API Jest tests, 5 API end-to-end tests, 45 web tests,
+  Prisma validation, scoped API production lint, web type-check/lint, and both
+  production builds; web lint retains only the two pre-existing Settings-page
+  warnings.
 - Added derived `FIAT_CASH` holding rows for broker and cryptocurrency-wallet
   ledgers without creating fiat assets. Account and global Investments views
   now include cash in account value, liquidity, currency exposure, and
@@ -400,6 +419,9 @@ change.
 
 ## Next Up
 
+- Discuss separate onboarding paths for users who already hold stocks or crypto
+  and users who have no holdings yet. No import, sync, or first-holding wizard
+  has been included in the domain-separation work.
 - Collect current balances for the seven imported accounts and record explicit
   adjustment transactions to reconcile their zero-based derived balances.
 - Manually verify USD, PKR, and Native Currencies modes with holdings spread
@@ -418,6 +440,10 @@ change.
 
 ## Architecture Decisions
 
+- Money, Stocks, and Crypto are separate user-facing domains over one shared,
+  authoritative ledger. Investment assets, portfolios, and watchlists have a
+  required `SECURITIES` or `CRYPTO` domain, and the dashboard combines only
+  their values for net worth.
 - Context documents remain in `context/` because the AI workflow already depends on that folder.
 - Liability and debt account tracking is out of scope for the MVP, so dashboard totals are asset-only.
 - Reversals are modeled as linked corrective transactions instead of a standalone transaction type so audit history remains traceable.

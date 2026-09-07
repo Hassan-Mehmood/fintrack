@@ -10,12 +10,12 @@ import { Input } from "@/components/ui/input"
 import { formatAmount } from "@/lib/formatting"
 import { createWatchlist, deleteWatchlist, listWatchlists, removeWatchlistItem, renameWatchlist, watchlistsQueryKey } from "./watchlists-api"
 
-export function WatchlistsPanel({ getToken, onAddHolding }: { readonly getToken: () => Promise<string | null>; readonly onAddHolding: () => void }) {
+export function WatchlistsPanel({ domain, getToken, onAddHolding }: { readonly domain: "SECURITIES" | "CRYPTO"; readonly getToken: () => Promise<string | null>; readonly onAddHolding: () => void }) {
   const client = useQueryClient()
   const [name, setName] = useState("")
-  const query = useQuery({ queryKey: watchlistsQueryKey, queryFn: () => listWatchlists(getToken) })
+  const query = useQuery({ queryKey: [...watchlistsQueryKey, domain], queryFn: () => listWatchlists(getToken, domain) })
   const refresh = () => client.invalidateQueries({ queryKey: watchlistsQueryKey })
-  const create = useMutation({ mutationFn: () => createWatchlist(getToken, name), onSuccess: () => { setName(""); void refresh() } })
+  const create = useMutation({ mutationFn: () => createWatchlist(getToken, name, domain), onSuccess: () => { setName(""); void refresh() } })
   const remove = useMutation({ mutationFn: (id: string) => deleteWatchlist(getToken, id), onSuccess: refresh })
   const rename = useMutation({ mutationFn: ({ id, name }: { id: string; name: string }) => renameWatchlist(getToken, id, name), onSuccess: refresh })
   const removeItem = useMutation({ mutationFn: ({ id, assetId }: { id: string; assetId: string }) => removeWatchlistItem(getToken, id, assetId), onSuccess: refresh })

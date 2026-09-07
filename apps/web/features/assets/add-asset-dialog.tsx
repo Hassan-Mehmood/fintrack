@@ -50,6 +50,7 @@ import { searchMarketAssets } from "./assets-api"
 import type { MarketSearchResult } from "./asset-types"
 
 interface AddAssetDialogProps {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly errorMessage?: string | null
   readonly getToken: () => Promise<string | null>
   readonly isPending: boolean
@@ -61,10 +62,11 @@ interface AddAssetDialogProps {
 }
 
 export function AddAssetDialog({
+  domain,
   errorMessage,
   getToken,
   isPending,
-  initialMarketSelection = "US_STOCK",
+  initialMarketSelection = domain === "CRYPTO" ? "CRYPTO" : "US_STOCK",
   onAddProviderAsset,
   onManualAsset,
   onOpenChange,
@@ -155,9 +157,14 @@ export function AddAssetDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="US_STOCK">US stock</SelectItem>
-                      <SelectItem value="PSX_STOCK">PSX stock</SelectItem>
-                      <SelectItem value="CRYPTO">Cryptocurrency</SelectItem>
+                      {domain === "SECURITIES" ? (
+                        <>
+                          <SelectItem value="US_STOCK">US stock</SelectItem>
+                          <SelectItem value="PSX_STOCK">PSX stock</SelectItem>
+                        </>
+                      ) : (
+                        <SelectItem value="CRYPTO">Cryptocurrency</SelectItem>
+                      )}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

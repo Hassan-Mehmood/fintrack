@@ -190,6 +190,12 @@ export function TransactionsPage({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const requestedScope = searchParams.get("scope");
+  const scope: "MONEY" | "SECURITIES" | "CRYPTO" | undefined = accountId
+    ? undefined
+    : requestedScope === "SECURITIES" || requestedScope === "CRYPTO"
+      ? requestedScope
+      : "MONEY";
   const filters = useMemo(() => {
     const parsed = readTransactionFilters(searchParams);
     return accountId ? { ...parsed, accountIds: [], currencies: [] } : parsed;
@@ -233,12 +239,14 @@ export function TransactionsPage({
 
   const listParams = useMemo(() => {
     const params = toTransactionListParams(filters, debouncedSearch);
-    return accountId ? { ...params, accountIds: [], currencies: [] } : params;
-  }, [accountId, filters, debouncedSearch]);
+    return accountId
+      ? { ...params, accountIds: [], currencies: [] }
+      : { ...params, scope };
+  }, [accountId, filters, debouncedSearch, scope]);
   const listKey = useMemo(() => JSON.stringify(listParams), [listParams]);
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
-    queryFn: () => listAccounts(getToken),
+    queryFn: () => listAccounts(getToken, scope),
   });
   const accountQuery = useQuery({
     queryKey: accountQueryKey(accountId ?? "inactive"),
@@ -254,11 +262,18 @@ export function TransactionsPage({
   });
   const assetsQuery = useQuery({
     queryKey: assetsQueryKey,
-    queryFn: () => listAssets(getToken),
+    queryFn: () =>
+      listAssets(
+        getToken,
+        scope === "CRYPTO" ? "CRYPTO" : scope === "SECURITIES" ? "SECURITIES" : undefined,
+      ),
   });
   const holdingsQuery = useQuery({
     queryKey: [...holdingsQueryKey, "NATIVE"],
-    queryFn: () => listHoldings(getToken, "NATIVE"),
+    queryFn: () =>
+      listHoldings(getToken, "NATIVE", {
+        domain: scope === "CRYPTO" ? "CRYPTO" : "SECURITIES",
+      }),
   });
   const settingsQuery = useQuery({
     queryKey: settingsQueryKey,
@@ -317,6 +332,14 @@ export function TransactionsPage({
 
   const accounts = accountsQuery.data ?? [];
   const account = accountQuery.data;
+  useEffect(() => {
+    if (!accountId || !account) return;
+    if (account.type === "BROKER") {
+      router.replace(`/stocks?accountId=${account.id}`);
+    } else if (account.type === "CRYPTO_WALLET") {
+      router.replace(`/crypto?accountId=${account.id}`);
+    }
+  }, [account, accountId, router]);
   const transactions = transactionsQuery.data?.data ?? [];
   const meta = transactionsQuery.data?.meta;
   const visibleIds = transactions.map((transaction) => transaction.id);
@@ -481,12 +504,12 @@ export function TransactionsPage({
 
   return (
     <AppShell
-      currentSection={accountId ? "accounts" : "transactions"}
-      title={accountId ? (account?.name ?? "Account") : "Transactions"}
+      currentSection={accountId ? "accounts" : scope === "CRYPTO" ? "crypto" : scope === "SECURITIES" ? "stocks" : "transactions"}
+      title={accountId ? (account?.name ?? "Account") : scope === "CRYPTO" ? "Crypto activity" : scope === "SECURITIES" ? "Stock activity" : "Transactions"}
       description={
         accountId
           ? "Review balances and activity for this account."
-          : "View and manage activity across all accounts."
+          : scope === "MONEY" ? "View and manage everyday money activity." : `View and manage ${scope === "CRYPTO" ? "crypto" : "securities"} activity.`
       }
       primaryAction={
         <div className="flex items-center gap-2">
@@ -960,6 +983,7 @@ export function TransactionsPage({
       <TransactionFormDialog
         open={dialog !== null}
         mode={dialog?.mode ?? "create"}
+        scope={scope}
         transaction={dialog?.transaction ?? null}
         accounts={accounts}
         assets={assetsQuery.data ?? []}
@@ -1017,8 +1041,9 @@ export function TransactionsPage({
         />
       ) : null}
       {account?.type === "CRYPTO_WALLET" ? (
-        <AddHoldingDialog
-          cashEquivalentOnly
+      <AddHoldingDialog
+        domain="CRYPTO"
+        cashEquivalentOnly
           getToken={getToken}
           initialAccountId={account.id}
           lockAccount

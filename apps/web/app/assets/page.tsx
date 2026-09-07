@@ -1,5 +1,5 @@
-import { AssetsPage } from "@/features/assets/assets-page"
+import { redirect } from "next/navigation"
 
 export default function AssetsRoute() {
-  return <AssetsPage />
+  redirect("/stocks/assets")
 }

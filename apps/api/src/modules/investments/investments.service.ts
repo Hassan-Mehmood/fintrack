@@ -42,6 +42,7 @@ const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
 
 interface AssetRecord {
+  readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly id: string;
   readonly name: string;
   readonly symbol: string | null;
@@ -98,6 +99,8 @@ interface DetailRecord {
 }
 
 interface InvestmentAccountRecord {
+  readonly type:
+    'BANK' | 'CASH_WALLET' | 'DIGITAL_WALLET' | 'BROKER' | 'CRYPTO_WALLET';
   readonly id: string;
   readonly name: string;
   readonly currency: string;
@@ -121,6 +124,7 @@ interface InvestmentAccountRecord {
 }
 
 interface ReportOptions {
+  readonly domain?: 'SECURITIES' | 'CRYPTO';
   readonly reportingCurrency?: ReportingCurrency;
   readonly accountId?: string;
   readonly portfolioId?: string;
@@ -292,7 +296,7 @@ export class InvestmentsService {
             tx,
             user.id,
             payload,
-            asset.marketType,
+            payload.domain,
           );
           const priceCurrency = asset.priceCurrency;
           if (!priceCurrency) {
@@ -440,6 +444,7 @@ export class InvestmentsService {
 
     const { holdings } = await this.getHoldingsForUser(user, {
       accountId: result.accountId,
+      domain: payload.domain,
     });
     const holding = holdings.find((item) => item.assetId === result.assetId);
     if (!holding) {
@@ -513,9 +518,14 @@ export class InvestmentsService {
           symbol: true,
           priceCurrency: true,
           marketType: true,
+          domain: true,
         },
       });
       if (!asset) throw new NotFoundException('Asset not found.');
+      if (asset.domain !== payload.domain)
+        throw new BadRequestException(
+          'Asset belongs to another investment domain.',
+        );
       if (!asset.priceCurrency)
         throw new BadRequestException('Asset price currency is required.');
       return asset;
@@ -535,9 +545,22 @@ export class InvestmentsService {
           symbol: true,
           priceCurrency: true,
           marketType: true,
+          domain: true,
         },
       });
-      if (existing?.priceCurrency) return existing;
+      if (existing?.priceCurrency) {
+        if (existing.domain !== payload.domain)
+          throw new BadRequestException(
+            'Asset belongs to another investment domain.',
+          );
+        return existing;
+      }
+      const providerDomain =
+        candidate.type === 'CRYPTO' ? 'CRYPTO' : 'SECURITIES';
+      if (providerDomain !== payload.domain)
+        throw new BadRequestException(
+          'Provider asset belongs to another investment domain.',
+        );
       const cashEquivalent = isAutomaticCashEquivalent(
         candidate.provider,
         candidate.providerAssetId,
@@ -573,6 +596,7 @@ export class InvestmentsService {
           symbol: candidate.symbol,
           provider: candidate.provider,
           marketType: candidate.type,
+          domain: providerDomain,
           providerAssetId: candidate.providerAssetId,
           exchange: candidate.exchange,
           imageUrl: candidate.imageUrl,
@@ -587,6 +611,7 @@ export class InvestmentsService {
           symbol: true,
           priceCurrency: true,
           marketType: true,
+          domain: true,
         },
       });
     }
@@ -600,6 +625,7 @@ export class InvestmentsService {
     return tx.asset.create({
       data: {
         userId,
+        domain: payload.domain,
         name: payload.asset.name,
         symbol: payload.asset.symbol,
         categoryId: payload.asset.categoryId,
@@ -615,6 +641,7 @@ export class InvestmentsService {
         symbol: true,
         priceCurrency: true,
         marketType: true,
+        domain: true,
       },
     });
   }
@@ -623,9 +650,9 @@ export class InvestmentsService {
     tx: Prisma.TransactionClient,
     userId: string,
     payload: CreatePositionDto,
-    marketType: string | null,
+    domain: 'SECURITIES' | 'CRYPTO',
   ) {
-    const expectedType = marketType === 'CRYPTO' ? 'CRYPTO_WALLET' : 'BROKER';
+    const expectedType = domain === 'CRYPTO' ? 'CRYPTO_WALLET' : 'BROKER';
     if (payload.account.kind === 'EXISTING') {
       if (!payload.account.accountId)
         throw new BadRequestException('Select an investment account.');
@@ -639,7 +666,7 @@ export class InvestmentsService {
       });
       if (!account)
         throw new NotFoundException('Investment account not found.');
-      if (marketType && account.type !== expectedType)
+      if (account.type !== expectedType)
         throw new BadRequestException(
           'The selected account is not compatible with this asset.',
         );
@@ -742,6 +769,7 @@ export class InvestmentsService {
             symbol: candidate.symbol,
             provider: candidate.provider,
             marketType: 'CRYPTO',
+            domain: 'CRYPTO',
             providerAssetId: candidate.providerAssetId,
             exchange: candidate.exchange,
             imageUrl: candidate.imageUrl,
@@ -908,7 +936,11 @@ export class InvestmentsService {
       if (!payload.portfolio.portfolioId)
         throw new BadRequestException('Select a portfolio.');
       const portfolio = await tx.portfolio.findFirst({
-        where: { id: payload.portfolio.portfolioId, userId },
+        where: {
+          id: payload.portfolio.portfolioId,
+          userId,
+          domain: payload.domain,
+        },
         select: { id: true },
       });
       if (!portfolio) throw new NotFoundException('Portfolio not found.');
@@ -917,7 +949,7 @@ export class InvestmentsService {
       if (!payload.portfolio.name)
         throw new BadRequestException('Portfolio name is required.');
       const portfolio = await tx.portfolio.create({
-        data: { userId, name: payload.portfolio.name },
+        data: { userId, name: payload.portfolio.name, domain: payload.domain },
         select: { id: true },
       });
       portfolioId = portfolio.id;
@@ -953,10 +985,11 @@ export class InvestmentsService {
     const [assets, details, accounts] = await Promise.all([
       this.fetchAssets(user.id),
       this.fetchInvestmentDetails(user.id),
-      this.fetchInvestmentAccounts(user.id),
+      this.fetchInvestmentAccounts(user.id, options.domain),
     ]);
     const filteredAssets = assets.filter(
       (asset) =>
+        (!options.domain || asset.domain === options.domain) &&
         (!options.assetType ||
           asset.category.name.toLocaleLowerCase() ===
             options.assetType.toLocaleLowerCase()) &&
@@ -1088,6 +1121,7 @@ export class InvestmentsService {
 
     return {
       data: {
+        domain: options.domain ?? 'SECURITIES',
         reportingCurrency,
         totalCostBasis: combinedAssets?.totalCostBasis ?? null,
         totalCurrentValue: combinedAssets?.totalCurrentValue ?? null,
@@ -1176,6 +1210,7 @@ export class InvestmentsService {
       .map(({ portfolio }) => portfolio);
 
     return {
+      domain: asset.domain,
       holdingKind: 'ASSET',
       assetId: asset.id,
       assetName: asset.name,
@@ -1601,6 +1636,7 @@ export class InvestmentsService {
     );
     return {
       holdingKind: 'FIAT_CASH',
+      domain: account.type === 'CRYPTO_WALLET' ? 'CRYPTO' : 'SECURITIES',
       assetId: `fiat-cash:${account.id}:${suffix}`,
       assetName: 'Cash',
       assetSymbol: account.currency,
@@ -1643,11 +1679,21 @@ export class InvestmentsService {
 
   private async fetchInvestmentAccounts(
     userId: string,
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<readonly InvestmentAccountRecord[]> {
     return this.prisma.account.findMany({
-      where: { userId, type: { in: ['BROKER', 'CRYPTO_WALLET'] } },
+      where: {
+        userId,
+        type:
+          domain === 'CRYPTO'
+            ? 'CRYPTO_WALLET'
+            : domain === 'SECURITIES'
+              ? 'BROKER'
+              : { in: ['BROKER', 'CRYPTO_WALLET'] },
+      },
       select: {
         id: true,
+        type: true,
         name: true,
         currency: true,
         openingBalance: true,
@@ -1685,6 +1731,7 @@ export class InvestmentsService {
       where: { userId },
       select: {
         id: true,
+        domain: true,
         name: true,
         symbol: true,
         currentPrice: true,

@@ -13,6 +13,9 @@ const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
 const CURRENCY_VALUES = ['USD', 'PKR'] as const;
 
 export class CreateAssetDto {
+  @IsIn(['SECURITIES', 'CRYPTO'])
+  domain!: 'SECURITIES' | 'CRYPTO';
+
   @IsString()
   @MinLength(1)
   @MaxLength(120)

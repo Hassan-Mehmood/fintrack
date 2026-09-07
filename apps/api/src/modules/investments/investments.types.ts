@@ -3,6 +3,7 @@ export type HoldingGroupBy =
   'NONE' | 'ACCOUNT' | 'PORTFOLIO' | 'ASSET_TYPE' | 'CURRENCY';
 
 export interface HoldingResponse {
+  readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly holdingKind: 'ASSET' | 'FIAT_CASH';
   readonly assetId: string;
   readonly assetName: string;
@@ -61,6 +62,7 @@ export interface CurrencyTotal {
 }
 
 export interface InvestmentSummaryData {
+  readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly reportingCurrency: ReportingCurrency;
   readonly totalCostBasis: string | null;
   readonly totalCurrentValue: string | null;

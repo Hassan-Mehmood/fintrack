@@ -161,6 +161,7 @@ function renderDialog({
   return render(
     <QueryClientProvider client={queryClient}>
       <AddAssetDialog
+        domain={initialMarketSelection === "CRYPTO" ? "CRYPTO" : "SECURITIES"}
         open
         getToken={async () => "token"}
         initialMarketSelection={initialMarketSelection}

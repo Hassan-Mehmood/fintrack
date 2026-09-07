@@ -1,8 +1,10 @@
 export type ReportingCurrency = "USD" | "PKR" | "NATIVE";
+export type InvestmentDomain = "SECURITIES" | "CRYPTO";
 export type HoldingGroupBy =
   "NONE" | "ACCOUNT" | "PORTFOLIO" | "ASSET_TYPE" | "CURRENCY";
 
 export interface Holding {
+  readonly domain: InvestmentDomain;
   readonly holdingKind: "ASSET" | "FIAT_CASH";
   readonly assetId: string;
   readonly assetName: string;
@@ -61,6 +63,7 @@ export interface CurrencyTotal {
 }
 
 export interface InvestmentSummary {
+  readonly domain: InvestmentDomain;
   readonly reportingCurrency: ReportingCurrency;
   readonly totalCostBasis: string | null;
   readonly totalCurrentValue: string | null;
@@ -90,6 +93,7 @@ export interface InvestmentSummary {
 }
 
 export interface InvestmentFilters {
+  readonly domain: InvestmentDomain;
   readonly accountId?: string;
   readonly portfolioId?: string;
   readonly assetType?: string;
@@ -116,6 +120,7 @@ export type PositionAssetInput =
     };
 
 export interface CreatePositionPayload {
+  readonly domain: InvestmentDomain;
   readonly idempotencyKey: string;
   readonly mode: "OPENING" | "BUY";
   readonly asset: PositionAssetInput;

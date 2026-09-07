@@ -1,13 +1,21 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlertIcon, PiggyBankIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { AccountFormDialog } from "@/features/accounts/account-form-dialog";
+import type { AccountFormPayload } from "@/features/accounts/account-form-schema";
+import {
+  accountsQueryKey,
+  createAccount,
+  listAccounts,
+} from "@/features/accounts/accounts-api";
+import type { Account } from "@/features/accounts/account-types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,12 +69,13 @@ import type {
   HoldingGroupBy,
   InvestmentFilters,
   ReportingCurrency,
+  InvestmentDomain,
 } from "./investment-types";
 
 const ALL = "ALL";
 const EMPTY_HOLDINGS: readonly Holding[] = [];
 
-export function InvestmentsPage() {
+export function InvestmentsPage({ domain }: { readonly domain: InvestmentDomain }) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -75,19 +84,18 @@ export function InvestmentsPage() {
   const [reportingCurrency, setReportingCurrency] =
     useState<ReportingCurrency>("USD");
   const [groupBy, setGroupBy] = useState<HoldingGroupBy>("NONE");
-  const [accountId, setAccountId] = useState(ALL);
+  const [accountId, setAccountId] = useState(searchParams.get("accountId") ?? ALL);
   const [portfolioId, setPortfolioId] = useState(ALL);
   const [assetType, setAssetType] = useState(ALL);
   const [currency, setCurrency] = useState(ALL);
   const [showExposure, setShowExposure] = useState(false);
-  const [automaticView, setAutomaticView] = useState<
-    "ALL" | "STOCKS" | "CRYPTO" | "CASH"
-  >("ALL");
   const [addHoldingOpen, setAddHoldingOpen] = useState(false);
   const [addStablecoinOpen, setAddStablecoinOpen] = useState(false);
   const [addWatchlistItemOpen, setAddWatchlistItemOpen] = useState(false);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
 
   const filters: InvestmentFilters = {
+    domain,
     accountId: accountId === ALL ? undefined : accountId,
     portfolioId: portfolioId === ALL ? undefined : portfolioId,
     assetType: assetType === ALL ? undefined : assetType,
@@ -102,12 +110,13 @@ export function InvestmentsPage() {
       assetType,
       currency,
       groupBy,
+      domain,
     ],
     queryFn: () => listHoldings(getToken, reportingCurrency, filters, groupBy),
   });
   const holdingOptionsQuery = useQuery({
-    queryKey: [...holdingsQueryKey, reportingCurrency, "filter-options"],
-    queryFn: () => listHoldings(getToken, reportingCurrency),
+    queryKey: [...holdingsQueryKey, domain, reportingCurrency, "filter-options"],
+    queryFn: () => listHoldings(getToken, reportingCurrency, { domain }),
   });
   const summaryQuery = useQuery({
     queryKey: [
@@ -117,25 +126,31 @@ export function InvestmentsPage() {
       portfolioId,
       assetType,
       currency,
+      domain,
     ],
     queryFn: () => getInvestmentSummary(getToken, reportingCurrency, filters),
   });
   const portfoliosQuery = useQuery({
-    queryKey: ["portfolios"],
-    queryFn: () => listPortfolios(getToken),
+    queryKey: ["portfolios", domain],
+    queryFn: () => listPortfolios(getToken, domain),
+  });
+  const accountsQuery = useQuery({
+    queryKey: [...accountsQueryKey, domain],
+    queryFn: () => listAccounts(getToken, domain),
+  });
+  const createAccountMutation = useMutation({
+    mutationFn: (payload: AccountFormPayload) => createAccount(getToken, payload),
+    onSuccess: async () => {
+      setAddAccountOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: holdingsQueryKey }),
+        queryClient.invalidateQueries({ queryKey: investmentSummaryQueryKey }),
+      ]);
+    },
   });
   const holdings = holdingsQuery.data ?? EMPTY_HOLDINGS;
-  const filteredHoldings = holdings.filter((holding) =>
-    automaticView === "ALL"
-      ? true
-      : automaticView === "CASH"
-        ? holding.liquidityClass === "CASH_EQUIVALENT" ||
-          holding.liquidityClass === "FIAT_CASH"
-        : automaticView === "CRYPTO"
-          ? holding.categoryName.toLowerCase().includes("crypto")
-          : holding.categoryName.toLowerCase().includes("stock") ||
-            holding.categoryName.toLowerCase().includes("etf"),
-  );
+  const filteredHoldings = holdings;
   const activeHoldings = filteredHoldings.filter(
     (holding) => holding.positionStatus === "ACTIVE",
   );
@@ -144,20 +159,25 @@ export function InvestmentsPage() {
   );
   const summary = summaryQuery.data;
   const options = useMemo(
-    () => buildFilterOptions(holdingOptionsQuery.data ?? holdings),
-    [holdingOptionsQuery.data, holdings],
+    () =>
+      buildFilterOptions(
+        holdingOptionsQuery.data ?? holdings,
+        accountsQuery.data ?? [],
+      ),
+    [accountsQuery.data, holdingOptionsQuery.data, holdings],
   );
   const hasError =
     holdingsQuery.isError ||
     summaryQuery.isError ||
-    holdingOptionsQuery.isError;
+    holdingOptionsQuery.isError ||
+    accountsQuery.isError;
   const isLoading = holdingsQuery.isLoading || summaryQuery.isLoading;
 
   return (
     <AppShell
-      currentSection="investments"
-      title="Investments"
-      description="Track holdings in USD, PKR, or their original currencies without losing native price context."
+      currentSection={domain === "CRYPTO" ? "crypto" : "stocks"}
+      title={domain === "CRYPTO" ? "Crypto" : "Stocks"}
+      description={domain === "CRYPTO" ? "Track crypto wallets, stablecoins, and digital assets." : "Track broker accounts, stocks, ETFs, mutual funds, and other securities."}
       primaryAction={
         <div className="flex gap-2">
           <Button
@@ -181,10 +201,19 @@ export function InvestmentsPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setAddStablecoinOpen(true)}
+            onClick={() => setAddAccountOpen(true)}
           >
-            Add stablecoin balance
+            Add {domain === "CRYPTO" ? "wallet" : "broker"}
           </Button>
+          {domain === "CRYPTO" ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddStablecoinOpen(true)}
+            >
+              Add stablecoin balance
+            </Button>
+          ) : null}
         </div>
       }
     >
@@ -196,7 +225,8 @@ export function InvestmentsPage() {
             <AlertDescription>
               {holdingsQuery.error?.message ??
                 summaryQuery.error?.message ??
-                holdingOptionsQuery.error?.message}
+                holdingOptionsQuery.error?.message ??
+                accountsQuery.error?.message}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -205,7 +235,7 @@ export function InvestmentsPage() {
           <Tabs
             value={tab}
             onValueChange={(value) =>
-              router.replace(`/investments?tab=${value}`)
+              router.replace(`/${domain === "CRYPTO" ? "crypto" : "stocks"}?tab=${value}`)
             }
           >
             <TabsList variant="line" className="max-w-full overflow-x-auto">
@@ -217,7 +247,7 @@ export function InvestmentsPage() {
             </TabsList>
           </Tabs>
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/assets">Manage asset library</Link>
+            <Link href={`/${domain === "CRYPTO" ? "crypto" : "stocks"}/assets`}>Manage asset library</Link>
           </Button>
         </div>
 
@@ -227,26 +257,6 @@ export function InvestmentsPage() {
             tab !== "overview" && tab !== "holdings" && "hidden",
           )}
         >
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["ALL", "All investments"],
-                ["STOCKS", "Stocks"],
-                ["CRYPTO", "Crypto"],
-                ["CASH", "Cash & equivalents"],
-              ] as const
-            ).map(([value, label]) => (
-              <Button
-                key={value}
-                size="sm"
-                variant={automaticView === value ? "secondary" : "ghost"}
-                onClick={() => setAutomaticView(value)}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-
           <ReportControls
             accountId={accountId}
             assetType={assetType}
@@ -535,8 +545,8 @@ export function InvestmentsPage() {
             </CardHeader>
             <CardContent>
               <Button asChild>
-                <Link href="/transactions?types=INVESTMENT_BUY,INVESTMENT_SELL,INVESTMENT_OPENING_POSITION,DIVIDEND,INTEREST,INVESTMENT_REINVESTMENT,INVESTMENT_SPLIT,INVESTMENT_BONUS,INVESTMENT_DEPOSIT,INVESTMENT_WITHDRAWAL">
-                  View investment activity
+                <Link href={`/transactions?scope=${domain}`}>
+                  View {domain === "CRYPTO" ? "crypto" : "stock"} activity
                 </Link>
               </Button>
             </CardContent>
@@ -545,6 +555,7 @@ export function InvestmentsPage() {
 
         {tab === "portfolios" ? (
           <InvestmentPortfoliosPanel
+            domain={domain}
             holdings={holdings}
             portfolios={portfoliosQuery.data ?? []}
           />
@@ -561,6 +572,7 @@ export function InvestmentsPage() {
               </Button>
             </div>
             <WatchlistsPanel
+              domain={domain}
               getToken={getToken}
               onAddHolding={() => setAddHoldingOpen(true)}
             />
@@ -568,20 +580,44 @@ export function InvestmentsPage() {
         ) : null}
       </main>
       <AddHoldingDialog
+        domain={domain}
         getToken={getToken}
         open={addHoldingOpen}
         onOpenChange={setAddHoldingOpen}
       />
       <AddHoldingDialog
+        domain="CRYPTO"
         cashEquivalentOnly
         getToken={getToken}
         open={addStablecoinOpen}
         onOpenChange={setAddStablecoinOpen}
       />
       <AddToWatchlistDialog
+        domain={domain}
         getToken={getToken}
         open={addWatchlistItemOpen}
         onOpenChange={setAddWatchlistItemOpen}
+      />
+      <AccountFormDialog
+        allowedAccountTypes={[
+          domain === "CRYPTO" ? "CRYPTO_WALLET" : "BROKER",
+        ]}
+        defaultCurrency="USD"
+        errorMessage={
+          createAccountMutation.isError
+            ? createAccountMutation.error.message
+            : null
+        }
+        isPending={createAccountMutation.isPending}
+        mode="create"
+        onOpenChange={(open) => {
+          setAddAccountOpen(open);
+          if (!open) createAccountMutation.reset();
+        }}
+        onSubmit={async (payload) => {
+          await createAccountMutation.mutateAsync(payload);
+        }}
+        open={addAccountOpen}
       />
     </AppShell>
   );
@@ -841,11 +877,18 @@ function HoldingsTableSkeleton() {
   );
 }
 
-function buildFilterOptions(holdings: readonly Holding[]) {
+function buildFilterOptions(
+  holdings: readonly Holding[],
+  investmentAccounts: readonly Account[],
+) {
   const accounts = new Map<string, string>();
   const portfolios = new Map<string, string>();
   const assetTypes = new Set<string>();
   const currencies = new Set<string>();
+
+  for (const account of investmentAccounts) {
+    accounts.set(account.id, `${account.name} · ${account.currency}`);
+  }
 
   for (const holding of holdings) {
     accounts.set(

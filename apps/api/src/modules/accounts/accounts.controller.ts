@@ -26,6 +26,7 @@ import { ReorderAccountsDto } from './dto/reorder-accounts.dto';
 import { TransactionsService } from '../transactions/transactions.service';
 import { ListTransactionsQueryDto } from '../transactions/dto/list-transactions-query.dto';
 import type { AccountTransactionsListResponse } from '../transactions/transactions.types';
+import { ListAccountsQueryDto } from './dto/list-accounts-query.dto';
 
 @Controller('api/v1/accounts')
 export class AccountsController {
@@ -37,8 +38,12 @@ export class AccountsController {
   @Get()
   async listAccounts(
     @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListAccountsQueryDto,
   ): Promise<AccountsListResponse> {
-    const accounts = await this.accountsService.listAccountsForUser(user);
+    const accounts = await this.accountsService.listAccountsForUser(
+      user,
+      query.scope,
+    );
 
     return {
       data: accounts,

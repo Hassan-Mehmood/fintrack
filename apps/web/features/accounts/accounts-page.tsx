@@ -95,7 +95,7 @@ export function AccountsPage() {
 
   const accountsQuery = useQuery({
     queryKey: accountsQueryKey,
-    queryFn: () => listAccounts(getToken),
+    queryFn: () => listAccounts(getToken, "MONEY"),
   })
 
   const settingsQuery = useQuery({
@@ -224,7 +224,7 @@ export function AccountsPage() {
     <AppShell
       currentSection="accounts"
       title="Accounts"
-      description="Create, update, and remove financial accounts from one place."
+      description="Manage bank accounts, cash wallets, and digital wallets."
       primaryAction={
         <Button size="sm" onClick={() => setDialogState({ mode: "create" })}>
           <PlusIcon data-icon="inline-start" />
@@ -254,7 +254,7 @@ export function AccountsPage() {
           <SummaryCard
             label="Total accounts"
             value={accountsQuery.isLoading ? "..." : String(totalAccounts)}
-            detail="All tracked asset accounts"
+            detail="Everyday money accounts"
           />
           <SummaryCard
             label="Currencies"
@@ -267,8 +267,8 @@ export function AccountsPage() {
           <CardHeader>
             <CardTitle>Managed accounts</CardTitle>
             <CardDescription>
-              Manage your bank accounts, wallets, and investment accounts from
-              one place.
+              Bank accounts, physical cash, and digital wallets stay separate
+              from Stocks and Crypto.
             </CardDescription>
             {hasDraftAccountOrder ? (
               <CardAction className="flex items-center gap-1">
@@ -312,8 +312,8 @@ export function AccountsPage() {
                   </EmptyMedia>
                   <EmptyTitle>No accounts yet</EmptyTitle>
                   <EmptyDescription>
-                    Add your first bank, cash, digital, broker, or crypto
-                    account to start tracking balances.
+                    Add your first bank account, cash wallet, or digital wallet
+                    to start tracking everyday balances.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -478,6 +478,7 @@ export function AccountsPage() {
       ) : null}
 
       <AccountFormDialog
+        allowedAccountTypes={["BANK", "CASH_WALLET", "DIGITAL_WALLET"]}
         open={dialogState !== null}
         mode={dialogState?.mode ?? "create"}
         account={dialogState?.mode === "edit" ? dialogState.account : null}

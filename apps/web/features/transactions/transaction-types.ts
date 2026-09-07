@@ -150,6 +150,7 @@ export interface TransactionPayload {
 }
 
 export interface TransactionListParams {
+  readonly scope?: "MONEY" | "SECURITIES" | "CRYPTO";
   readonly search?: string;
   readonly dateFrom?: string;
   readonly dateTo?: string;

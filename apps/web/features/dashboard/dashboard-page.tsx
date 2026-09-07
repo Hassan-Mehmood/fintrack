@@ -18,7 +18,6 @@ import {
   PlusIcon,
   ReceiptTextIcon,
   TargetIcon,
-  TrendingUpIcon,
   WalletCardsIcon,
 } from "lucide-react"
 
@@ -51,11 +50,7 @@ import { formatAmount, formatDate, formatSignedAmount } from "@/lib/formatting"
 import { cn } from "@/lib/utils"
 
 import { dashboardQueryKey, getDashboard } from "./dashboard-api"
-import {
-  AssetAllocationChart,
-  IncomeExpenseInvestmentChart,
-  InvestmentAllocationChart,
-} from "./dashboard-charts"
+import { AssetAllocationChart, IncomeExpenseInvestmentChart } from "./dashboard-charts"
 import type {
   DashboardAccountItem,
   DashboardAccountType,
@@ -79,13 +74,8 @@ const metricCards = [
   },
   {
     key: "liquidCash" as const,
-    label: "Liquid cash",
+    label: "Everyday money",
     icon: BanknoteIcon,
-  },
-  {
-    key: "investedCash" as const,
-    label: "Invested cash",
-    icon: BriefcaseBusinessIcon,
   },
 ]
 
@@ -139,7 +129,7 @@ export function DashboardPage() {
           </Alert>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2">
           {metricCards.map((metric) => (
             <MetricCard
               key={metric.key}
@@ -159,50 +149,20 @@ export function DashboardPage() {
         </section>
 
         {isLoading || !data ? null : (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 md:grid-cols-2">
             <InvestmentMetricCard
-              label="Investment value"
-              value={data.metrics.totalInvestmentValue}
+              label="Stocks"
+              value={data.stocksSummary.totalAccountValue ?? "0"}
               currency={data.baseCurrency}
-              detail="Current market value"
-              icon={TrendingUpIcon}
+              detail={`${formatSignedAmount(data.stocksSummary.totalUnrealizedGain ?? "0", data.baseCurrency)} unrealized`}
+              href="/stocks"
             />
             <InvestmentMetricCard
-              label="Cost basis"
-              value={data.metrics.totalInvestmentCostBasis}
+              label="Crypto"
+              value={data.cryptoSummary.totalAccountValue ?? "0"}
               currency={data.baseCurrency}
-              detail="Total invested"
-              icon={PiggyBankIcon}
-            />
-            <InvestmentMetricCard
-              label="Unrealized gain"
-              value={data.metrics.totalUnrealizedGain}
-              currency={data.baseCurrency}
-              detail={
-                data.metrics.totalUnrealizedGainPercent !== null
-                  ? `${data.metrics.totalUnrealizedGainPercent >= 0 ? "+" : ""}${data.metrics.totalUnrealizedGainPercent}% unrealized`
-                  : "Unrealized gain"
-              }
-              tone={
-                data.metrics.totalUnrealizedGainPercent === null
-                  ? "neutral"
-                  : data.metrics.totalUnrealizedGainPercent >= 0
-                    ? "success"
-                    : "error"
-              }
-              icon={ArrowUpRightIcon}
-            />
-            <InvestmentMetricCard
-              label="Realized gain"
-              value={data.metrics.totalRealizedGain}
-              currency={data.baseCurrency}
-              detail="Lifetime realized"
-              tone={
-                Number(data.metrics.totalRealizedGain) >= 0
-                  ? "success"
-                  : "error"
-              }
-              icon={ArrowDownLeftIcon}
+              detail={`${formatSignedAmount(data.cryptoSummary.totalUnrealizedGain ?? "0", data.baseCurrency)} unrealized`}
+              href="/crypto"
             />
           </section>
         )}
@@ -216,9 +176,9 @@ export function DashboardPage() {
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.9fr)]">
               <Card>
                 <CardHeader>
-                  <CardTitle>Income vs expenses vs investments</CardTitle>
+                  <CardTitle>Income vs expenses</CardTitle>
                   <CardDescription>
-                    Monthly movement across cash flow and invested capital.
+                    Monthly movement across everyday accounts.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -259,52 +219,12 @@ export function DashboardPage() {
               </Card>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.9fr)]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Investment allocation</CardTitle>
-                  <CardDescription>
-                    Holdings grouped by asset category.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  {data.investmentAllocation.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No investments recorded yet.
-                    </p>
-                  ) : (
-                    <>
-                      <InvestmentAllocationChart data={data.investmentAllocation} />
-                      <div className="grid gap-2">
-                        {data.investmentAllocation.map((item) => (
-                          <div
-                            key={item.category}
-                            className="flex items-center justify-between gap-3 text-sm"
-                          >
-                            <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                className="size-2.5 rounded-full"
-                                style={{
-                                  backgroundColor: `var(--color-${item.category})`,
-                                }}
-                                aria-hidden="true"
-                              />
-                              <span className="truncate">{item.category}</span>
-                            </div>
-                            <span className="font-mono text-sm">{item.value}%</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-
+            <section>
               <Card>
                 <CardHeader>
                   <CardTitle>Recent activity</CardTitle>
                   <CardDescription>
-                    Latest recorded account movements.
+                    Latest everyday account movements.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
@@ -326,7 +246,7 @@ export function DashboardPage() {
                 <CardHeader>
                   <CardTitle>Connected wallets</CardTitle>
                   <CardDescription>
-                    Balances across bank, cash, digital, broker, and crypto accounts.
+                    Balances across bank, cash, and digital-wallet accounts.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -381,7 +301,7 @@ function getMetricDetail(
   key: (typeof metricCards)[number]["key"],
   data: { readonly baseCurrency: string; readonly metrics: DashboardMetrics }
 ): string {
-  const { metrics, baseCurrency } = data
+  const { metrics } = data
 
   switch (key) {
     case "totalNetWorth":
@@ -390,10 +310,6 @@ function getMetricDetail(
         : "Asset-only total"
     case "liquidCash":
       return `${metrics.liquidCashPercent}% of total assets`
-    case "investedCash":
-      return metrics.investedCashThisMonth !== null
-        ? `+${formatAmount(metrics.investedCashThisMonth, baseCurrency)} this month`
-        : "Investment accounts"
   }
 }
 
@@ -431,11 +347,11 @@ function MetricCard({ label, value, currency, detail, icon: Icon }: MetricCardPr
 }
 
 interface InvestmentMetricCardProps {
+  readonly href: string
   readonly label: string
   readonly value: string
   readonly currency: string
   readonly detail: string
-  readonly icon: typeof CircleDollarSignIcon
   readonly tone?: "success" | "error" | "neutral"
 }
 
@@ -444,7 +360,7 @@ function InvestmentMetricCard({
   value,
   currency,
   detail,
-  icon: Icon,
+  href,
   tone = "neutral",
 }: InvestmentMetricCardProps) {
   const isGainCard = label === "Unrealized gain" || label === "Realized gain"
@@ -454,9 +370,7 @@ function InvestmentMetricCard({
       <CardHeader>
         <CardTitle>{label}</CardTitle>
         <CardAction>
-          <div className="flex size-9 items-center justify-center rounded-md bg-muted">
-            <Icon className="size-4" aria-hidden="true" />
-          </div>
+          <Button asChild size="sm" variant="ghost"><Link href={href}>View</Link></Button>
         </CardAction>
         <CardDescription>{detail}</CardDescription>
       </CardHeader>

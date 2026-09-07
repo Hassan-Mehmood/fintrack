@@ -33,6 +33,10 @@ export type TransactionSort = (typeof transactionSortValues)[number];
 
 export class ListTransactionsQueryDto {
   @IsOptional()
+  @IsIn(['MONEY', 'SECURITIES', 'CRYPTO'])
+  scope?: 'MONEY' | 'SECURITIES' | 'CRYPTO';
+
+  @IsOptional()
   @IsString()
   @MaxLength(200)
   @Transform(({ value }: { value: unknown }): string | undefined =>

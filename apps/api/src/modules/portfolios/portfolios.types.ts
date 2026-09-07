@@ -23,6 +23,7 @@ export interface PortfolioMetrics {
 }
 
 export interface PortfolioResponse {
+  readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly id: string;
   readonly name: string;
   readonly description: string | null;

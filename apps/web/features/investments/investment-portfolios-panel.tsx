@@ -27,18 +27,20 @@ import { formatAmount, formatSignedAmount } from "@/lib/formatting"
 import type { Holding } from "./investment-types"
 
 interface InvestmentPortfoliosPanelProps {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly holdings: readonly Holding[]
   readonly portfolios: readonly Portfolio[]
 }
 
-export function InvestmentPortfoliosPanel({ holdings, portfolios }: InvestmentPortfoliosPanelProps) {
+export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: InvestmentPortfoliosPanelProps) {
   const { getToken } = useAuth()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Portfolio | "new" | null>(null)
-  const accountsQuery = useQuery({ queryKey: accountsQueryKey, queryFn: () => listAccounts(getToken) })
+  const accountsQuery = useQuery({ queryKey: [...accountsQueryKey, domain], queryFn: () => listAccounts(getToken, domain) })
   const save = useMutation({
     mutationFn: async (values: PortfolioEditorValues) => {
       const payload = {
+        domain,
         name: values.name,
         description: values.description || undefined,
         holdings: values.holdings.map((key) => splitPositionKey(key)),
@@ -122,7 +124,7 @@ function PortfolioEditor({ portfolio, holdings, portfolios, accounts, pending, e
   const [selected, setSelected] = useState<string[]>(portfolio?.holdings.map(({ accountId, assetId }) => positionKey(accountId, assetId)) ?? [])
   const [cash, setCash] = useState<Record<string, string>>(Object.fromEntries(portfolio?.cashAllocations.map(({ accountId, percentage }) => [accountId, percentage]) ?? []))
   const active = holdings.filter((holding) => holding.positionStatus === "ACTIVE")
-  const investmentAccounts = accounts.filter((account) => account.type === "BROKER" || account.type === "CRYPTO_WALLET")
+  const investmentAccounts = accounts
   const allocatedElsewhere = useMemo(() => {
     const result = new Map<string, number>()
     portfolios.filter(({ id }) => id !== portfolio?.id).forEach((item) => item.cashAllocations.forEach(({ accountId, percentage }) => result.set(accountId, (result.get(accountId) ?? 0) + Number(percentage))))

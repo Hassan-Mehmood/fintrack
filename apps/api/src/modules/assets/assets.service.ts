@@ -27,6 +27,7 @@ const assetSelect = {
   symbol: true,
   provider: true,
   marketType: true,
+  domain: true,
   providerAssetId: true,
   exchange: true,
   imageUrl: true,
@@ -91,10 +92,12 @@ export class AssetsService {
 
   async listAssetsForUser(
     user: AuthenticatedUser,
+    domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<readonly AssetResponse[]> {
     const assets = await this.prisma.asset.findMany({
       where: {
         userId: user.id,
+        domain,
       },
       orderBy: [{ createdAt: 'desc' }],
       select: assetSelect,
@@ -136,6 +139,7 @@ export class AssetsService {
     const asset = await this.prisma.asset.create({
       data: {
         userId: user.id,
+        domain: payload.domain,
         name: payload.name,
         symbol: payload.symbol,
         categoryId: payload.categoryId,
@@ -205,6 +209,7 @@ export class AssetsService {
           symbol: candidate.symbol,
           provider: candidate.provider,
           marketType: candidate.type,
+          domain: candidate.type === 'CRYPTO' ? 'CRYPTO' : 'SECURITIES',
           providerAssetId: candidate.providerAssetId,
           exchange: candidate.exchange,
           imageUrl: candidate.imageUrl,
@@ -363,6 +368,7 @@ export class AssetsService {
       symbol: asset.symbol ?? null,
       provider: asset.provider,
       marketType: asset.marketType,
+      domain: asset.domain,
       providerAssetId: asset.providerAssetId,
       exchange: asset.exchange,
       imageUrl: asset.imageUrl,
