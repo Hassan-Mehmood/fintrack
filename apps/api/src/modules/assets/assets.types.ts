@@ -42,6 +42,8 @@ export interface AssetResponse {
   readonly priceBid: string | null;
   readonly priceAsk: string | null;
   readonly notes: string | null;
+  readonly liquidityClass: 'INVESTMENT' | 'CASH_EQUIVALENT';
+  readonly liquidityClassSource: 'AUTO' | 'USER';
   readonly createdAt: string;
   readonly updatedAt: string;
 }

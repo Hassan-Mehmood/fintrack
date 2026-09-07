@@ -19,6 +19,7 @@ import type {
   AssetResponse,
   RiskProfileResponse,
 } from './assets.types';
+import { isAutomaticCashEquivalent } from './asset-liquidity';
 
 const assetSelect = {
   id: true,
@@ -44,6 +45,8 @@ const assetSelect = {
   currentPrice: true,
   priceCurrency: true,
   notes: true,
+  liquidityClass: true,
+  liquidityClassSource: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.AssetSelect;
@@ -140,6 +143,8 @@ export class AssetsService {
         currentPrice: payload.currentPrice,
         priceCurrency: payload.priceCurrency,
         notes: payload.notes,
+        liquidityClass: payload.liquidityClass,
+        liquidityClassSource: payload.liquidityClass ? 'USER' : undefined,
       },
       select: assetSelect,
     });
@@ -161,11 +166,29 @@ export class AssetsService {
     );
     const [category, riskProfile] = await Promise.all([
       this.prisma.assetCategory.findUnique({
-        where: { name: payload.type === 'STOCK' ? 'Stock' : 'Crypto' },
+        where: {
+          name: isAutomaticCashEquivalent(
+            candidate.provider,
+            candidate.providerAssetId,
+          )
+            ? 'Cash Equivalent'
+            : payload.type === 'STOCK'
+              ? 'Stock'
+              : 'Crypto',
+        },
         select: { id: true },
       }),
       this.prisma.riskProfile.findUnique({
-        where: { name: payload.type === 'STOCK' ? 'Stocks' : 'Crypto' },
+        where: {
+          name: isAutomaticCashEquivalent(
+            candidate.provider,
+            candidate.providerAssetId,
+          )
+            ? 'Cash Equivalents'
+            : payload.type === 'STOCK'
+              ? 'Stocks'
+              : 'Crypto',
+        },
         select: { id: true },
       }),
     ]);
@@ -188,6 +211,12 @@ export class AssetsService {
           categoryId: category.id,
           riskProfileId: riskProfile?.id,
           priceCurrency: candidate.quoteCurrency,
+          liquidityClass: isAutomaticCashEquivalent(
+            candidate.provider,
+            candidate.providerAssetId,
+          )
+            ? 'CASH_EQUIVALENT'
+            : 'INVESTMENT',
         },
         select: assetSelect,
       });
@@ -245,6 +274,8 @@ export class AssetsService {
         currentPrice: payload.currentPrice,
         priceCurrency: payload.priceCurrency,
         notes: payload.notes,
+        liquidityClass: payload.liquidityClass,
+        liquidityClassSource: payload.liquidityClass ? 'USER' : undefined,
       },
       select: assetSelect,
     });
@@ -358,6 +389,8 @@ export class AssetsService {
       priceBid: price?.bid ?? null,
       priceAsk: price?.ask ?? null,
       notes: asset.notes,
+      liquidityClass: asset.liquidityClass,
+      liquidityClassSource: asset.liquidityClassSource,
       createdAt: asset.createdAt.toISOString(),
       updatedAt: asset.updatedAt.toISOString(),
     };

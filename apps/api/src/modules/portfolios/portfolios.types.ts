@@ -28,6 +28,14 @@ export interface PortfolioResponse {
   readonly description: string | null;
   readonly accountCount: number;
   readonly accounts: readonly PortfolioAccountItem[];
+  readonly holdings: ReadonlyArray<{
+    readonly accountId: string;
+    readonly assetId: string;
+  }>;
+  readonly cashAllocations: ReadonlyArray<{
+    readonly accountId: string;
+    readonly percentage: string;
+  }>;
   readonly metrics: PortfolioMetrics;
   readonly allocation: readonly PortfolioAllocationItem[];
   readonly createdAt: string;

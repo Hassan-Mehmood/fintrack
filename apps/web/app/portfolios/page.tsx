@@ -1,5 +1,5 @@
-import { PortfoliosPage } from "@/features/portfolios/portfolios-page"
+import { redirect } from "next/navigation"
 
 export default function PortfoliosRoute() {
-  return <PortfoliosPage />
+  redirect("/investments?tab=portfolios")
 }

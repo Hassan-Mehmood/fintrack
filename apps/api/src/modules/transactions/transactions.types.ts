@@ -9,6 +9,11 @@ export interface InvestmentTransactionDetailResponse {
   readonly assetId: string;
   readonly assetName: string;
   readonly assetSymbol: string | null;
+  readonly settlementAssetId: string | null;
+  readonly settlementAssetName: string | null;
+  readonly settlementAssetSymbol: string | null;
+  readonly settlementQuantity: string | null;
+  readonly pairLabel: string | null;
   readonly tradeType: TradeType;
   readonly quantity: string;
   readonly price: string;

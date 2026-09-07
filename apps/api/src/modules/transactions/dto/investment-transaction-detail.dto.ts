@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { TradeType } from '../../../generated/prisma/enums';
+import { SettlementAssetDto } from '../../investments/dto/settlement-asset.dto';
 
 const DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d{1,8})?$/;
 
@@ -40,6 +41,11 @@ export class InvestmentTransactionDetailDto {
   @MinLength(1)
   @MaxLength(1000)
   notes?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SettlementAssetDto)
+  settlementAsset?: SettlementAssetDto;
 }
 
 export class OptionalInvestmentTransactionDetailDto {

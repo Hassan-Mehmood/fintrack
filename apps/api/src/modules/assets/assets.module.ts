@@ -7,5 +7,6 @@ import { MarketDataModule } from '../market-data/market-data.module';
   imports: [MarketDataModule],
   controllers: [AssetsController],
   providers: [AssetsService],
+  exports: [AssetsService],
 })
 export class AssetsModule {}

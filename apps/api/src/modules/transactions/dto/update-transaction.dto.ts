@@ -37,7 +37,10 @@ export class UpdateTransactionDto {
   accountId?: string;
 
   @IsOptional()
-  @ValidateIf((dto: UpdateTransactionDto) => dto.type === 'TRANSFER')
+  @ValidateIf(
+    (dto: UpdateTransactionDto) =>
+      dto.type === 'TRANSFER' || dto.type === 'INVESTMENT_TRANSFER',
+  )
   @IsUUID()
   @Transform(({ value }: { value: unknown }): string | undefined =>
     typeof value === 'string' && value.trim() !== '' ? value : undefined,

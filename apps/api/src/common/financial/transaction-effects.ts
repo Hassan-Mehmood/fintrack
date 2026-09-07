@@ -24,6 +24,8 @@ export function getSourceAccountEffect(
     case 'INVESTMENT_BONUS':
     case 'INVESTMENT_DEPOSIT':
     case 'INVESTMENT_WITHDRAWAL':
+    case 'INVESTMENT_TRANSFER':
+    case 'INVESTMENT_OPENING_POSITION':
       return new Prisma.Decimal(0);
     case 'ADJUSTMENT':
       return amount;

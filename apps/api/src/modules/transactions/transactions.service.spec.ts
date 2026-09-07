@@ -16,6 +16,11 @@ import {
   createTransactionNotFoundException,
   createTransactionNotReversibleException,
 } from './transactions.errors';
+import {
+  insufficientAccountCashException,
+  insufficientSettlementBalanceException,
+  settlementAssetRequiredException,
+} from '../investments/investment-settlement.errors';
 
 jest.mock('../../prisma/prisma.service', () => ({
   PrismaService: class PrismaService {},
@@ -538,6 +543,252 @@ describe('TransactionsService', () => {
     });
   });
 
+  it('records both sides of a crypto purchase settled with USDT', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+      type: 'CRYPTO_WALLET',
+    });
+    prisma.asset.findFirst
+      .mockResolvedValueOnce({
+        id: 'asset-1',
+        priceCurrency: 'USD',
+        marketType: 'CRYPTO',
+      })
+      .mockResolvedValueOnce({
+        id: 'usdt',
+        priceCurrency: 'USD',
+        liquidityClass: 'CASH_EQUIVALENT',
+      });
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      {
+        assetId: 'usdt',
+        settlementAssetId: null,
+        tradeType: 'OPENING',
+        quantity: new Prisma.Decimal('2000'),
+        price: new Prisma.Decimal('1'),
+        fees: new Prisma.Decimal('0'),
+        grossAmount: new Prisma.Decimal('2000'),
+      },
+    ]);
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_BUY',
+        amount: '0',
+        investmentDetail: createInvestmentDetailRecord({
+          settlementAssetId: 'usdt',
+          settlementAssetSymbol: 'USDT',
+          quantity: '0.02',
+          price: '50000',
+          fees: '2',
+          grossAmount: '1000',
+        }),
+      }),
+    );
+
+    const result = await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_BUY',
+      accountId: 'account-1',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'General',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'BUY',
+        quantity: '0.02',
+        price: '50000',
+        fees: '2',
+        settlementAsset: { kind: 'EXISTING', assetId: 'usdt' },
+      },
+    });
+
+    expect(result.amount).toBe('0');
+    expect(result.investmentDetail).toEqual(
+      expect.objectContaining({
+        pairLabel: 'BTC/USDT',
+        settlementQuantity: '1002',
+      }),
+    );
+    expect(prisma.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: new Prisma.Decimal(0),
+          investmentDetail: {
+            create: expect.objectContaining({ settlementAssetId: 'usdt' }),
+          },
+        }),
+      }),
+    );
+  });
+
+  it('requires a settlement asset for a crypto-wallet trade', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+      type: 'CRYPTO_WALLET',
+    });
+    prisma.asset.findFirst.mockResolvedValue({
+      id: 'asset-1',
+      priceCurrency: 'USD',
+      marketType: 'CRYPTO',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '0.02',
+          price: '50000',
+          fees: '2',
+        },
+      }),
+    ).rejects.toEqual(settlementAssetRequiredException());
+  });
+
+  it('rejects a crypto purchase with insufficient stablecoin balance', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+      type: 'CRYPTO_WALLET',
+    });
+    prisma.asset.findFirst
+      .mockResolvedValueOnce({
+        id: 'asset-1',
+        priceCurrency: 'USD',
+        marketType: 'CRYPTO',
+      })
+      .mockResolvedValueOnce({
+        id: 'usdt',
+        priceCurrency: 'USD',
+        liquidityClass: 'CASH_EQUIVALENT',
+      });
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      {
+        assetId: 'usdt',
+        settlementAssetId: null,
+        tradeType: 'OPENING',
+        quantity: new Prisma.Decimal('500'),
+        price: new Prisma.Decimal('1'),
+        fees: new Prisma.Decimal('0'),
+        grossAmount: new Prisma.Decimal('500'),
+      },
+    ]);
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '0.02',
+          price: '50000',
+          fees: '2',
+          settlementAsset: { kind: 'EXISTING', assetId: 'usdt' },
+        },
+      }),
+    ).rejects.toEqual(
+      insufficientSettlementBalanceException('usdt', '500', '1002'),
+    );
+  });
+
+  it('rejects a broker purchase with insufficient Cash', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+      type: 'BROKER',
+      openingBalance: new Prisma.Decimal('100'),
+    });
+    prisma.asset.findFirst.mockResolvedValue({
+      id: 'asset-1',
+      priceCurrency: 'USD',
+      marketType: 'STOCK',
+    });
+    prisma.transaction.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'INVESTMENT_BUY',
+        accountId: 'account-1',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'General',
+        investment: {
+          assetId: 'asset-1',
+          tradeType: 'BUY',
+          quantity: '2',
+          price: '100',
+          fees: '5',
+        },
+      }),
+    ).rejects.toEqual(
+      insufficientAccountCashException('account-1', '100', '205'),
+    );
+  });
+
+  it('creates an opening position with basis and no account cash impact', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'account-1',
+      currency: 'USD',
+    });
+    prisma.asset.findFirst.mockResolvedValue({
+      id: 'asset-1',
+      priceCurrency: 'USD',
+    });
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_OPENING_POSITION',
+        amount: '0',
+        investmentDetail: createInvestmentDetailRecord({
+          tradeType: 'OPENING',
+          quantity: '100',
+          price: '12',
+          fees: '0',
+          grossAmount: '1200',
+        }),
+      }),
+    );
+
+    await service.createTransactionForUser(authenticatedUser, {
+      type: 'INVESTMENT_OPENING_POSITION',
+      accountId: 'account-1',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'Opening position',
+      description: 'Existing position',
+      investment: {
+        assetId: 'asset-1',
+        tradeType: 'OPENING',
+        quantity: '100',
+        price: '12',
+        fees: '0',
+      },
+    });
+
+    const createCall: unknown = prisma.transaction.create.mock.lastCall?.[0];
+    expect(createCall).toMatchObject({
+      data: {
+        amount: new Prisma.Decimal(0),
+        investmentDetail: {
+          create: {
+            tradeType: 'OPENING',
+            grossAmount: new Prisma.Decimal(1200),
+            fees: '0',
+          },
+        },
+      },
+    });
+  });
+
   it('converts a native USD purchase into a PKR account and stores the FX snapshot', async () => {
     const userWithRate: AuthenticatedUser = {
       ...authenticatedUser,
@@ -602,10 +853,13 @@ describe('TransactionsService', () => {
     prisma.asset.findFirst.mockResolvedValue({ id: 'asset-1' });
     prisma.investmentTransactionDetail.findMany.mockResolvedValue([
       {
+        assetId: 'asset-1',
+        settlementAssetId: null,
         tradeType: 'BUY',
         quantity: new Prisma.Decimal('10'),
         price: new Prisma.Decimal('20'),
         fees: new Prisma.Decimal('0'),
+        grossAmount: new Prisma.Decimal('200'),
       },
     ]);
     prisma.transaction.create.mockResolvedValue(
@@ -1185,6 +1439,88 @@ describe('TransactionsService', () => {
     });
   });
 
+  it('moves a stablecoin between crypto wallets with server-derived basis', async () => {
+    prisma.account.findFirst
+      .mockResolvedValueOnce({
+        id: 'wallet-1',
+        currency: 'USD',
+        type: 'CRYPTO_WALLET',
+      })
+      .mockResolvedValueOnce({
+        id: 'wallet-2',
+        currency: 'USD',
+        type: 'CRYPTO_WALLET',
+      });
+    prisma.asset.findFirst.mockResolvedValue({
+      id: 'usdt',
+      priceCurrency: 'USD',
+      marketType: 'CRYPTO',
+      liquidityClass: 'CASH_EQUIVALENT',
+    });
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      {
+        assetId: 'usdt',
+        settlementAssetId: null,
+        tradeType: 'OPENING',
+        quantity: new Prisma.Decimal('100'),
+        price: new Prisma.Decimal('0.98'),
+        fees: new Prisma.Decimal(0),
+        grossAmount: new Prisma.Decimal('98'),
+        transaction: {
+          accountId: 'wallet-1',
+          destinationAccountId: null,
+        },
+      },
+    ]);
+    prisma.transaction.create.mockResolvedValue(
+      createTransactionRecord({
+        type: 'INVESTMENT_TRANSFER',
+        accountId: 'wallet-1',
+        destinationAccountId: 'wallet-2',
+        destinationAccountName: 'Cold wallet',
+        amount: '0',
+        investmentDetail: createInvestmentDetailRecord({
+          assetId: 'usdt',
+          tradeType: 'TRANSFER',
+          quantity: '25',
+          price: '0.98',
+          grossAmount: '24.5',
+        }),
+      }),
+    );
+
+    await service.createTransactionForUser(authenticatedUser, {
+      idempotencyKey: '00000000-0000-4000-8000-000000000099',
+      type: 'INVESTMENT_TRANSFER',
+      accountId: 'wallet-1',
+      destinationAccountId: 'wallet-2',
+      currency: 'USD',
+      occurredAt: '2026-07-01T00:00:00.000Z',
+      category: 'Asset transfer',
+      investment: {
+        assetId: 'usdt',
+        tradeType: 'TRANSFER',
+        quantity: '25',
+      },
+    });
+
+    expect(prisma.transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: new Prisma.Decimal(0),
+          destinationAccountId: 'wallet-2',
+          investmentDetail: {
+            create: expect.objectContaining({
+              tradeType: 'TRANSFER',
+              price: '0.98000000',
+              grossAmount: new Prisma.Decimal('24.5'),
+            }),
+          },
+        }),
+      }),
+    );
+  });
+
   it('rejects a split transaction with a non-positive ratio', async () => {
     prisma.account.findFirst.mockResolvedValue({
       id: 'account-1',
@@ -1328,6 +1664,8 @@ function createInvestmentDetailRecord({
   quantity = '0.015',
   tradeType = 'BUY',
   priceCurrency = 'USD',
+  settlementAssetId = null,
+  settlementAssetSymbol = null,
 }: {
   readonly assetId?: string;
   readonly assetName?: string;
@@ -1338,6 +1676,8 @@ function createInvestmentDetailRecord({
   readonly quantity?: string;
   readonly tradeType?: string;
   readonly priceCurrency?: string;
+  readonly settlementAssetId?: string | null;
+  readonly settlementAssetSymbol?: string | null;
 } = {}) {
   return {
     id: 'detail-1',
@@ -1346,20 +1686,19 @@ function createInvestmentDetailRecord({
       name: assetName,
       symbol: assetSymbol,
     },
+    settlementAssetId,
+    settlementAsset: settlementAssetId
+      ? {
+          name: settlementAssetSymbol ?? 'Stablecoin',
+          symbol: settlementAssetSymbol,
+        }
+      : null,
     tradeType,
-    quantity: {
-      toString: () => quantity,
-    },
-    price: {
-      toString: () => price,
-    },
+    quantity: new Prisma.Decimal(quantity),
+    price: new Prisma.Decimal(price),
     priceCurrency,
-    grossAmount: {
-      toString: () => grossAmount,
-    },
-    fees: {
-      toString: () => fees,
-    },
+    grossAmount: new Prisma.Decimal(grossAmount),
+    fees: new Prisma.Decimal(fees),
     fxRateUsdToPkr: null,
     fxRateSource: null,
     fxRateUpdatedAt: null,

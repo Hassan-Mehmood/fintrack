@@ -32,12 +32,14 @@ const investmentSchema = z.object({
       "REINVESTMENT",
       "DEPOSIT",
       "WITHDRAWAL",
+      "TRANSFER",
     ])
     .optional(),
   quantity: decimalField,
   price: decimalField,
   fees: decimalField,
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
+  settlementAssetId: z.string().trim().max(255).optional().or(z.literal("")),
 });
 
 export const transactionFormSchema = z
@@ -67,7 +69,10 @@ export const transactionFormSchema = z
     investment: investmentSchema.optional(),
   })
   .superRefine((data, context) => {
-    if (data.type === "TRANSFER" && !data.destinationAccountId) {
+    if (
+      (data.type === "TRANSFER" || data.type === "INVESTMENT_TRANSFER") &&
+      !data.destinationAccountId
+    ) {
       addIssue(
         context,
         ["destinationAccountId"],
@@ -76,7 +81,7 @@ export const transactionFormSchema = z
     }
 
     if (
-      data.type === "TRANSFER" &&
+      (data.type === "TRANSFER" || data.type === "INVESTMENT_TRANSFER") &&
       data.destinationAccountId === data.accountId
     ) {
       addIssue(
@@ -130,6 +135,18 @@ export const transactionFormSchema = z
         context,
         ["investment", "price"],
         "Price must be greater than zero.",
+      );
+    }
+
+    if (
+      data.type === "INVESTMENT_DEPOSIT" &&
+      data.investment.price &&
+      !isPositiveDecimal(data.investment.price)
+    ) {
+      addIssue(
+        context,
+        ["investment", "price"],
+        "Cost per unit must be greater than zero.",
       );
     }
 
@@ -194,7 +211,8 @@ export function requiresInvestmentDetail(type: TransactionType): boolean {
     type === "INVESTMENT_BONUS" ||
     type === "INVESTMENT_REINVESTMENT" ||
     type === "INVESTMENT_DEPOSIT" ||
-    type === "INVESTMENT_WITHDRAWAL"
+    type === "INVESTMENT_WITHDRAWAL" ||
+    type === "INVESTMENT_TRANSFER"
   );
 }
 
@@ -211,7 +229,11 @@ export function requiresPrice(type: TransactionType): boolean {
 }
 
 export function supportsFees(type: TransactionType): boolean {
-  return requiresPrice(type);
+  return (
+    type === "INVESTMENT_BUY" ||
+    type === "INVESTMENT_SELL" ||
+    type === "INVESTMENT_REINVESTMENT"
+  );
 }
 
 function addIssue(

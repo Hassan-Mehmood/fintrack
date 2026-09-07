@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsOptional,
@@ -6,7 +6,12 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import {
+  PortfolioCashAllocationDto,
+  PortfolioHoldingDto,
+} from './create-portfolio.dto';
 
 export class UpdatePortfolioDto {
   @IsOptional()
@@ -40,4 +45,16 @@ export class UpdatePortfolioDto {
   @IsArray()
   @IsUUID('all', { each: true })
   accountIds?: readonly string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PortfolioHoldingDto)
+  holdings?: readonly PortfolioHoldingDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PortfolioCashAllocationDto)
+  cashAllocations?: readonly PortfolioCashAllocationDto[];
 }

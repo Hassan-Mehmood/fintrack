@@ -43,6 +43,48 @@ export class CoinGeckoProvider implements MarketDataProvider {
       }));
   }
 
+  async getAssetById(
+    providerAssetId: string,
+  ): Promise<MarketSearchResult | null> {
+    const url = new URL(
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(providerAssetId)}`,
+    );
+    url.searchParams.set('localization', 'false');
+    url.searchParams.set('tickers', 'false');
+    url.searchParams.set('market_data', 'false');
+    url.searchParams.set('community_data', 'false');
+    url.searchParams.set('developer_data', 'false');
+    url.searchParams.set('sparkline', 'false');
+
+    const payload = await this.http.getJson(
+      this.provider,
+      url,
+      this.headers(),
+      { notFoundAsNull: true },
+    );
+    if (payload === null) return null;
+    if (
+      !isRecord(payload) ||
+      payload.id !== providerAssetId ||
+      typeof payload.name !== 'string' ||
+      typeof payload.symbol !== 'string'
+    ) {
+      throw marketProviderFailureException(this.provider);
+    }
+
+    const image = isRecord(payload.image) ? payload.image : null;
+    return {
+      name: payload.name,
+      symbol: payload.symbol.toUpperCase(),
+      type: 'CRYPTO',
+      provider: this.provider,
+      providerAssetId: payload.id,
+      exchange: null,
+      imageUrl: image && typeof image.thumb === 'string' ? image.thumb : null,
+      quoteCurrency: 'USD',
+    };
+  }
+
   async getQuotes(
     providerAssetIds: readonly string[],
   ): Promise<ReadonlyMap<string, ProviderQuote>> {

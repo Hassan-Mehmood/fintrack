@@ -1,12 +1,30 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsOptional,
   IsString,
   IsUUID,
+  IsNumberString,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+export class PortfolioHoldingDto {
+  @IsUUID()
+  accountId!: string;
+
+  @IsUUID()
+  assetId!: string;
+}
+
+export class PortfolioCashAllocationDto {
+  @IsUUID()
+  accountId!: string;
+
+  @IsNumberString()
+  percentage!: string;
+}
 
 export class CreatePortfolioDto {
   @IsString()
@@ -30,7 +48,20 @@ export class CreatePortfolioDto {
   })
   description?: string;
 
+  @IsOptional()
   @IsArray()
   @IsUUID('all', { each: true })
-  accountIds!: readonly string[];
+  accountIds?: readonly string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PortfolioHoldingDto)
+  holdings?: readonly PortfolioHoldingDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PortfolioCashAllocationDto)
+  cashAllocations?: readonly PortfolioCashAllocationDto[];
 }

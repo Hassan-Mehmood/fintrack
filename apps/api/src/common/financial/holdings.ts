@@ -5,6 +5,7 @@ type Decimal = Prisma.Decimal;
 
 export interface InvestmentTransactionInput {
   readonly type:
+    | 'OPENING'
     | 'BUY'
     | 'SELL'
     | 'DIVIDEND'
@@ -45,6 +46,7 @@ export function calculateHolding(
   for (const transaction of input.transactions) {
     switch (transaction.type) {
       case 'BUY':
+      case 'OPENING':
       case 'REINVESTMENT':
       case 'DEPOSIT':
         costBasis = costBasis.add(

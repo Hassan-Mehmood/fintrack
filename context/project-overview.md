@@ -4,7 +4,6 @@
 
 This application is a personal finance and investment management platform for individuals who keep money across multiple bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets. It brings all of these accounts into one centralized dashboard where users can manually track income, expenses, transfers, investments, portfolio performance, and savings goals while receiving immediate balance updates and clear financial insights. It solves the problem of fragmented financial information by giving users a single place to understand their net worth, spending habits, available cash, investment returns, goal progress, and overall financial health.
 
-
 ## Goals
 
 1. **Centralize financial accounts:** Enable users to add and manage five asset account types, including bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets, from one dashboard.
@@ -22,7 +21,6 @@ This application is a personal finance and investment management platform for in
 7. **Ensure reliable financial records:** Preserve a complete transaction history so that every account balance can be traced back to recorded transactions and balance adjustments.
 
 8. **Deliver a responsive user experience:** Ensure that core dashboard and transaction pages load within three seconds under normal usage and work effectively across desktop, tablet, and mobile screen sizes.
-
 
 ## Core User Flow
 
@@ -65,119 +63,140 @@ This application is a personal finance and investment management platform for in
 13. **Continue Regular Tracking**
     The user returns to record new transactions, review updated balances, monitor investments, and track progress toward financial goals.
 
-
 ## Features
 
 ### User Accounts and Onboarding
 
-* Users can register, sign in, and sign out securely.
-* Users can select a base currency for dashboard calculations.
-* Users can complete an onboarding process to create their first financial account.
+- Users can register, sign in, and sign out securely.
+- Users can select a base currency for dashboard calculations.
+- Users can complete an onboarding process to create their first financial account.
 
 ### Financial Accounts
 
-* Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
-* Users can enter an opening balance for each account.
-* Users can view the current balance of each account.
-* Users can edit financial accounts.
-* Users can arrange accounts in a persistent custom order.
-* Users can delete financial accounts that do not have recorded transactions.
+- Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
+- Users can enter an opening balance for each account.
+- Users can view the current balance of each account.
+- Users can edit financial accounts.
+- Users can arrange accounts in a persistent custom order.
+- Users can delete financial accounts that do not have recorded transactions.
 
 ### Transactions
 
-* Users can record income, expenses, transfers, refunds, fees, investment purchases, investment sales, and balance adjustments.
-* Users can select the account affected by each transaction.
-* Users select a transaction category and can add an amount, date, optional
+- Users can record income, expenses, transfers, refunds, fees, investment purchases, investment sales, and balance adjustments.
+- Users can select the account affected by each transaction.
+- Users select a transaction category and can add an amount, date, optional
   description, merchant, and notes.
-* Account balances update automatically when a transaction is created.
-* Users can view, filter, search, edit, and reverse recorded transactions.
-* Reversals are recorded as linked corrective transactions so confirmed financial history remains traceable.
-* Transfers between accounts do not count as income or expenses.
+- Account balances update automatically when a transaction is created.
+- Users can view, filter, search, edit, and reverse recorded transactions.
+- Reversals are recorded as linked corrective transactions so confirmed financial history remains traceable.
+- Transfers between accounts do not count as income or expenses.
 
 ### Expense Tracking and Budgets
 
-* Users can organize expenses using default and custom categories.
-* Transaction forms offer type-specific default categories together with
+- Users can organize expenses using default and custom categories.
+- Transaction forms offer type-specific default categories together with
   categories already used for that transaction type.
-* Users can view spending totals by category and time period.
-* Users can create monthly budgets for individual categories.
-* Users can compare actual spending against their assigned budgets.
-* Users can view monthly income, expenses, savings, and savings rate.
+- Users can view spending totals by category and time period.
+- Users can create monthly budgets for individual categories.
+- Users can compare actual spending against their assigned budgets.
+- Users can view monthly income, expenses, savings, and savings rate.
 
 ### Centralized Dashboard
 
-* Users can view total assets, liquid cash, investments, and net worth.
-* Users can view balances across all financial accounts.
-* Users can view income and expense summaries for a selected period.
-* Users can view spending distribution by category.
-* Users can view recent transactions, budget progress, investment performance, and goal progress.
-* Dashboard values update after financial records are created or changed.
+- Users can view total assets, liquid cash, investments, and net worth.
+- Users can view balances across all financial accounts.
+- Users can view income and expense summaries for a selected period.
+- Users can view spending distribution by category.
+- Users can view recent transactions, budget progress, investment performance, and goal progress.
+- Dashboard values update after financial records are created or changed.
 
 ### Investment Tracking
 
-* Users can add stocks, ETFs, mutual funds, and cryptocurrency holdings.
-* Users can record investment purchases and sales.
-* Users can search for and add US stocks from Finnhub, PSX stocks and ETFs from EODHD, and cryptocurrencies from CoinGecko.
-* Provider-backed assets receive cached current or end-of-day market prices automatically.
-* Users can manually enter or update the current market price of assets that are not provider-backed.
-* The application calculates quantity held, cost basis, current value, realized profit or loss, and unrealized profit or loss.
-* Users can view their investment allocation by asset and asset type.
+- Users can add stocks, ETFs, mutual funds, and cryptocurrency holdings.
+- Users can add either an existing position or a new purchase from one guided
+  flow, including creating the investment account and portfolio inline.
+- Users can record investment purchases and sales.
+- Users can search for and add US stocks from Finnhub, PSX stocks and ETFs from EODHD, and cryptocurrencies from CoinGecko.
+- Provider-backed assets receive cached current or end-of-day market prices automatically.
+- Users can manually enter or update the current market price of assets that are not provider-backed.
+- The application calculates quantity held, cost basis, current value, realized profit or loss, and unrealized profit or loss.
+- Users can view their investment allocation by asset and asset type.
+- Users can organize account-specific positions into one custom portfolio and
+  dynamically allocate a percentage of an account's fiat cash to portfolios.
+- Broker and cryptocurrency-wallet fiat balances appear as derived Cash
+  holdings in account and global investment reporting without duplicating the
+  account ledger.
+- Users can maintain multiple named watchlists without changing balances,
+  holdings, net worth, or portfolio calculations.
+- Stablecoin holdings remain investments while contributing to explicit cash-
+  equivalent and liquidity subtotals.
+- Users can record starting stablecoin balances, external stablecoin deposits,
+  and atomic stablecoin transfers between their tracked crypto wallets.
+- Stock purchases and sales settle against the broker account's fiat cash.
+- Cryptocurrency purchases and sales settle against a USD-priced cash-
+  equivalent holding in the same crypto wallet, such as USDT, USDC, or DAI;
+  both sides of the pair update atomically.
 
 ### Financial Goals
 
-* Users can create goals with a target amount, current savings, and target date.
-* The application calculates the amount required daily, weekly, and monthly to achieve each goal.
-* Users can record contributions toward a goal.
-* Users can view goal progress and the remaining amount required.
-* The application identifies whether the goal is achievable based on the user’s recent income and expenses.
+- Users can create goals with a target amount, current savings, and target date.
+- The application calculates the amount required daily, weekly, and monthly to achieve each goal.
+- Users can record contributions toward a goal.
+- Users can view goal progress and the remaining amount required.
+- The application identifies whether the goal is achievable based on the user’s recent income and expenses.
 
 ### Financial Health Insights
 
-* The application calculates savings rate, liquidity ratio, emergency-fund coverage, expense-to-income ratio, and portfolio concentration.
-* The application provides rules-based recommendations using the user’s financial data.
-* Every recommendation includes the metric and reason that triggered it.
-* The application clearly presents insights as educational information rather than professional financial advice.
+- The application calculates savings rate, liquidity ratio, emergency-fund coverage, expense-to-income ratio, and portfolio concentration.
+- The application provides rules-based recommendations using the user’s financial data.
+- Every recommendation includes the metric and reason that triggered it.
+- The application clearly presents insights as educational information rather than professional financial advice.
 
 ## Scope
 
 ### In Scope
 
-* A responsive web application for desktop, tablet, and mobile browsers.
-* User authentication and personal finance profiles.
-* Manual creation and management of financial accounts.
-* Manual entry of income, expenses, transfers, refunds, fees, investment transactions, and balance adjustments.
-* Automatic account-balance calculations based on recorded transactions.
-* Expense categories and monthly budgets.
-* A centralized financial dashboard.
-* Manual investment holdings and market-price updates.
-* On-demand cached market prices for Finnhub-backed US stocks, EODHD-backed PSX stocks and ETFs, and CoinGecko-backed cryptocurrencies.
-* Basic realized and unrealized profit-and-loss calculations.
-* Savings goals and contribution plans.
-* Rules-based financial health calculations.
-* Transaction filtering and searching.
-* USD, PKR, and native-currency investment reporting, with historical FX
+- A responsive web application for desktop, tablet, and mobile browsers.
+- User authentication and personal finance profiles.
+- Manual creation and management of financial accounts.
+- Manual entry of income, expenses, transfers, refunds, fees, investment transactions, and balance adjustments.
+- Automatic account-balance calculations based on recorded transactions.
+- Expense categories and monthly budgets.
+- A centralized financial dashboard.
+- Manual investment holdings and market-price updates.
+- Ledger-backed opening positions that establish quantity and cost basis
+  without changing account cash, income, expenses, or net worth.
+- Explicit broker-cash and same-wallet stablecoin settlement for new
+  investment purchases and sales.
+- Multiple investment watchlists and position-level custom portfolios.
+- On-demand cached market prices for Finnhub-backed US stocks, EODHD-backed PSX stocks and ETFs, and CoinGecko-backed cryptocurrencies.
+- Basic realized and unrealized profit-and-loss calculations.
+- Savings goals and contribution plans.
+- Rules-based financial health calculations.
+- Transaction filtering and searching.
+- USD, PKR, and native-currency investment reporting, with historical FX
   snapshots for cross-currency investment performance.
-* Secure storage of user financial records.
-* Audit history for important financial changes.
+- Secure storage of user financial records.
+- Audit history for important financial changes.
 
 ### Out of Scope
 
-* Direct synchronization with banks, brokers, mutual funds, or cryptocurrency exchanges.
-* Automatic collection of transactions from SMS messages, emails, or mobile notifications.
-* Live streaming market prices or background market-price polling.
-* Automated trading or investment execution.
-* Cryptocurrency private-key or seed-phrase management.
-* Professional investment, tax, accounting, or legal advice.
-* Tax-return preparation or submission.
-* Credit scoring and loan approval.
-* Liability or debt account tracking, including loans and credit-card balances.
-* Shared family, household, or business accounts.
-* Native Android or iOS applications.
-* AI-generated financial recommendations.
-* Receipt file uploads.
-* Receipt scanning and OCR.
-* Automatic bank-statement or broker-statement imports.
-* Support for advanced investment events such as stock splits, rights issues, and bonus shares.
+- Direct synchronization with banks, brokers, mutual funds, or cryptocurrency exchanges.
+- Automatic collection of transactions from SMS messages, emails, or mobile notifications.
+- Live streaming market prices or background market-price polling.
+- Automated trading or investment execution.
+- Cryptocurrency private-key or seed-phrase management.
+- Professional investment, tax, accounting, or legal advice.
+- Tax-return preparation or submission.
+- Credit scoring and loan approval.
+- Liability or debt account tracking, including loans and credit-card balances.
+- Shared family, household, or business accounts.
+- Native Android or iOS applications.
+- AI-generated financial recommendations.
+- Receipt file uploads.
+- Receipt scanning and OCR.
+- Automatic bank-statement or broker-statement imports.
+- Support for advanced investment events such as stock splits, rights issues, and bonus shares.
 
 ## Success Criteria
 

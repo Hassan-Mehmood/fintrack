@@ -32,6 +32,8 @@ export const defaultTransactionCategories: TransactionCategories = {
   INVESTMENT_REINVESTMENT: ['Reinvestment'],
   INVESTMENT_DEPOSIT: ['Asset deposit'],
   INVESTMENT_WITHDRAWAL: ['Asset withdrawal'],
+  INVESTMENT_TRANSFER: ['Asset transfer'],
+  INVESTMENT_OPENING_POSITION: ['Opening position'],
   ADJUSTMENT: ['Balance adjustment', 'Other adjustment'],
 };
 

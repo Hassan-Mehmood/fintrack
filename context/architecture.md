@@ -6,10 +6,10 @@ The application is a personal finance management platform that allows users to m
 
 The system uses:
 
-* **Next.js** for the web interface
-* **NestJS** for the backend API and business logic
-* **PostgreSQL** for persistent data
-* **Prisma** for database access
+- **Next.js** for the web interface
+- **NestJS** for the backend API and business logic
+- **PostgreSQL** for persistent data
+- **Prisma** for database access
 
 The first version uses a simple modular architecture. It does not include microservices, AI processing, background workers, or streaming market data. On-demand Finnhub, EODHD, and CoinGecko requests are normalized by the API and cached in Redis.
 
@@ -17,25 +17,25 @@ The first version uses a simple modular architecture. It does not include micros
 
 ## Technology Stack
 
-| Layer               | Technology                      | Role                                              |
-| ------------------- | ------------------------------- | ------------------------------------------------- |
-| Frontend            | Next.js                         | Builds the web interface and application pages    |
-| Frontend language   | TypeScript                      | Provides type safety                              |
-| UI components       | React and shadcn/ui             | Builds reusable interface components              |
-| Styling             | Tailwind CSS                    | Handles responsive styling                        |
-| Forms               | React Hook Form                 | Manages transaction, account, and goal forms      |
-| Frontend validation | Zod                             | Validates form data before submission             |
-| API state           | TanStack Query                  | Fetches and refreshes backend data                |
-| Charts              | Recharts or Apache ECharts      | Displays spending and portfolio analytics         |
-| Backend             | NestJS                          | Handles API requests and business logic           |
-| API style           | REST                            | Provides communication between Next.js and NestJS |
-| Backend validation  | NestJS DTOs and class-validator | Validates incoming API data                       |
-| Database            | PostgreSQL                      | Stores financial and user data                    |
-| ORM                 | Prisma                          | Manages database queries, schema, and migrations  |
-| Authentication      | Clerk                           | Handles registration, login, and sessions         |
-| Market data         | Finnhub, EODHD, and CoinGecko | Provides US stock, PSX end-of-day, and cryptocurrency market data |
-| Cache               | Redis                            | Caches quotes and coordinates provider rate limits |
-| Package manager     | pnpm                            | Manages project dependencies                      |
+| Layer               | Technology                      | Role                                                              |
+| ------------------- | ------------------------------- | ----------------------------------------------------------------- |
+| Frontend            | Next.js                         | Builds the web interface and application pages                    |
+| Frontend language   | TypeScript                      | Provides type safety                                              |
+| UI components       | React and shadcn/ui             | Builds reusable interface components                              |
+| Styling             | Tailwind CSS                    | Handles responsive styling                                        |
+| Forms               | React Hook Form                 | Manages transaction, account, and goal forms                      |
+| Frontend validation | Zod                             | Validates form data before submission                             |
+| API state           | TanStack Query                  | Fetches and refreshes backend data                                |
+| Charts              | Recharts or Apache ECharts      | Displays spending and portfolio analytics                         |
+| Backend             | NestJS                          | Handles API requests and business logic                           |
+| API style           | REST                            | Provides communication between Next.js and NestJS                 |
+| Backend validation  | NestJS DTOs and class-validator | Validates incoming API data                                       |
+| Database            | PostgreSQL                      | Stores financial and user data                                    |
+| ORM                 | Prisma                          | Manages database queries, schema, and migrations                  |
+| Authentication      | Clerk                           | Handles registration, login, and sessions                         |
+| Market data         | Finnhub, EODHD, and CoinGecko   | Provides US stock, PSX end-of-day, and cryptocurrency market data |
+| Cache               | Redis                           | Caches quotes and coordinates provider rate limits                |
+| Package manager     | pnpm                            | Manages project dependencies                                      |
 
 ---
 
@@ -94,21 +94,21 @@ The `apps/web` folder owns the user-facing web application.
 
 Responsibilities:
 
-* Pages and layouts
-* Navigation
-* Forms
-* Charts and dashboard components
-* Loading and error states
-* Calling the NestJS API
-* Formatting currency, dates, and percentages
-* Client-side form validation
+- Pages and layouts
+- Navigation
+- Forms
+- Charts and dashboard components
+- Loading and error states
+- Calling the NestJS API
+- Formatting currency, dates, and percentages
+- Client-side form validation
 
 It must not contain:
 
-* Database queries
-* Account ownership checks
-* Authoritative balance calculations
-* Financial transaction rules
+- Database queries
+- Account ownership checks
+- Authoritative balance calculations
+- Financial transaction rules
 
 Suggested structure:
 
@@ -138,18 +138,18 @@ The `apps/api` folder owns the backend API and business logic.
 
 Responsibilities:
 
-* Authentication verification
-* Ownership and authorization checks
-* Request validation
-* Account management
-* Transaction creation
-* Balance calculations
-* Expense categorization
-* Budget tracking
-* Investment calculations
-* Goal calculations
-* Dashboard analytics
-* Database access
+- Authentication verification
+- Ownership and authorization checks
+- Request validation
+- Account management
+- Transaction creation
+- Balance calculations
+- Expense categorization
+- Budget tracking
+- Investment calculations
+- Goal calculations
+- Dashboard analytics
+- Database access
 
 Suggested structure:
 
@@ -185,13 +185,13 @@ This package contains reusable financial calculations.
 
 Responsibilities:
 
-* Calculate account balances
-* Calculate net worth
-* Calculate monthly income and expenses
-* Calculate savings rate
-* Calculate investment profit or loss
-* Calculate goal contribution requirements
-* Calculate basic financial-health metrics
+- Calculate account balances
+- Calculate net worth
+- Calculate monthly income and expenses
+- Calculate savings rate
+- Calculate investment profit or loss
+- Calculate goal contribution requirements
+- Calculate basic financial-health metrics
 
 Example functions:
 
@@ -205,10 +205,10 @@ calculateGoalPlan();
 
 This package must not:
 
-* Access the database
-* Call external APIs
-* Import NestJS
-* Read environment variables
+- Access the database
+- Call external APIs
+- Import NestJS
+- Read environment variables
 
 Its functions should accept inputs and return calculated results.
 
@@ -220,11 +220,11 @@ This package contains values shared between the frontend and backend.
 
 Examples:
 
-* Account types
-* Transaction types
-* Goal statuses
-* Currency codes
-* API response types
+- Account types
+- Transaction types
+- Goal statuses
+- Currency codes
+- API response types
 
 Example:
 
@@ -249,9 +249,9 @@ The current standalone NestJS backend keeps Prisma inside `apps/api`.
 
 This folder owns:
 
-* Prisma schema
-* Prisma migrations
-* Migration lock metadata
+- Prisma schema
+- Prisma migrations
+- Migration lock metadata
 
 The API root also owns `prisma.config.ts`, and `apps/api/src/prisma/`
 owns the NestJS Prisma module and service.
@@ -266,27 +266,27 @@ source of truth for Prisma schema and migrations.
 
 If introduced later, this package may own:
 
-* Prisma schema
-* Prisma migrations
-* Prisma client configuration
-* Database seed scripts
+- Prisma schema
+- Prisma migrations
+- Prisma client configuration
+- Database seed scripts
 
 ---
 
 ## Backend Modules
 
-| Module         | Responsibility                                                    |
-| -------------- | ----------------------------------------------------------------- |
-| `auth`         | Verifies signed-in users                                          |
-| `users`        | Stores profile, base currency, and preferences                    |
+| Module         | Responsibility                                                                |
+| -------------- | ----------------------------------------------------------------------------- |
+| `auth`         | Verifies signed-in users                                                      |
+| `users`        | Stores profile, base currency, and preferences                                |
 | `accounts`     | Manages bank, cash wallet, digital wallet, broker, and crypto wallet accounts |
-| `transactions` | Manages income, expenses, transfers, and adjustments              |
-| `categories`   | Manages expense and income categories                             |
-| `budgets`      | Manages monthly spending limits                                   |
-| `investments`  | Manages investment purchases, sales, holdings, and profit or loss |
-| `market-data`  | Searches provider assets and retrieves normalized cached quotes |
-| `goals`        | Manages savings goals and contribution plans                      |
-| `analytics`    | Produces dashboard totals and charts                              |
+| `transactions` | Manages income, expenses, transfers, and adjustments                          |
+| `categories`   | Manages expense and income categories                                         |
+| `budgets`      | Manages monthly spending limits                                               |
+| `investments`  | Manages investment purchases, sales, holdings, and profit or loss             |
+| `market-data`  | Searches provider assets and retrieves normalized cached quotes               |
+| `goals`        | Manages savings goals and contribution plans                                  |
+| `analytics`    | Produces dashboard totals and charts                                          |
 
 ---
 
@@ -298,20 +298,22 @@ PostgreSQL is the main and authoritative data store.
 
 Store the following in PostgreSQL:
 
-* Users
-* User preferences
-* Financial accounts
-* Transactions
-* Transaction entries
-* Categories
-* Budgets
-* Investment assets
-* Investment trades
-* Authoritative investment gross amounts, fees, and final cash impacts
-* Current manually entered asset prices
-* Stable provider identifiers and metadata for provider-backed assets
-* Financial goals
-* Goal contributions
+- Users
+- User preferences
+- Financial accounts
+- Transactions
+- Transaction entries
+- Categories
+- Budgets
+- Investment assets
+- Investment trades
+- Position-level portfolio memberships and percentage-based fiat cash allocations
+- Named watchlists and their asset memberships
+- Authoritative investment gross amounts, fees, and final cash impacts
+- Current manually entered asset prices
+- Stable provider identifiers and metadata for provider-backed assets
+- Financial goals
+- Goal contributions
 
 Financial values must use PostgreSQL `NUMERIC` fields.
 
@@ -345,11 +347,58 @@ rate, source, and observation timestamp used for historical reporting. The
 initial FX source is the manually configured USD-to-PKR rate in user settings;
 no external FX provider is introduced by the investment reporting feature.
 
+New stock buys and sells settle against the broker account's derived fiat cash.
+New crypto buys and sells instead reference an optional settlement asset on the
+investment detail. For crypto trades this reference is required and must point
+to a USD-priced cash-equivalent asset in the same crypto wallet. A buy deducts
+gross amount plus fees from the settlement holding; a sell credits gross amount
+minus fees. Paired crypto trades have zero fiat-account effect. A null
+settlement reference is retained for opening positions, non-trade investment
+events, stock cash settlement, and legacy crypto trades created before this
+feature.
+
 The Investments API owns reporting-currency calculations. It supports `USD`,
 `PKR`, and `NATIVE` display modes. USD and PKR mode convert each transaction's
 cost basis and realized result with its historical FX snapshot, while current
 market value uses the latest configured FX rate. Native mode returns
 currency-grouped totals and never combines unlike currencies.
+
+An investment position is identified by `accountId + assetId`. A position may
+belong to at most one custom portfolio. Portfolio membership never changes an
+investment account's own totals, which always include the account's complete
+fiat cash balance and all of its holdings. Portfolio cash allocations are
+percentages of current account cash; allocations for an account across all
+portfolios must not exceed 100 percent.
+
+Opening positions are represented by
+`TransactionType.INVESTMENT_OPENING_POSITION` and `TradeType.OPENING`. They add
+quantity and average-cost basis but have a zero transaction amount, no fees,
+and no account-cash, income, or expense effect. Both an original reversed
+investment transaction and its linked reversal are excluded from holding
+calculations.
+
+Assets carry an explicit liquidity classification of `INVESTMENT` or
+`CASH_EQUIVALENT` and record whether it came from automatic canonical-
+stablecoin classification or a user override. Cash equivalents remain asset
+holdings and are never folded into fiat account balances.
+
+Investment reporting also exposes each broker or cryptocurrency wallet's
+derived fiat balance as a synthetic `FIAT_CASH` holding. This row is a read
+model only: no fiat `Asset` is created, and its value always comes from the
+account opening balance plus cleared ledger activity. Fiat cash contributes to
+account value, liquidity, currency exposure, and percentage-based portfolio
+cash allocations, but never to investment cost basis or profit and loss.
+
+Stablecoin movements between two tracked cryptocurrency wallets use one
+`INVESTMENT_TRANSFER` transaction with the source account, destination account,
+asset, quantity, and the source position's average cost. The transaction has no
+fiat balance, income, expense, or net-worth effect. Holdings interpret it as a
+withdrawal from the source and a deposit into the destination so quantity and
+cost basis move atomically.
+
+Watchlists are independent user-owned containers. Their items reference asset
+library records for pricing, but never participate in ledger, balance, net
+worth, holding, or portfolio calculations.
 
 Example Prisma field:
 
@@ -458,11 +507,11 @@ Fees reduce the selected account balance and count as expenses unless a more spe
 
 Clerk handles:
 
-* User registration
-* Login
-* Logout
-* Session management
-* Password recovery
+- User registration
+- Login
+- Logout
+- Session management
+- Password recovery
 
 The Next.js application sends the authenticated user token to the NestJS API.
 
@@ -511,12 +560,12 @@ The backend must never trust a `userId` provided by the frontend.
 
 A user must only be able to access:
 
-* Their own accounts
-* Their own transactions
-* Their own investments
-* Their own budgets
-* Their own goals
-* Their own analytics
+- Their own accounts
+- Their own transactions
+- Their own investments
+- Their own budgets
+- Their own goals
+- Their own analytics
 
 ---
 
@@ -564,21 +613,21 @@ Background workers are not part of the initial MVP.
 
 All initial functionality should run through normal API requests, including:
 
-* Creating accounts
-* Recording transactions
-* Updating balances
-* Creating budgets
-* Adding investment trades
-* Updating manual investment prices and retrieving provider-backed prices on demand
-* Creating financial goals
-* Calculating dashboard analytics
+- Creating accounts
+- Recording transactions
+- Updating balances
+- Creating budgets
+- Adding investment trades
+- Updating manual investment prices and retrieving provider-backed prices on demand
+- Creating financial goals
+- Calculating dashboard analytics
 
 A background-task system may be added later for:
 
-* Automatic market-price updates
-* Scheduled reminders
-* Statement imports
-* Email transaction parsing
+- Automatic market-price updates
+- Scheduled reminders
+- Statement imports
+- Email transaction parsing
 
 ---
 
@@ -636,10 +685,10 @@ An entity ID alone is not sufficient authorization.
 
 Moving money between two accounts owned by the same user changes account balances but does not change:
 
-* Total assets
-* Net worth
-* Income
-* Expenses
+- Total assets
+- Net worth
+- Income
+- Expenses
 
 ---
 
@@ -685,6 +734,28 @@ configured FX rate.
 
 ---
 
+### 10. Investment organization must not rewrite the ledger
+
+Holdings are always derived from cleared, non-deleted, non-reversed ledger
+transactions. Portfolio membership, cash allocation, watchlist membership, and
+liquidity classification organize or classify those results; they do not
+create quantity or cash movements.
+
+### 11. Investment settlement must update both sides atomically
+
+A cleared stock purchase cannot exceed the broker account's available fiat
+cash. A cleared crypto purchase cannot exceed the selected same-wallet cash-
+equivalent quantity. Creating, editing, clearing, reversing, or deleting a
+paired crypto trade must apply or release both asset movements together.
+
+### 12. Fiat cash holdings must remain derived
+
+The `FIAT_CASH` holding is a reporting projection of the account ledger. It
+must never be persisted as an investment asset or independently edited. Cash
+funding must continue to use transfers or audited balance adjustments.
+
+---
+
 ## Deployment
 
 The application should initially have two deployments.
@@ -696,18 +767,18 @@ The application should initially have two deployments.
 
 PostgreSQL can be hosted using:
 
-* Neon
-* Supabase
-* Railway
-* AWS RDS
+- Neon
+- Supabase
+- Railway
+- AWS RDS
 
 The first version does not require:
 
-* Background-worker containers
-* Microservices
-* AI infrastructure
-* Real-time market-data services
-* Dedicated analytics databases
+- Background-worker containers
+- Microservices
+- AI infrastructure
+- Real-time market-data services
+- Dedicated analytics databases
 
 ---
 

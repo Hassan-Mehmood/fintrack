@@ -77,6 +77,8 @@ interface TransactionFormDialogProps {
   readonly holdings: readonly Holding[];
   readonly categoriesByType?: TransactionCategories;
   readonly initialAccountId?: string;
+  readonly initialAssetId?: string;
+  readonly initialType?: TransactionType;
   readonly isPending?: boolean;
   readonly mode: "create" | "edit";
   readonly onOpenChange: (open: boolean) => void;
@@ -94,6 +96,8 @@ export function TransactionFormDialog({
   holdings,
   categoriesByType = emptyTransactionCategories,
   initialAccountId,
+  initialAssetId,
+  initialType,
   isPending = false,
   mode,
   onOpenChange,
@@ -106,16 +110,35 @@ export function TransactionFormDialog({
       transaction,
       defaultCurrency,
       initialAccountId,
+      initialAssetId,
+      initialType,
+      categoriesByType[initialType ?? "EXPENSE"]?.[0],
     ),
   });
 
   useEffect(() => {
     if (open) {
       form.reset(
-        getDefaultValues(transaction, defaultCurrency, initialAccountId),
+        getDefaultValues(
+          transaction,
+          defaultCurrency,
+          initialAccountId,
+          initialAssetId,
+          initialType,
+          categoriesByType[initialType ?? "EXPENSE"]?.[0],
+        ),
       );
     }
-  }, [defaultCurrency, form, initialAccountId, open, transaction]);
+  }, [
+    categoriesByType,
+    defaultCurrency,
+    form,
+    initialAccountId,
+    initialAssetId,
+    initialType,
+    open,
+    transaction,
+  ]);
 
   const {
     control,
@@ -145,11 +168,16 @@ export function TransactionFormDialog({
     control,
     name: "investment.fees",
   });
+  const watchedSettlementAssetId = useWatch({
+    control,
+    name: "investment.settlementAssetId",
+  });
   const showDestination = isTransferType(watchedType);
   const showInvestment =
     requiresInvestmentDetail(watchedType) || watchedType === "DIVIDEND";
   const showInvestmentQuantity = requiresQuantity(watchedType);
-  const showInvestmentPrice = requiresPrice(watchedType);
+  const showInvestmentPrice =
+    requiresPrice(watchedType) || watchedType === "INVESTMENT_DEPOSIT";
   const showInvestmentFees = supportsFees(watchedType);
   const showManualAmount = requiresManualAmount(watchedType);
   const showCalculatedAmount =
@@ -165,6 +193,9 @@ export function TransactionFormDialog({
     () => assets.find((asset) => asset.id === watchedAssetId),
     [assets, watchedAssetId],
   );
+  const usesStablecoinSettlement =
+    selectedAccount?.type === "CRYPTO_WALLET" &&
+    (watchedType === "INVESTMENT_BUY" || watchedType === "INVESTMENT_SELL");
   const selectedHolding = useMemo(
     () =>
       holdings.find(
@@ -183,7 +214,8 @@ export function TransactionFormDialog({
       editedDetail &&
       editedDetail.assetId === watchedAssetId &&
       (transaction?.type === "INVESTMENT_SELL" ||
-        transaction?.type === "INVESTMENT_WITHDRAWAL")
+        transaction?.type === "INVESTMENT_WITHDRAWAL" ||
+        transaction?.type === "INVESTMENT_TRANSFER")
     ) {
       return (
         addQuantities(currentQuantity, editedDetail.quantity) ?? currentQuantity
@@ -215,7 +247,9 @@ export function TransactionFormDialog({
       showCalculatedAmount
         ? calculateInvestmentTransactionAmounts({
             type: watchedType,
-            accountCurrency: selectedAccount?.currency,
+            accountCurrency: usesStablecoinSettlement
+              ? (selectedAsset?.priceCurrency ?? undefined)
+              : selectedAccount?.currency,
             exchangeRate,
             quantity: watchedQuantity ?? "",
             price: watchedPrice ?? "",
@@ -232,8 +266,39 @@ export function TransactionFormDialog({
       watchedPrice,
       watchedQuantity,
       watchedType,
+      usesStablecoinSettlement,
     ],
   );
+  const settlementAssets = useMemo(() => {
+    const heldIds = new Set(
+      holdings
+        .filter(
+          (holding) =>
+            holding.accountId === watchedAccountId &&
+            holding.liquidityClass === "CASH_EQUIVALENT" &&
+            holding.nativeCurrency === "USD" &&
+            (watchedType === "INVESTMENT_SELL" ||
+              compareDecimals(holding.quantity, "0") === 1),
+        )
+        .map((holding) => holding.assetId),
+    );
+    return assets.filter(
+      (asset) =>
+        asset.id !== watchedAssetId &&
+        asset.liquidityClass === "CASH_EQUIVALENT" &&
+        asset.priceCurrency === "USD" &&
+        (watchedType === "INVESTMENT_SELL" || heldIds.has(asset.id)),
+    );
+  }, [assets, holdings, watchedAccountId, watchedAssetId, watchedType]);
+  const selectedSettlementAsset = settlementAssets.find(
+    (asset) => asset.id === watchedSettlementAssetId,
+  );
+  const selectedSettlementSymbol =
+    selectedSettlementAsset?.symbol ??
+    CANONICAL_STABLECOINS.find(
+      (asset) =>
+        `provider:${asset.providerAssetId}` === watchedSettlementAssetId,
+    )?.symbol;
   const resultingSplitQuantity = useMemo(
     () =>
       watchedType === "INVESTMENT_SPLIT"
@@ -268,9 +333,10 @@ export function TransactionFormDialog({
   const availableAccounts = useMemo(
     () =>
       showInvestment || watchedType === "INTEREST"
-        ? accounts.filter(
-            (account) =>
-              account.type === "BROKER" || account.type === "CRYPTO_WALLET",
+        ? accounts.filter((account) =>
+            watchedType === "INVESTMENT_TRANSFER"
+              ? account.type === "CRYPTO_WALLET"
+              : account.type === "BROKER" || account.type === "CRYPTO_WALLET",
           )
         : accounts,
     [accounts, showInvestment, watchedType],
@@ -288,9 +354,37 @@ export function TransactionFormDialog({
   }, [selectedAccount, setValue, showInvestment, watchedType]);
 
   const otherAccounts = useMemo(
-    () => accounts.filter((account) => account.id !== watchedAccountId),
-    [accounts, watchedAccountId],
+    () =>
+      accounts.filter(
+        (account) =>
+          account.id !== watchedAccountId &&
+          (watchedType === "INVESTMENT_TRANSFER"
+            ? account.type === "CRYPTO_WALLET"
+            : account.currency === selectedAccount?.currency),
+      ),
+    [accounts, selectedAccount?.currency, watchedAccountId, watchedType],
   );
+  const availableAssets = useMemo(
+    () =>
+      watchedType === "INVESTMENT_TRANSFER"
+        ? assets.filter(
+            (asset) =>
+              asset.liquidityClass === "CASH_EQUIVALENT" &&
+              asset.priceCurrency === "USD",
+          )
+        : assets,
+    [assets, watchedType],
+  );
+
+  useEffect(() => {
+    if (
+      watchedType === "INVESTMENT_DEPOSIT" &&
+      selectedAsset?.liquidityClass === "CASH_EQUIVALENT" &&
+      !watchedPrice
+    ) {
+      setValue("investment.price", "1");
+    }
+  }, [selectedAsset?.liquidityClass, setValue, watchedPrice, watchedType]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -328,7 +422,8 @@ export function TransactionFormDialog({
 
             if (
               (parsedValues.data.type === "INVESTMENT_SELL" ||
-                parsedValues.data.type === "INVESTMENT_WITHDRAWAL") &&
+                parsedValues.data.type === "INVESTMENT_WITHDRAWAL" ||
+                parsedValues.data.type === "INVESTMENT_TRANSFER") &&
               compareDecimals(
                 parsedValues.data.investment?.quantity ?? "",
                 availableQuantity,
@@ -336,6 +431,19 @@ export function TransactionFormDialog({
             ) {
               setError("investment.quantity", {
                 message: `Quantity cannot exceed the current holding (${availableQuantity}).`,
+              });
+              return;
+            }
+
+            if (
+              usesStablecoinSettlement &&
+              !parsedValues.data.investment?.settlementAssetId
+            ) {
+              setError("investment.settlementAssetId", {
+                message:
+                  watchedType === "INVESTMENT_BUY"
+                    ? "Select the stablecoin used to pay for this purchase."
+                    : "Select the stablecoin that received the sale proceeds.",
               });
               return;
             }
@@ -508,7 +616,9 @@ export function TransactionFormDialog({
                   )}
                 />
                 <FieldDescription>
-                  Money will leave the selected account and move here.
+                  {watchedType === "INVESTMENT_TRANSFER"
+                    ? "The stablecoin quantity and proportional cost basis will move here."
+                    : "Money will leave the selected account and move here."}
                 </FieldDescription>
                 <FieldError errors={[errors.destinationAccountId]} />
               </Field>
@@ -535,13 +645,21 @@ export function TransactionFormDialog({
 
             {showCalculatedAmount ? (
               <CalculatedAmountField
-                currency={selectedAccount?.currency}
+                currency={
+                  usesStablecoinSettlement
+                    ? (selectedSettlementSymbol ?? "stablecoin")
+                    : selectedAccount?.currency
+                }
                 label={
                   watchedType === "INVESTMENT_SELL"
-                    ? "Net proceeds"
+                    ? usesStablecoinSettlement
+                      ? "Stablecoin received"
+                      : "Net proceeds"
                     : watchedType === "INVESTMENT_REINVESTMENT"
                       ? "Total used"
-                      : "Total amount"
+                      : usesStablecoinSettlement
+                        ? "Stablecoin required"
+                        : "Total amount"
                 }
                 value={investmentCalculation?.cashImpact ?? ""}
               />
@@ -627,12 +745,12 @@ export function TransactionFormDialog({
                                 No related asset
                               </SelectItem>
                             ) : null}
-                            {assets.length === 0 ? (
+                            {availableAssets.length === 0 ? (
                               <SelectItem value="unavailable" disabled>
                                 No assets available
                               </SelectItem>
                             ) : null}
-                            {assets.map((asset) => (
+                            {availableAssets.map((asset) => (
                               <SelectItem key={asset.id} value={asset.id}>
                                 {asset.name}
                                 {asset.symbol ? ` (${asset.symbol})` : null}
@@ -679,7 +797,8 @@ export function TransactionFormDialog({
                       {watchedType === "INVESTMENT_SPLIT"
                         ? "Enter the new-for-old multiplier, such as 2 for a 2-for-1 split."
                         : watchedType === "INVESTMENT_SELL" ||
-                            watchedType === "INVESTMENT_WITHDRAWAL"
+                            watchedType === "INVESTMENT_WITHDRAWAL" ||
+                            watchedType === "INVESTMENT_TRANSFER"
                           ? `Currently available: ${availableQuantity}`
                           : "Fractional shares and cryptocurrency quantities are supported."}
                     </FieldDescription>
@@ -694,7 +813,9 @@ export function TransactionFormDialog({
                     }
                   >
                     <FieldLabel htmlFor="transaction-investment-price">
-                      Price per unit
+                      {watchedType === "INVESTMENT_DEPOSIT"
+                        ? "Cost per unit"
+                        : "Price per unit"}
                     </FieldLabel>
                     <Input
                       id="transaction-investment-price"
@@ -706,7 +827,9 @@ export function TransactionFormDialog({
                       {...register("investment.price")}
                     />
                     <FieldDescription>
-                      Price in{" "}
+                      {watchedType === "INVESTMENT_DEPOSIT"
+                        ? "Defaults to USD 1 for stablecoins. Enter the actual acquisition cost in "
+                        : "Price in "}
                       {selectedAsset?.priceCurrency ?? "asset price currency"}.
                     </FieldDescription>
                     <FieldError errors={[errors.investment?.price]} />
@@ -730,9 +853,107 @@ export function TransactionFormDialog({
                       {...register("investment.fees")}
                     />
                     <FieldDescription>
-                      Fees in {selectedAccount?.currency ?? "account currency"}.
+                      Fees in{" "}
+                      {usesStablecoinSettlement
+                        ? (selectedSettlementSymbol ??
+                          "the selected stablecoin")
+                        : (selectedAccount?.currency ?? "account currency")}
+                      .
                     </FieldDescription>
                     <FieldError errors={[errors.investment?.fees]} />
+                  </Field>
+                ) : null}
+
+                {usesStablecoinSettlement ? (
+                  <Field
+                    data-invalid={
+                      Boolean(errors.investment?.settlementAssetId) || undefined
+                    }
+                  >
+                    <FieldLabel htmlFor="transaction-settlement-asset">
+                      {watchedType === "INVESTMENT_BUY"
+                        ? "Pay with"
+                        : "Receive in"}
+                    </FieldLabel>
+                    <Controller
+                      control={control}
+                      name="investment.settlementAssetId"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value ?? ""}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger id="transaction-settlement-asset">
+                            <SelectValue placeholder="Select a stablecoin" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {settlementAssets.map((asset) => {
+                                const holding = holdings.find(
+                                  (item) =>
+                                    item.accountId === watchedAccountId &&
+                                    item.assetId === asset.id,
+                                );
+                                return (
+                                  <SelectItem key={asset.id} value={asset.id}>
+                                    {asset.symbol ?? asset.name}
+                                    {holding
+                                      ? ` · ${holding.quantity} available`
+                                      : " · new balance"}
+                                  </SelectItem>
+                                );
+                              })}
+                              {watchedType === "INVESTMENT_SELL"
+                                ? CANONICAL_STABLECOINS.filter(
+                                    (candidate) =>
+                                      !assets.some(
+                                        (asset) =>
+                                          asset.provider === "COINGECKO" &&
+                                          asset.providerAssetId ===
+                                            candidate.providerAssetId,
+                                      ),
+                                  ).map((candidate) => (
+                                    <SelectItem
+                                      key={candidate.providerAssetId}
+                                      value={`provider:${candidate.providerAssetId}`}
+                                    >
+                                      {candidate.symbol} · create new balance
+                                    </SelectItem>
+                                  ))
+                                : null}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FieldDescription>
+                      {selectedAsset && selectedSettlementSymbol
+                        ? `Pair: ${selectedAsset.symbol ?? selectedAsset.name}/${selectedSettlementSymbol}`
+                        : watchedType === "INVESTMENT_BUY"
+                          ? "Only positive cash-equivalent balances in this wallet are available."
+                          : "Sale proceeds create or increase this cash-equivalent holding."}
+                    </FieldDescription>
+                    <FieldError
+                      errors={[errors.investment?.settlementAssetId]}
+                    />
+                  </Field>
+                ) : watchedType === "INVESTMENT_BUY" ||
+                  watchedType === "INVESTMENT_SELL" ? (
+                  <Field>
+                    <FieldLabel>
+                      {watchedType === "INVESTMENT_BUY"
+                        ? "Paid with"
+                        : "Receive as"}
+                    </FieldLabel>
+                    <Input
+                      readOnly
+                      value={`Cash (${selectedAccount?.currency ?? ""})`}
+                    />
+                    <FieldDescription>
+                      Available broker cash:{" "}
+                      {selectedAccount?.currentBalance ?? "0"}{" "}
+                      {selectedAccount?.currency ?? ""}
+                    </FieldDescription>
                   </Field>
                 ) : null}
 
@@ -896,23 +1117,29 @@ function getDefaultValues(
   transaction: Transaction | null | undefined,
   defaultCurrency: (typeof currencyValues)[number],
   initialAccountId?: string,
+  initialAssetId?: string,
+  initialType: TransactionType = "EXPENSE",
+  initialCategory = "",
 ): TransactionFormValues {
   if (!transaction) {
+    const investment = getEmptyInvestmentValues(initialType);
     return {
-      type: "EXPENSE",
+      type: initialType,
       status: "CLEARED",
       accountId: initialAccountId ?? "",
       destinationAccountId: "",
       amount: "",
       currency: defaultCurrency,
       occurredAt: new Date().toISOString().slice(0, 10),
-      category: "",
+      category: initialCategory,
       description: "",
       merchant: "",
       notes: "",
       reference: "",
       labels: "",
-      investment: undefined,
+      investment: investment
+        ? { ...investment, assetId: initialAssetId ?? "" }
+        : undefined,
     };
   }
 
@@ -940,13 +1167,17 @@ function getDefaultValues(
             quantity: requiresQuantity(transaction.type)
               ? transaction.investmentDetail.quantity
               : "",
-            price: requiresPrice(transaction.type)
-              ? transaction.investmentDetail.price
-              : "",
+            price:
+              requiresPrice(transaction.type) ||
+              transaction.type === "INVESTMENT_DEPOSIT"
+                ? transaction.investmentDetail.price
+                : "",
             fees: supportsFees(transaction.type)
               ? transaction.investmentDetail.fees
               : "",
             notes: "",
+            settlementAssetId:
+              transaction.investmentDetail.settlementAssetId ?? "",
           }
         : getEmptyInvestmentValues(transaction.type),
   };
@@ -968,6 +1199,7 @@ function getEmptyInvestmentValues(
     price: "",
     fees: "",
     notes: "",
+    settlementAssetId: "",
   };
 }
 
@@ -989,13 +1221,28 @@ function sanitizePayload(
           quantity: requiresQuantity(values.type)
             ? values.investment.quantity
             : undefined,
-          price: requiresPrice(values.type)
-            ? values.investment.price
-            : undefined,
+          price:
+            requiresPrice(values.type) || values.type === "INVESTMENT_DEPOSIT"
+              ? values.investment.price
+              : undefined,
           fees: supportsFees(values.type)
             ? values.investment.fees || "0"
             : undefined,
           notes: undefined,
+          settlementAsset: values.investment.settlementAssetId
+            ? values.investment.settlementAssetId.startsWith("provider:")
+              ? {
+                  kind: "PROVIDER" as const,
+                  provider: "COINGECKO" as const,
+                  providerAssetId: values.investment.settlementAssetId.slice(
+                    "provider:".length,
+                  ),
+                }
+              : {
+                  kind: "EXISTING" as const,
+                  assetId: values.investment.settlementAssetId,
+                }
+            : undefined,
         }
       : values.type === "DIVIDEND"
         ? null
@@ -1021,6 +1268,12 @@ function sanitizePayload(
     investment,
   };
 }
+
+const CANONICAL_STABLECOINS = [
+  { providerAssetId: "tether", symbol: "USDT" },
+  { providerAssetId: "usd-coin", symbol: "USDC" },
+  { providerAssetId: "dai", symbol: "DAI" },
+] as const;
 
 function CalculatedAmountField({
   currency,

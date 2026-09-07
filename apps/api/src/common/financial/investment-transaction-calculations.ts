@@ -23,6 +23,11 @@ export function calculateInvestmentTransactionAmounts(
     .toDecimalPlaces(8, Decimal.ROUND_HALF_UP);
 
   switch (input.type) {
+    case 'INVESTMENT_OPENING_POSITION':
+      return {
+        grossAmount,
+        cashImpact: new Decimal(0),
+      };
     case 'INVESTMENT_BUY':
     case 'INVESTMENT_REINVESTMENT':
       return {
@@ -40,8 +45,10 @@ export function calculateInvestmentTransactionAmounts(
     case 'INVESTMENT_BONUS':
     case 'INVESTMENT_DEPOSIT':
     case 'INVESTMENT_WITHDRAWAL':
+    case 'INVESTMENT_TRANSFER':
       return {
-        grossAmount: new Decimal(0),
+        grossAmount:
+          input.type === 'INVESTMENT_TRANSFER' ? grossAmount : new Decimal(0),
         cashImpact: new Decimal(0),
       };
     default:

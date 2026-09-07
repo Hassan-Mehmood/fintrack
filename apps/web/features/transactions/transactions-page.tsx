@@ -142,6 +142,9 @@ import {
   type TransactionFilters,
 } from "./transaction-filters";
 import { TransactionFormDialog } from "./transaction-form-dialog";
+import { InvestmentAccountSummaryPanel } from "@/features/investments/investment-account-summary";
+import { AddHoldingDialog } from "@/features/investments/add-holding-dialog";
+import { FundInvestmentAccountDialog } from "@/features/investments/fund-investment-account-dialog";
 import type { TransactionFormPayload } from "./transaction-form-schema";
 import {
   bulkUpdateTransactions,
@@ -193,13 +196,16 @@ export function TransactionsPage({
   }, [accountId, searchParams]);
   const [searchText, setSearchText] = useState(filters.search);
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const requestedAction = parseInvestmentAction(searchParams.get("action"));
+  const [dialog, setDialog] = useState<DialogState>(
+    requestedAction ? { mode: "create" } : null,
+  );
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
   const [details, setDetails] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [accountAction, setAccountAction] = useState<"edit" | "adjust" | null>(
-    null,
-  );
+  const [accountAction, setAccountAction] = useState<
+    "edit" | "adjust" | "fund" | null
+  >(null);
 
   function updateUrl(
     key: string,
@@ -486,6 +492,12 @@ export function TransactionsPage({
         <div className="flex items-center gap-2">
           {account ? (
             <>
+              {account.type === "BROKER" || account.type === "CRYPTO_WALLET" ? (
+                <Button size="sm" onClick={() => setAccountAction("fund")}>
+                  <PlusIcon data-icon="inline-start" />
+                  <span className="hidden sm:inline">Add funds</span>
+                </Button>
+              ) : null}
               <Button
                 size="sm"
                 variant="outline"
@@ -547,6 +559,13 @@ export function TransactionsPage({
         ) : null}
 
         {account ? <AccountOverview account={account} /> : null}
+        {account &&
+        (account.type === "BROKER" || account.type === "CRYPTO_WALLET") ? (
+          <InvestmentAccountSummaryPanel
+            accountId={account.id}
+            getToken={getToken}
+          />
+        ) : null}
 
         {hasError ? (
           <Alert variant="destructive">
@@ -946,7 +965,11 @@ export function TransactionsPage({
         assets={assetsQuery.data ?? []}
         holdings={holdingsQuery.data ?? []}
         categoriesByType={categoriesQuery.data}
-        initialAccountId={accountId}
+        initialAccountId={
+          accountId ?? searchParams.get("accountId") ?? undefined
+        }
+        initialAssetId={searchParams.get("assetId") ?? undefined}
+        initialType={requestedAction ?? undefined}
         exchangeRate={settingsQuery.data?.exchangeRate}
         defaultCurrency={
           (settingsQuery.data?.baseCurrency === "PKR" ? "PKR" : "USD") as
@@ -980,6 +1003,29 @@ export function TransactionsPage({
             }
           }}
           onSubmit={saveAccount}
+        />
+      ) : null}
+      {account?.type === "BROKER" && accountAction === "fund" ? (
+        <FundInvestmentAccountDialog
+          account={account}
+          accounts={accounts}
+          getToken={getToken}
+          open
+          onOpenChange={(open) => {
+            if (!open) setAccountAction(null);
+          }}
+        />
+      ) : null}
+      {account?.type === "CRYPTO_WALLET" ? (
+        <AddHoldingDialog
+          cashEquivalentOnly
+          getToken={getToken}
+          initialAccountId={account.id}
+          lockAccount
+          open={accountAction === "fund"}
+          onOpenChange={(open) => {
+            if (!open) setAccountAction(null);
+          }}
         />
       ) : null}
       {account && accountAction === "adjust" ? (
@@ -1068,6 +1114,20 @@ export function TransactionsPage({
       </AlertDialog>
     </AppShell>
   );
+}
+
+function parseInvestmentAction(value: string | null): TransactionType | null {
+  return value === "INVESTMENT_BUY" ||
+    value === "INVESTMENT_SELL" ||
+    value === "DIVIDEND" ||
+    value === "INVESTMENT_REINVESTMENT" ||
+    value === "INVESTMENT_SPLIT" ||
+    value === "INVESTMENT_BONUS" ||
+    value === "INVESTMENT_DEPOSIT" ||
+    value === "INVESTMENT_WITHDRAWAL" ||
+    value === "INVESTMENT_TRANSFER"
+    ? value
+    : null;
 }
 
 type FilterProps = {
@@ -1699,6 +1759,22 @@ function DetailSheet({
             value={formatDateTime(transaction.occurredAt)}
           />
           <Detail label="Account" value={transaction.accountName} />
+          {transaction.investmentDetail?.pairLabel ? (
+            <>
+              <Detail
+                label="Pair"
+                value={transaction.investmentDetail.pairLabel}
+              />
+              <Detail
+                label={
+                  transaction.type === "INVESTMENT_BUY"
+                    ? "Stablecoin paid"
+                    : "Stablecoin received"
+                }
+                value={`${transaction.investmentDetail.settlementQuantity ?? "0"} ${transaction.investmentDetail.settlementAssetSymbol ?? ""}`.trim()}
+              />
+            </>
+          ) : null}
           {transaction.destinationAccountName ? (
             <Detail
               label="Destination"
@@ -2092,6 +2168,17 @@ function amountColor(item: Transaction) {
     : "text-foreground";
 }
 function transactionAmount(item: Transaction) {
+  const investment = item.investmentDetail;
+  if (
+    investment?.settlementAssetSymbol &&
+    investment.settlementQuantity &&
+    (item.type === "INVESTMENT_BUY" || item.type === "INVESTMENT_SELL")
+  ) {
+    const asset = investment.assetSymbol ?? investment.assetName;
+    return item.type === "INVESTMENT_BUY"
+      ? `+${investment.quantity} ${asset} / −${investment.settlementQuantity} ${investment.settlementAssetSymbol}`
+      : `−${investment.quantity} ${asset} / +${investment.settlementQuantity} ${investment.settlementAssetSymbol}`;
+  }
   if (item.accountEffect !== undefined)
     return item.accountDirection === "NEUTRAL"
       ? formatAmount(item.accountEffect, item.currency)

@@ -32,6 +32,8 @@ enum TransactionType {
   INVESTMENT_REINVESTMENT
   INVESTMENT_DEPOSIT
   INVESTMENT_WITHDRAWAL
+  INVESTMENT_TRANSFER
+  INVESTMENT_OPENING_POSITION
   ADJUSTMENT
 }
 
@@ -54,6 +56,7 @@ enum AssetMarketType {
 }
 
 enum TradeType {
+  OPENING
   BUY
   SELL
   DIVIDEND
@@ -66,6 +69,16 @@ enum TradeType {
   FEE
   TAX
   REINVESTMENT
+}
+
+enum AssetLiquidityClass {
+  INVESTMENT
+  CASH_EQUIVALENT
+}
+
+enum AssetLiquidityClassSource {
+  AUTO
+  USER
 }
 
 model User {
@@ -81,6 +94,7 @@ model User {
   transactions          Transaction[]
   assets                Asset[]
   portfolios            Portfolio[]
+  watchlists            Watchlist[]
   createdAt             DateTime      @default(now()) @map("created_at")
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
@@ -88,21 +102,23 @@ model User {
 }
 
 model Account {
-  id             String             @id @default(uuid()) @db.Uuid
-  userId         String             @map("user_id") @db.Uuid
-  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  type           AccountType
-  currency       String             @db.VarChar(3)
-  openingBalance Decimal            @default(0) @map("opening_balance") @db.Decimal(24, 8)
-  displayOrder   Int                @default(0) @map("display_order")
-  openedAt       DateTime           @default(now()) @map("opened_at")
-  archivedAt     DateTime?          @map("archived_at")
-  transactions   Transaction[]      @relation("TransactionAccount")
-  transfersIn    Transaction[]      @relation("TransactionDestinationAccount")
-  portfolios     PortfolioAccount[]
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
+  id                       String                    @id @default(uuid()) @db.Uuid
+  userId                   String                    @map("user_id") @db.Uuid
+  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                     String
+  type                     AccountType
+  currency                 String                    @db.VarChar(3)
+  openingBalance           Decimal                   @default(0) @map("opening_balance") @db.Decimal(24, 8)
+  displayOrder             Int                       @default(0) @map("display_order")
+  openedAt                 DateTime                  @default(now()) @map("opened_at")
+  archivedAt               DateTime?                 @map("archived_at")
+  transactions             Transaction[]             @relation("TransactionAccount")
+  transfersIn              Transaction[]             @relation("TransactionDestinationAccount")
+  portfolios               PortfolioAccount[]
+  portfolioHoldings        PortfolioHolding[]
+  portfolioCashAllocations PortfolioCashAllocation[]
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([userId, type])
@@ -111,17 +127,49 @@ model Account {
 }
 
 model Portfolio {
-  id          String             @id @default(uuid()) @db.Uuid
-  userId      String             @map("user_id") @db.Uuid
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  accounts    PortfolioAccount[]
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
+  id              String                    @id @default(uuid()) @db.Uuid
+  userId          String                    @map("user_id") @db.Uuid
+  user            User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  accounts        PortfolioAccount[]
+  holdings        PortfolioHolding[]
+  cashAllocations PortfolioCashAllocation[]
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("portfolios")
+}
+
+model PortfolioHolding {
+  portfolioId String    @map("portfolio_id") @db.Uuid
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  accountId   String    @map("account_id") @db.Uuid
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  assetId     String    @map("asset_id") @db.Uuid
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@id([portfolioId, accountId, assetId])
+  @@unique([accountId, assetId])
+  @@index([portfolioId])
+  @@index([assetId])
+  @@map("portfolio_holdings")
+}
+
+model PortfolioCashAllocation {
+  portfolioId String    @map("portfolio_id") @db.Uuid
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  accountId   String    @map("account_id") @db.Uuid
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  percentage  Decimal   @db.Decimal(5, 2)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@id([portfolioId, accountId])
+  @@index([accountId])
+  @@map("portfolio_cash_allocations")
 }
 
 model PortfolioAccount {
@@ -200,26 +248,31 @@ model RiskProfile {
 }
 
 model Asset {
-  id                String                        @id @default(uuid()) @db.Uuid
-  userId            String                        @map("user_id") @db.Uuid
-  user              User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name              String
-  symbol            String?
-  provider          AssetProvider?
-  marketType        AssetMarketType?              @map("market_type")
-  providerAssetId   String?                       @map("provider_asset_id")
-  exchange          String?
-  imageUrl          String?                       @map("image_url")
-  categoryId        String                        @map("category_id") @db.Uuid
-  category          AssetCategory                 @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  riskProfileId     String?                       @map("risk_profile_id") @db.Uuid
-  riskProfile       RiskProfile?                  @relation(fields: [riskProfileId], references: [id], onDelete: SetNull)
-  currentPrice      Decimal?                      @map("current_price") @db.Decimal(24, 8)
-  priceCurrency     String?                       @map("price_currency") @db.VarChar(3)
-  notes             String?
-  investmentDetails InvestmentTransactionDetail[]
-  createdAt         DateTime                      @default(now()) @map("created_at")
-  updatedAt         DateTime                      @updatedAt @map("updated_at")
+  id                   String                        @id @default(uuid()) @db.Uuid
+  userId               String                        @map("user_id") @db.Uuid
+  user                 User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String
+  symbol               String?
+  provider             AssetProvider?
+  marketType           AssetMarketType?              @map("market_type")
+  providerAssetId      String?                       @map("provider_asset_id")
+  exchange             String?
+  imageUrl             String?                       @map("image_url")
+  categoryId           String                        @map("category_id") @db.Uuid
+  category             AssetCategory                 @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  riskProfileId        String?                       @map("risk_profile_id") @db.Uuid
+  riskProfile          RiskProfile?                  @relation(fields: [riskProfileId], references: [id], onDelete: SetNull)
+  currentPrice         Decimal?                      @map("current_price") @db.Decimal(24, 8)
+  priceCurrency        String?                       @map("price_currency") @db.VarChar(3)
+  notes                String?
+  liquidityClass       AssetLiquidityClass           @default(INVESTMENT) @map("liquidity_class")
+  liquidityClassSource AssetLiquidityClassSource     @default(AUTO) @map("liquidity_class_source")
+  investmentDetails    InvestmentTransactionDetail[] @relation("InvestmentAsset")
+  settlementDetails    InvestmentTransactionDetail[] @relation("SettlementAsset")
+  portfolioHoldings    PortfolioHolding[]
+  watchlistItems       WatchlistItem[]
+  createdAt            DateTime                      @default(now()) @map("created_at")
+  updatedAt            DateTime                      @updatedAt @map("updated_at")
 
   @@unique([userId, provider, providerAssetId])
   @@index([userId])
@@ -228,26 +281,56 @@ model Asset {
   @@map("assets")
 }
 
+model Watchlist {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @map("user_id") @db.Uuid
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  displayOrder Int             @default(0) @map("display_order")
+  items        WatchlistItem[]
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  @@unique([userId, name])
+  @@index([userId, displayOrder])
+  @@map("watchlists")
+}
+
+model WatchlistItem {
+  watchlistId String    @map("watchlist_id") @db.Uuid
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  assetId     String    @map("asset_id") @db.Uuid
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@id([watchlistId, assetId])
+  @@index([assetId])
+  @@map("watchlist_items")
+}
+
 model InvestmentTransactionDetail {
-  id              String      @id @default(uuid()) @db.Uuid
-  transactionId   String      @unique @map("transaction_id") @db.Uuid
-  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  assetId         String      @map("asset_id") @db.Uuid
-  asset           Asset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  tradeType       TradeType   @map("trade_type")
-  quantity        Decimal     @db.Decimal(24, 8)
-  price           Decimal     @db.Decimal(24, 8)
-  priceCurrency   String      @map("price_currency") @db.VarChar(3)
-  grossAmount     Decimal     @map("gross_amount") @db.Decimal(24, 8)
-  fees            Decimal     @default(0) @db.Decimal(24, 8)
-  fxRateUsdToPkr  Decimal?    @map("fx_rate_usd_to_pkr") @db.Decimal(24, 8)
-  fxRateSource    String?     @map("fx_rate_source")
-  fxRateUpdatedAt DateTime?   @map("fx_rate_updated_at")
-  notes           String?
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  id                String      @id @default(uuid()) @db.Uuid
+  transactionId     String      @unique @map("transaction_id") @db.Uuid
+  transaction       Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  assetId           String      @map("asset_id") @db.Uuid
+  asset             Asset       @relation("InvestmentAsset", fields: [assetId], references: [id], onDelete: Restrict)
+  settlementAssetId String?     @map("settlement_asset_id") @db.Uuid
+  settlementAsset   Asset?      @relation("SettlementAsset", fields: [settlementAssetId], references: [id], onDelete: Restrict)
+  tradeType         TradeType   @map("trade_type")
+  quantity          Decimal     @db.Decimal(24, 8)
+  price             Decimal     @db.Decimal(24, 8)
+  priceCurrency     String      @map("price_currency") @db.VarChar(3)
+  grossAmount       Decimal     @map("gross_amount") @db.Decimal(24, 8)
+  fees              Decimal     @default(0) @db.Decimal(24, 8)
+  fxRateUsdToPkr    Decimal?    @map("fx_rate_usd_to_pkr") @db.Decimal(24, 8)
+  fxRateSource      String?     @map("fx_rate_source")
+  fxRateUpdatedAt   DateTime?   @map("fx_rate_updated_at")
+  notes             String?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
 
   @@index([assetId])
+  @@index([settlementAssetId])
   @@index([transactionId])
   @@map("investment_transaction_details")
 }

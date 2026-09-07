@@ -1,15 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client';
 import type { TradeType, TransactionType } from '../../generated/prisma/enums';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
-import {
-  calculateHolding,
-  type InvestmentTransactionInput,
-} from '../../common/financial/holdings';
+import { calculateHolding } from '../../common/financial/holdings';
 import { calculateInvestmentTransactionAmounts } from '../../common/financial/investment-transaction-calculations';
+import { holdingTransactionsForAsset } from '../../common/financial/settlement-holdings';
 import { convertUsdPkr } from '../../common/financial/fx-conversion';
 import { CurrencyConverter } from '../../common/financial/currency-converter';
 import {
+  calculateAccountBalance,
   getSourceAccountEffect,
   hasDestinationBalanceEffect,
 } from '../../common/financial/transaction-effects';
@@ -43,6 +42,15 @@ import type {
   TransactionResponse,
   TransactionsListResponse,
 } from './transactions.types';
+import { AssetsService } from '../assets/assets.service';
+import type { SettlementAssetDto } from '../investments/dto/settlement-asset.dto';
+import {
+  insufficientSettlementBalanceException,
+  insufficientAccountCashException,
+  invalidSettlementAssetException,
+  settlementAssetNotFoundException,
+  settlementAssetRequiredException,
+} from '../investments/investment-settlement.errors';
 
 const investmentDetailSelect = {
   id: true,
@@ -52,6 +60,10 @@ const investmentDetailSelect = {
       name: true,
       symbol: true,
     },
+  },
+  settlementAssetId: true,
+  settlementAsset: {
+    select: { name: true, symbol: true },
   },
   tradeType: true,
   quantity: true,
@@ -119,6 +131,8 @@ const investmentTypes = new Set<string>([
   'INVESTMENT_REINVESTMENT',
   'INVESTMENT_DEPOSIT',
   'INVESTMENT_WITHDRAWAL',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
 ]);
 
 const investmentDetailRequiredTypes = new Set<string>([
@@ -129,6 +143,8 @@ const investmentDetailRequiredTypes = new Set<string>([
   'INVESTMENT_REINVESTMENT',
   'INVESTMENT_DEPOSIT',
   'INVESTMENT_WITHDRAWAL',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
 ]);
 
 const investmentDetailSupportedTypes = new Set<string>([
@@ -146,6 +162,8 @@ const reversibleTypes = new Set<string>([
   'DIVIDEND',
   'INTEREST',
   'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
 ]);
 
 const incomingTypes = new Set<TransactionType>([
@@ -187,6 +205,8 @@ const categorisableTypes = new Set<TransactionType>([
   'INVESTMENT_REINVESTMENT',
   'INVESTMENT_DEPOSIT',
   'INVESTMENT_WITHDRAWAL',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
   'ADJUSTMENT',
 ]);
 
@@ -197,6 +217,7 @@ interface InvestmentPayload {
   readonly price?: string;
   readonly fees?: string;
   readonly notes?: string;
+  readonly settlementAsset?: SettlementAssetDto;
 }
 
 @Injectable()
@@ -204,6 +225,7 @@ export class TransactionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly categoriesService: CategoriesService,
+    @Optional() private readonly assetsService?: AssetsService,
   ) {}
 
   async listTransactionsForUser(
@@ -468,7 +490,7 @@ export class TransactionsService {
 
     await this.assertCategoryAllowed(user.id, payload.type, payload.category);
 
-    await this.validateTransactionAccounts(user.id, {
+    const transactionAccount = await this.validateTransactionAccounts(user.id, {
       ...payload,
       currency: payload.currency,
     });
@@ -480,38 +502,114 @@ export class TransactionsService {
     const investmentAsset = payload.investment
       ? await this.validateInvestmentAsset(user.id, payload.investment.assetId)
       : null;
+    if (
+      investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
+      transactionAccount.type !== 'CRYPTO_WALLET'
+    ) {
+      throw createInvalidInvestmentAccountException();
+    }
+    if (
+      payload.type === 'INVESTMENT_DEPOSIT' &&
+      investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
+      !new Prisma.Decimal(payload.investment?.price ?? '0').isPositive()
+    ) {
+      throw createInvalidInvestmentAmountException(
+        'Stablecoin deposits require a positive cost per unit.',
+      );
+    }
+    const createInvestment =
+      payload.type === 'INVESTMENT_TRANSFER' && payload.investment
+        ? {
+            ...payload.investment,
+            price: await this.resolveInvestmentTransferBasis(
+              user.id,
+              payload.accountId,
+              payload.destinationAccountId,
+              payload.investment.assetId,
+              payload.investment.quantity ?? '0',
+              investmentAsset,
+            ),
+            fees: '0',
+          }
+        : payload.investment;
+    const isPairedCryptoTrade =
+      transactionAccount.type === 'CRYPTO_WALLET' &&
+      (payload.type === 'INVESTMENT_BUY' || payload.type === 'INVESTMENT_SELL');
+    const settlementAssetId = isPairedCryptoTrade
+      ? await this.resolveSettlementAsset(
+          user,
+          payload.investment?.settlementAsset,
+          payload.investment!.assetId,
+        )
+      : null;
 
-    if (payload.investment) {
+    if (createInvestment) {
       await this.assertSufficientHolding(
         user.id,
         payload.type,
         {
-          assetId: payload.investment.assetId,
-          quantity: payload.investment.quantity ?? '0',
+          assetId: createInvestment.assetId,
+          quantity: createInvestment.quantity ?? '0',
         },
         undefined,
         payload.accountId,
       );
+      if (
+        settlementAssetId &&
+        payload.type === 'INVESTMENT_BUY' &&
+        (payload.status ?? 'CLEARED') === 'CLEARED'
+      ) {
+        const required = new Prisma.Decimal(createInvestment.quantity ?? '0')
+          .times(createInvestment.price ?? '0')
+          .add(createInvestment.fees ?? '0');
+        await this.assertSufficientSettlement(
+          user.id,
+          payload.accountId,
+          settlementAssetId,
+          required,
+        );
+      }
+      if (
+        transactionAccount.type === 'BROKER' &&
+        payload.type === 'INVESTMENT_BUY' &&
+        (payload.status ?? 'CLEARED') === 'CLEARED'
+      ) {
+        const required = this.resolveAuthoritativeAmount(
+          payload.type,
+          payload.amount,
+          payload.investment,
+          investmentAsset?.priceCurrency ?? payload.currency,
+          payload.currency,
+          user.exchangeRate,
+        );
+        await this.assertSufficientAccountCash(
+          user.id,
+          payload.accountId,
+          required,
+        );
+      }
     }
 
     const authoritativeAmount = this.resolveAuthoritativeAmount(
       payload.type,
       payload.amount,
-      payload.investment,
+      createInvestment,
       investmentAsset?.priceCurrency ?? payload.currency,
       payload.currency,
       user.exchangeRate,
+      Boolean(settlementAssetId),
     );
-    const investmentDetailData = payload.investment
+    const investmentDetailData = createInvestment
       ? this.buildInvestmentDetailData(
           payload.type,
-          payload.investment,
+          createInvestment,
           investmentAsset?.priceCurrency ?? payload.currency,
           user,
+          settlementAssetId,
         )
       : undefined;
 
-    const transaction = await this.prisma.transaction.create({
+    const createArgs = {
       data: {
         userId: user.id,
         idempotencyKey: payload.idempotencyKey,
@@ -535,7 +633,55 @@ export class TransactionsService {
           : undefined,
       },
       select: transactionSelect,
-    });
+    } satisfies Prisma.TransactionCreateArgs;
+
+    const shouldGuardBalance =
+      (payload.status ?? 'CLEARED') === 'CLEARED' &&
+      (payload.type === 'INVESTMENT_TRANSFER' ||
+        (payload.type === 'INVESTMENT_BUY' &&
+          Boolean(settlementAssetId || transactionAccount.type === 'BROKER')));
+    const transaction = shouldGuardBalance
+      ? await this.prisma.$transaction(
+          async (tx) => {
+            if (payload.type === 'INVESTMENT_TRANSFER' && createInvestment) {
+              await this.resolveInvestmentTransferBasis(
+                user.id,
+                payload.accountId,
+                payload.destinationAccountId,
+                createInvestment.assetId,
+                createInvestment.quantity ?? '0',
+                investmentAsset,
+                undefined,
+                tx,
+              );
+            } else if (settlementAssetId && payload.investment) {
+              const required = new Prisma.Decimal(
+                payload.investment.quantity ?? '0',
+              )
+                .times(payload.investment.price ?? '0')
+                .add(payload.investment.fees ?? '0');
+              await this.assertSufficientSettlement(
+                user.id,
+                payload.accountId,
+                settlementAssetId,
+                required,
+                undefined,
+                tx,
+              );
+            } else {
+              await this.assertSufficientAccountCash(
+                user.id,
+                payload.accountId,
+                authoritativeAmount,
+                undefined,
+                tx,
+              );
+            }
+            return tx.transaction.create(createArgs);
+          },
+          { isolationLevel: 'Serializable' },
+        )
+      : await this.prisma.transaction.create(createArgs);
 
     return this.toTransactionResponse(transaction);
   }
@@ -558,7 +704,7 @@ export class TransactionsService {
     const effectiveDestinationAccountId =
       payload.destinationAccountId ?? existingTransaction.destinationAccountId;
     const effectiveCurrency = payload.currency ?? existingTransaction.currency;
-    const effectiveInvestment =
+    let effectiveInvestment =
       payload.investment !== undefined
         ? (payload.investment ?? undefined)
         : investmentDetailSupportedTypes.has(effectiveType) &&
@@ -571,7 +717,7 @@ export class TransactionsService {
 
     await this.assertCategoryAllowed(user.id, effectiveType, effectiveCategory);
 
-    await this.validateTransactionAccounts(user.id, {
+    const transactionAccount = await this.validateTransactionAccounts(user.id, {
       type: effectiveType,
       accountId: effectiveAccountId,
       destinationAccountId: effectiveDestinationAccountId ?? undefined,
@@ -588,6 +734,60 @@ export class TransactionsService {
     const investmentAsset = effectiveInvestment
       ? await this.validateInvestmentAsset(user.id, effectiveInvestment.assetId)
       : null;
+    if (
+      investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
+      transactionAccount.type !== 'CRYPTO_WALLET'
+    ) {
+      throw createInvalidInvestmentAccountException();
+    }
+    if (
+      effectiveType === 'INVESTMENT_DEPOSIT' &&
+      investmentAsset?.liquidityClass === 'CASH_EQUIVALENT' &&
+      !new Prisma.Decimal(effectiveInvestment?.price ?? '0').isPositive()
+    ) {
+      throw createInvalidInvestmentAmountException(
+        'Stablecoin deposits require a positive cost per unit.',
+      );
+    }
+    if (effectiveType === 'INVESTMENT_TRANSFER' && effectiveInvestment) {
+      effectiveInvestment = {
+        ...effectiveInvestment,
+        price: await this.resolveInvestmentTransferBasis(
+          user.id,
+          effectiveAccountId,
+          effectiveDestinationAccountId ?? undefined,
+          effectiveInvestment.assetId,
+          effectiveInvestment.quantity ?? '0',
+          investmentAsset,
+          transactionId,
+        ),
+        fees: '0',
+      };
+    }
+    const isTrade =
+      effectiveType === 'INVESTMENT_BUY' || effectiveType === 'INVESTMENT_SELL';
+    let effectiveSettlementAssetId = isTrade
+      ? (existingTransaction.investmentDetail?.settlementAssetId ?? null)
+      : null;
+    if (
+      payload.investment?.settlementAsset &&
+      !existingTransaction.investmentDetail?.settlementAssetId
+    ) {
+      throw invalidSettlementAssetException(
+        'Legacy crypto trades cannot be retrofitted with a settlement asset.',
+      );
+    }
+    if (
+      payload.investment?.settlementAsset &&
+      existingTransaction.investmentDetail?.settlementAssetId &&
+      investmentAsset
+    ) {
+      effectiveSettlementAssetId = await this.resolveSettlementAsset(
+        user,
+        payload.investment.settlementAsset,
+        investmentAsset.id,
+      );
+    }
 
     if (effectiveInvestment) {
       await this.assertSufficientHolding(
@@ -600,6 +800,42 @@ export class TransactionsService {
         transactionId,
         effectiveAccountId,
       );
+      if (
+        effectiveSettlementAssetId &&
+        effectiveType === 'INVESTMENT_BUY' &&
+        (payload.status ?? existingTransaction.status) === 'CLEARED'
+      ) {
+        const required = new Prisma.Decimal(effectiveInvestment.quantity ?? '0')
+          .times(effectiveInvestment.price ?? '0')
+          .add(effectiveInvestment.fees ?? '0');
+        await this.assertSufficientSettlement(
+          user.id,
+          effectiveAccountId,
+          effectiveSettlementAssetId,
+          required,
+          transactionId,
+        );
+      }
+      if (
+        transactionAccount.type === 'BROKER' &&
+        effectiveType === 'INVESTMENT_BUY' &&
+        (payload.status ?? existingTransaction.status) === 'CLEARED'
+      ) {
+        const required = this.resolveAuthoritativeAmount(
+          effectiveType,
+          effectiveAmount,
+          effectiveInvestment,
+          investmentAsset?.priceCurrency ?? effectiveCurrency,
+          effectiveCurrency,
+          user.exchangeRate,
+        );
+        await this.assertSufficientAccountCash(
+          user.id,
+          effectiveAccountId,
+          required,
+          transactionId,
+        );
+      }
     }
 
     const authoritativeAmount = this.resolveAuthoritativeAmount(
@@ -609,9 +845,10 @@ export class TransactionsService {
       investmentAsset?.priceCurrency ?? effectiveCurrency,
       effectiveCurrency,
       user.exchangeRate,
+      Boolean(effectiveSettlementAssetId),
     );
 
-    const transaction = await this.prisma.transaction.update({
+    const updateArgs = {
       where: {
         id: transactionId,
       },
@@ -634,13 +871,70 @@ export class TransactionsService {
         investmentDetail: this.buildInvestmentDetailUpdatePayload(
           effectiveType,
           existingTransaction.investmentDetail,
-          payload.investment,
+          effectiveType === 'INVESTMENT_TRANSFER'
+            ? effectiveInvestment
+            : payload.investment,
           investmentAsset?.priceCurrency ?? effectiveCurrency,
           user,
+          effectiveSettlementAssetId,
         ),
       },
       select: transactionSelect,
-    });
+    } satisfies Prisma.TransactionUpdateArgs;
+
+    const effectiveStatus = payload.status ?? existingTransaction.status;
+    const shouldGuardBalance =
+      effectiveStatus === 'CLEARED' &&
+      (effectiveType === 'INVESTMENT_TRANSFER' ||
+        (effectiveType === 'INVESTMENT_BUY' &&
+          Boolean(
+            effectiveSettlementAssetId || transactionAccount.type === 'BROKER',
+          )));
+    const transaction = shouldGuardBalance
+      ? await this.prisma.$transaction(
+          async (tx) => {
+            if (
+              effectiveType === 'INVESTMENT_TRANSFER' &&
+              effectiveInvestment
+            ) {
+              await this.resolveInvestmentTransferBasis(
+                user.id,
+                effectiveAccountId,
+                effectiveDestinationAccountId ?? undefined,
+                effectiveInvestment.assetId,
+                effectiveInvestment.quantity ?? '0',
+                investmentAsset,
+                transactionId,
+                tx,
+              );
+            } else if (effectiveSettlementAssetId && effectiveInvestment) {
+              const required = new Prisma.Decimal(
+                effectiveInvestment.quantity ?? '0',
+              )
+                .times(effectiveInvestment.price ?? '0')
+                .add(effectiveInvestment.fees ?? '0');
+              await this.assertSufficientSettlement(
+                user.id,
+                effectiveAccountId,
+                effectiveSettlementAssetId,
+                required,
+                transactionId,
+                tx,
+              );
+            } else {
+              await this.assertSufficientAccountCash(
+                user.id,
+                effectiveAccountId,
+                authoritativeAmount,
+                transactionId,
+                tx,
+              );
+            }
+            return tx.transaction.update(updateArgs);
+          },
+          { isolationLevel: 'Serializable' },
+        )
+      : await this.prisma.transaction.update(updateArgs);
 
     return this.toTransactionResponse(transaction);
   }
@@ -684,6 +978,8 @@ export class TransactionsService {
             ? {
                 create: {
                   assetId: originalTransaction.investmentDetail.assetId,
+                  settlementAssetId:
+                    originalTransaction.investmentDetail.settlementAssetId,
                   tradeType: originalTransaction.investmentDetail.tradeType,
                   quantity:
                     originalTransaction.investmentDetail.quantity.toString(),
@@ -1045,7 +1341,11 @@ export class TransactionsService {
       readonly destinationAccountId?: string;
       readonly currency?: string;
     },
-  ): Promise<void> {
+  ): Promise<{
+    readonly id: string;
+    readonly currency: string;
+    readonly type: string;
+  }> {
     const account = await this.prisma.account.findFirst({
       where: {
         id: payload.accountId,
@@ -1081,7 +1381,7 @@ export class TransactionsService {
       throw createInvalidInvestmentAccountException();
     }
 
-    if (payload.type === 'TRANSFER') {
+    if (payload.type === 'TRANSFER' || payload.type === 'INVESTMENT_TRANSFER') {
       if (!payload.destinationAccountId) {
         throw createInvalidTransferException(
           'Transfers require a destination account.',
@@ -1099,9 +1399,7 @@ export class TransactionsService {
           id: payload.destinationAccountId,
           userId,
         },
-        select: {
-          id: true,
-        },
+        select: { id: true, currency: true, type: true },
       });
 
       if (!destinationAccount) {
@@ -1109,7 +1407,27 @@ export class TransactionsService {
           payload.destinationAccountId,
         );
       }
+
+      if (
+        payload.type === 'TRANSFER' &&
+        destinationAccount.currency !== account.currency
+      ) {
+        throw createInvalidTransferException(
+          'Tracked cash transfers require accounts with the same currency.',
+        );
+      }
+
+      if (
+        payload.type === 'INVESTMENT_TRANSFER' &&
+        (account.type !== 'CRYPTO_WALLET' ||
+          destinationAccount.type !== 'CRYPTO_WALLET')
+      ) {
+        throw createInvalidTransferException(
+          'Stablecoin transfers require two cryptocurrency wallets.',
+        );
+      }
     }
+    return account;
   }
 
   private validateInvestmentPayload(
@@ -1148,6 +1466,7 @@ export class TransactionsService {
 
     if (
       type === 'INVESTMENT_BUY' ||
+      type === 'INVESTMENT_OPENING_POSITION' ||
       type === 'INVESTMENT_SELL' ||
       type === 'INVESTMENT_REINVESTMENT'
     ) {
@@ -1168,7 +1487,8 @@ export class TransactionsService {
       type === 'INVESTMENT_BONUS' ||
       type === 'INVESTMENT_SPLIT' ||
       type === 'INVESTMENT_DEPOSIT' ||
-      type === 'INVESTMENT_WITHDRAWAL'
+      type === 'INVESTMENT_WITHDRAWAL' ||
+      type === 'INVESTMENT_TRANSFER'
     ) {
       if (quantity.isZero() || quantity.isNegative()) {
         throw createInvalidInvestmentAmountException(
@@ -1176,11 +1496,25 @@ export class TransactionsService {
         );
       }
 
-      if (!price.isZero()) {
+      if (
+        type !== 'INVESTMENT_DEPOSIT' &&
+        type !== 'INVESTMENT_TRANSFER' &&
+        !price.isZero()
+      ) {
         throw createInvalidInvestmentAmountException(
           'Price must be zero for non-cash investment transactions.',
         );
       }
+    }
+
+    if (
+      type === 'INVESTMENT_OPENING_POSITION' &&
+      investment.fees !== undefined &&
+      !new Prisma.Decimal(investment.fees).isZero()
+    ) {
+      throw createInvalidInvestmentAmountException(
+        'Fees must be zero for an opening position.',
+      );
     }
 
     if (type === 'DIVIDEND') {
@@ -1225,6 +1559,7 @@ export class TransactionsService {
     priceCurrency: string,
     transactionCurrency: string,
     exchangeRate: string | null,
+    hasSettlementAsset = false,
   ): Prisma.Decimal {
     if (
       type === 'INVESTMENT_BUY' ||
@@ -1267,14 +1602,16 @@ export class TransactionsService {
         );
       }
 
-      return cashImpact;
+      return hasSettlementAsset ? new Prisma.Decimal(0) : cashImpact;
     }
 
     if (
       type === 'INVESTMENT_SPLIT' ||
       type === 'INVESTMENT_BONUS' ||
       type === 'INVESTMENT_DEPOSIT' ||
-      type === 'INVESTMENT_WITHDRAWAL'
+      type === 'INVESTMENT_WITHDRAWAL' ||
+      type === 'INVESTMENT_TRANSFER' ||
+      type === 'INVESTMENT_OPENING_POSITION'
     ) {
       return new Prisma.Decimal(0);
     }
@@ -1293,8 +1630,10 @@ export class TransactionsService {
     investment: InvestmentPayload,
     priceCurrency: string,
     user: AuthenticatedUser,
+    settlementAssetId: string | null = null,
   ): {
     readonly assetId: string;
+    readonly settlementAssetId: string | undefined;
     readonly tradeType: TradeType;
     readonly quantity: string;
     readonly price: string;
@@ -1318,6 +1657,7 @@ export class TransactionsService {
 
     return {
       assetId: investment.assetId,
+      settlementAssetId: settlementAssetId ?? undefined,
       tradeType: this.getExpectedTradeType(type),
       quantity,
       price,
@@ -1338,6 +1678,8 @@ export class TransactionsService {
     switch (type) {
       case 'INVESTMENT_BUY':
         return 'BUY';
+      case 'INVESTMENT_OPENING_POSITION':
+        return 'OPENING';
       case 'INVESTMENT_SELL':
         return 'SELL';
       case 'DIVIDEND':
@@ -1354,6 +1696,8 @@ export class TransactionsService {
         return 'DEPOSIT';
       case 'INVESTMENT_WITHDRAWAL':
         return 'WITHDRAWAL';
+      case 'INVESTMENT_TRANSFER':
+        return 'TRANSFER';
       default:
         throw createInvalidInvestmentAmountException(
           'This transaction type does not support investment details.',
@@ -1364,7 +1708,12 @@ export class TransactionsService {
   private async validateInvestmentAsset(
     userId: string,
     assetId: string,
-  ): Promise<{ readonly id: string; readonly priceCurrency: string | null }> {
+  ): Promise<{
+    readonly id: string;
+    readonly priceCurrency: string | null;
+    readonly marketType: string | null;
+    readonly liquidityClass: string;
+  }> {
     const asset = await this.prisma.asset.findFirst({
       where: {
         id: assetId,
@@ -1373,6 +1722,8 @@ export class TransactionsService {
       select: {
         id: true,
         priceCurrency: true,
+        marketType: true,
+        liquidityClass: true,
       },
     });
 
@@ -1381,6 +1732,153 @@ export class TransactionsService {
     }
 
     return asset;
+  }
+
+  private async resolveSettlementAsset(
+    user: AuthenticatedUser,
+    input: SettlementAssetDto | undefined,
+    primaryAssetId: string,
+  ): Promise<string> {
+    if (!input) throw settlementAssetRequiredException();
+    let asset: {
+      id: string;
+      priceCurrency: string | null;
+      liquidityClass: string;
+    } | null = null;
+
+    if (input.kind === 'EXISTING') {
+      if (!input.assetId) throw settlementAssetNotFoundException();
+      asset = await this.prisma.asset.findFirst({
+        where: { id: input.assetId, userId: user.id },
+        select: { id: true, priceCurrency: true, liquidityClass: true },
+      });
+    } else {
+      if (!input.providerAssetId || !this.assetsService) {
+        throw settlementAssetNotFoundException();
+      }
+      asset = await this.prisma.asset.findFirst({
+        where: {
+          userId: user.id,
+          provider: 'COINGECKO',
+          providerAssetId: input.providerAssetId,
+        },
+        select: { id: true, priceCurrency: true, liquidityClass: true },
+      });
+      if (!asset) {
+        const created = await this.assetsService.createProviderAssetForUser(
+          user,
+          {
+            type: 'CRYPTO',
+            provider: 'COINGECKO',
+            providerAssetId: input.providerAssetId,
+          },
+        );
+        asset = created;
+      }
+    }
+
+    if (!asset) throw settlementAssetNotFoundException(input.assetId);
+    if (asset.id === primaryAssetId) {
+      throw invalidSettlementAssetException(
+        'An asset cannot settle against itself.',
+      );
+    }
+    if (
+      asset.priceCurrency !== 'USD' ||
+      asset.liquidityClass !== 'CASH_EQUIVALENT'
+    ) {
+      throw invalidSettlementAssetException(
+        'Settlement assets must be USD-priced cash equivalents.',
+      );
+    }
+    return asset.id;
+  }
+
+  private async assertSufficientSettlement(
+    userId: string,
+    accountId: string,
+    assetId: string,
+    required: Prisma.Decimal,
+    excludedTransactionId?: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    const details = await client.investmentTransactionDetail.findMany({
+      where: {
+        OR: [{ assetId }, { settlementAssetId: assetId }],
+        asset: { userId },
+        transactionId: excludedTransactionId
+          ? { not: excludedTransactionId }
+          : undefined,
+        transaction: {
+          accountId,
+          status: 'CLEARED',
+          deletedAt: null,
+          reversalOfId: null,
+          reversal: { is: null },
+        },
+      },
+      select: {
+        assetId: true,
+        settlementAssetId: true,
+        tradeType: true,
+        quantity: true,
+        price: true,
+        fees: true,
+        grossAmount: true,
+      },
+    });
+    const holding = calculateHolding({
+      currentPrice: null,
+      priceCurrency: 'USD',
+      transactions: holdingTransactionsForAsset(assetId, details),
+    });
+    if (holding.quantity.lessThan(required)) {
+      throw insufficientSettlementBalanceException(
+        assetId,
+        holding.quantity.toString(),
+        required.toString(),
+      );
+    }
+  }
+
+  private async assertSufficientAccountCash(
+    userId: string,
+    accountId: string,
+    required: Prisma.Decimal,
+    excludedTransactionId?: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    const account = await client.account.findFirst({
+      where: { id: accountId, userId },
+      select: { openingBalance: true },
+    });
+    if (!account) throw createAccountNotFoundForTransactionException(accountId);
+    const rows = await client.transaction.findMany({
+      where: {
+        status: 'CLEARED',
+        deletedAt: null,
+        id: excludedTransactionId ? { not: excludedTransactionId } : undefined,
+        OR: [{ accountId }, { destinationAccountId: accountId }],
+      },
+      select: {
+        type: true,
+        accountId: true,
+        destinationAccountId: true,
+        amount: true,
+      },
+    });
+    const available = calculateAccountBalance(
+      account.openingBalance,
+      accountId,
+      rows,
+    );
+    if (available.lessThan(required)) {
+      throw insufficientAccountCashException(
+        accountId,
+        available.toString(),
+        required.toString(),
+      );
+    }
   }
 
   private async assertSufficientHolding(
@@ -1393,13 +1891,36 @@ export class TransactionsService {
     excludedTransactionId?: string,
     accountId?: string,
   ): Promise<void> {
-    if (type !== 'INVESTMENT_SELL' && type !== 'INVESTMENT_WITHDRAWAL') {
+    if (
+      type !== 'INVESTMENT_SELL' &&
+      type !== 'INVESTMENT_WITHDRAWAL' &&
+      type !== 'INVESTMENT_TRANSFER'
+    ) {
       return;
     }
 
-    const details = await this.prisma.investmentTransactionDetail.findMany({
+    const holding = await this.calculateAccountHolding(
+      userId,
+      accountId,
+      investment.assetId,
+      excludedTransactionId,
+    );
+
+    if (holding.quantity.lessThan(investment.quantity)) {
+      throw createInsufficientHoldingException(investment.assetId);
+    }
+  }
+
+  private async calculateAccountHolding(
+    userId: string,
+    accountId: string | undefined,
+    assetId: string,
+    excludedTransactionId?: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<ReturnType<typeof calculateHolding>> {
+    const details = await client.investmentTransactionDetail.findMany({
       where: {
-        assetId: investment.assetId,
+        OR: [{ assetId }, { settlementAssetId: assetId }],
         asset: { userId },
         transactionId: excludedTransactionId
           ? { not: excludedTransactionId }
@@ -1407,30 +1928,81 @@ export class TransactionsService {
         transaction: {
           status: 'CLEARED',
           deletedAt: null,
-          accountId,
+          OR: accountId
+            ? [{ accountId }, { destinationAccountId: accountId }]
+            : undefined,
+          reversalOfId: null,
+          reversal: { is: null },
         },
       },
       select: {
+        assetId: true,
+        settlementAssetId: true,
         tradeType: true,
         quantity: true,
         price: true,
         fees: true,
+        grossAmount: true,
+        transaction: {
+          select: { accountId: true, destinationAccountId: true },
+        },
       },
     });
-    const holding = calculateHolding({
+    return calculateHolding({
       currentPrice: null,
       priceCurrency: null,
-      transactions: details.map((detail) => ({
-        type: detail.tradeType as InvestmentTransactionInput['type'],
-        quantity: detail.quantity,
-        price: detail.price,
-        fees: detail.fees,
-      })),
+      transactions: holdingTransactionsForAsset(
+        assetId,
+        details.map((detail) => ({
+          ...detail,
+          transferDirection:
+            detail.tradeType === 'TRANSFER' &&
+            detail.transaction.destinationAccountId === accountId
+              ? ('IN' as const)
+              : ('OUT' as const),
+        })),
+      ),
     });
+  }
 
-    if (holding.quantity.lessThan(investment.quantity)) {
-      throw createInsufficientHoldingException(investment.assetId);
+  private async resolveInvestmentTransferBasis(
+    userId: string,
+    sourceAccountId: string,
+    destinationAccountId: string | undefined,
+    assetId: string,
+    quantity: string,
+    asset: {
+      readonly priceCurrency: string | null;
+      readonly liquidityClass: string;
+    } | null,
+    excludedTransactionId?: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<string> {
+    if (!destinationAccountId) {
+      throw createInvalidTransferException(
+        'Stablecoin transfers require a destination wallet.',
+      );
     }
+    if (
+      !asset ||
+      asset.liquidityClass !== 'CASH_EQUIVALENT' ||
+      asset.priceCurrency !== 'USD'
+    ) {
+      throw createInvalidTransferException(
+        'Only USD cash-equivalent assets can be transferred between crypto wallets.',
+      );
+    }
+    const holding = await this.calculateAccountHolding(
+      userId,
+      sourceAccountId,
+      assetId,
+      excludedTransactionId,
+      client,
+    );
+    if (holding.quantity.lessThan(quantity)) {
+      throw createInsufficientHoldingException(assetId);
+    }
+    return holding.averageCost?.toFixed(8) ?? '0';
   }
 
   private buildInvestmentDetailUpdatePayload(
@@ -1444,11 +2016,13 @@ export class TransactionsService {
           readonly price?: string;
           readonly fees?: string;
           readonly notes?: string;
+          readonly settlementAsset?: SettlementAssetDto;
         }
       | null
       | undefined,
     priceCurrency: string,
     user: AuthenticatedUser,
+    settlementAssetId: string | null,
   ):
     | {
         create?: Prisma.InvestmentTransactionDetailCreateWithoutTransactionInput;
@@ -1477,6 +2051,7 @@ export class TransactionsService {
       payloadInvestment,
       priceCurrency,
       user,
+      settlementAssetId,
     );
     const detailData = {
       asset: {
@@ -1497,10 +2072,24 @@ export class TransactionsService {
     };
 
     if (existingDetail) {
-      return { update: detailData };
+      return {
+        update: {
+          ...detailData,
+          settlementAsset: calculatedDetail.settlementAssetId
+            ? { connect: { id: calculatedDetail.settlementAssetId } }
+            : { disconnect: true },
+        },
+      };
     }
 
-    return { create: detailData };
+    return {
+      create: {
+        ...detailData,
+        settlementAsset: calculatedDetail.settlementAssetId
+          ? { connect: { id: calculatedDetail.settlementAssetId } }
+          : undefined,
+      },
+    };
   }
 
   private recordToInvestmentPayload(
@@ -1607,6 +2196,19 @@ export class TransactionsService {
       assetId: detail.assetId,
       assetName: detail.asset.name,
       assetSymbol: detail.asset.symbol,
+      settlementAssetId: detail.settlementAssetId,
+      settlementAssetName: detail.settlementAsset?.name ?? null,
+      settlementAssetSymbol: detail.settlementAsset?.symbol ?? null,
+      settlementQuantity: detail.settlementAssetId
+        ? (detail.tradeType === 'BUY'
+            ? detail.grossAmount.add(detail.fees)
+            : detail.grossAmount.sub(detail.fees)
+          ).toString()
+        : null,
+      pairLabel:
+        detail.settlementAssetId && detail.settlementAsset?.symbol
+          ? `${detail.asset.symbol ?? detail.asset.name}/${detail.settlementAsset.symbol}`
+          : null,
       tradeType: detail.tradeType,
       quantity: detail.quantity.toString(),
       price: detail.price.toString(),

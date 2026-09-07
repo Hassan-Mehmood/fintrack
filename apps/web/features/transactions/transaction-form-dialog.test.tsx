@@ -1,13 +1,13 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Account } from "@/features/accounts/account-types"
-import type { Asset } from "@/features/assets/asset-types"
-import type { Holding } from "@/features/investments/investment-types"
+import type { Account } from "@/features/accounts/account-types";
+import type { Asset } from "@/features/assets/asset-types";
+import type { Holding } from "@/features/investments/investment-types";
 
-import { TransactionFormDialog } from "./transaction-form-dialog"
-import { emptyTransactionCategories } from "./transaction-types"
+import { TransactionFormDialog } from "./transaction-form-dialog";
+import { emptyTransactionCategories } from "./transaction-types";
 
 const categoriesByType = {
   ...emptyTransactionCategories,
@@ -15,7 +15,7 @@ const categoriesByType = {
   INVESTMENT_BUY: ["Investment"],
   INVESTMENT_SELL: ["Investment"],
   INVESTMENT_SPLIT: ["Stock split"],
-}
+};
 
 const accounts: readonly Account[] = [
   {
@@ -46,7 +46,7 @@ const accounts: readonly Account[] = [
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
-]
+];
 
 const investmentAccount: Account = {
   ...accounts[0],
@@ -54,7 +54,7 @@ const investmentAccount: Account = {
   name: "Broker account",
   type: "BROKER",
   currency: "USD",
-}
+};
 
 const asset: Asset = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -87,11 +87,14 @@ const asset: Asset = {
   priceBid: null,
   priceAsk: null,
   notes: null,
+  liquidityClass: "INVESTMENT",
+  liquidityClassSource: "AUTO",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-}
+};
 
 const holding: Holding = {
+  holdingKind: "ASSET",
   assetId: asset.id,
   assetName: asset.name,
   assetSymbol: asset.symbol,
@@ -126,14 +129,17 @@ const holding: Holding = {
   unrealizedGain: "2.5",
   unrealizedGainPercent: 25,
   hasMissingHistoricalFx: false,
-}
+  positionStatus: "ACTIVE",
+  liquidityClass: "INVESTMENT",
+  liquidityClassSource: "AUTO",
+};
 
-afterEach(cleanup)
+afterEach(cleanup);
 
 describe("TransactionFormDialog", () => {
   it("stays open when an account is selected from its portaled menu", async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
 
     render(
       <TransactionFormDialog
@@ -145,18 +151,18 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    await user.click(screen.getByLabelText("Account"))
-    await user.click(screen.getByRole("option", { name: "Nayapay (PKR)" }))
+    await user.click(screen.getByLabelText("Account"));
+    await user.click(screen.getByRole("option", { name: "Nayapay (PKR)" }));
 
-    expect(onOpenChange).not.toHaveBeenCalledWith(false)
-    expect(screen.getByRole("dialog")).toBeInTheDocument()
-  })
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
 
   it("only closes the account menu when the modal is clicked", async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
 
     render(
       <TransactionFormDialog
@@ -168,38 +174,38 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    const dialog = screen.getByRole("dialog")
+    const dialog = screen.getByRole("dialog");
     vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue(
       DOMRect.fromRect({ x: 50, y: 50, width: 500, height: 500 }),
-    )
+    );
 
-    await user.click(screen.getByLabelText("Account"))
+    await user.click(screen.getByLabelText("Account"));
     expect(
       screen.getByRole("option", { name: "Nayapay (PKR)" }),
-    ).toBeInTheDocument()
+    ).toBeInTheDocument();
 
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.pointerDown(document.body, {
       button: 0,
       clientX: 100,
       clientY: 100,
       pointerId: 1,
       pointerType: "mouse",
-    })
-    fireEvent.click(document.body, { clientX: 100, clientY: 100 })
+    });
+    fireEvent.click(document.body, { clientX: 100, clientY: 100 });
 
-    expect(onOpenChange).not.toHaveBeenCalledWith(false)
-    expect(dialog).toBeInTheDocument()
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(dialog).toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "Nayapay (PKR)" }),
-    ).not.toBeInTheDocument()
-  })
+    ).not.toBeInTheDocument();
+  });
 
   it("still closes when the backdrop is clicked", async () => {
-    const user = userEvent.setup()
-    const onOpenChange = vi.fn()
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
 
     render(
       <TransactionFormDialog
@@ -211,19 +217,19 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    const overlay = document.querySelector('[data-slot="dialog-overlay"]')
-    expect(overlay).toBeInstanceOf(HTMLElement)
+    const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+    expect(overlay).toBeInstanceOf(HTMLElement);
 
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await user.click(overlay as HTMLElement)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await user.click(overlay as HTMLElement);
 
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-  })
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 
   it("recalculates read-only buy amounts from quantity, price, and fees", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
 
     render(
       <TransactionFormDialog
@@ -235,20 +241,20 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    await selectOption(user, "Type", "Investment buy")
-    await user.type(screen.getByLabelText("Quantity"), "0.1")
-    await user.type(screen.getByLabelText("Price per unit"), "0.2")
-    await user.type(screen.getByLabelText("Fees"), "0.01")
+    await selectOption(user, "Type", "Investment buy");
+    await user.type(screen.getByLabelText("Quantity"), "0.1");
+    await user.type(screen.getByLabelText("Price per unit"), "0.2");
+    await user.type(screen.getByLabelText("Fees"), "0.01");
 
-    expect(screen.getByLabelText("Gross amount")).toHaveValue("0.02")
-    expect(screen.getByLabelText("Total amount")).toHaveValue("0.03")
-    expect(screen.getByLabelText("Total amount")).toHaveAttribute("readonly")
-  })
+    expect(screen.getByLabelText("Gross amount")).toHaveValue("0.02");
+    expect(screen.getByLabelText("Total amount")).toHaveValue("0.03");
+    expect(screen.getByLabelText("Total amount")).toHaveAttribute("readonly");
+  });
 
   it("shows split quantities and hides cash fields", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
 
     render(
       <TransactionFormDialog
@@ -260,22 +266,22 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    await selectOption(user, "Type", "Stock split")
-    await selectOption(user, "Asset", "Acme (ACME)")
-    await user.type(screen.getByLabelText("Split ratio"), "2")
+    await selectOption(user, "Type", "Stock split");
+    await selectOption(user, "Asset", "Acme (ACME)");
+    await user.type(screen.getByLabelText("Split ratio"), "2");
 
-    expect(screen.getByLabelText("Existing quantity")).toHaveValue("1.25")
-    expect(screen.getByLabelText("Resulting quantity")).toHaveValue("2.5")
-    expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument()
-    expect(screen.queryByLabelText("Fees")).not.toBeInTheDocument()
-    expect(screen.queryByLabelText("Price per unit")).not.toBeInTheDocument()
-  })
+    expect(screen.getByLabelText("Existing quantity")).toHaveValue("1.25");
+    expect(screen.getByLabelText("Resulting quantity")).toHaveValue("2.5");
+    expect(screen.queryByLabelText("Amount")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Fees")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Price per unit")).not.toBeInTheDocument();
+  });
 
   it("submits category and description as separate fields", async () => {
-    const user = userEvent.setup()
-    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
 
     render(
       <TransactionFormDialog
@@ -288,16 +294,18 @@ describe("TransactionFormDialog", () => {
         onSubmit={onSubmit}
         open
       />,
-    )
+    );
 
-    await selectOption(user, "Account", "Broker account (USD)")
-    await user.type(screen.getByLabelText("Amount"), "25")
-    await selectOption(user, "Category", "Food & dining")
+    await selectOption(user, "Account", "Broker account (USD)");
+    await user.type(screen.getByLabelText("Amount"), "25");
+    await selectOption(user, "Category", "Food & dining");
     await user.type(
       screen.getByLabelText("Description (optional)"),
       "Lunch with a client",
-    )
-    await user.click(screen.getByRole("button", { name: "Create transaction" }))
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Create transaction" }),
+    );
 
     await vi.waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
@@ -306,12 +314,12 @@ describe("TransactionFormDialog", () => {
           description: "Lunch with a client",
         }),
       ),
-    )
-  })
+    );
+  });
 
   it("preselects an initial account and allows an empty description", async () => {
-    const user = userEvent.setup()
-    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
 
     render(
       <TransactionFormDialog
@@ -325,14 +333,16 @@ describe("TransactionFormDialog", () => {
         onSubmit={onSubmit}
         open
       />,
-    )
+    );
 
     expect(screen.getByLabelText("Account")).toHaveTextContent(
       "Broker account (USD)",
-    )
-    await user.type(screen.getByLabelText("Amount"), "25")
-    await selectOption(user, "Category", "Travel")
-    await user.click(screen.getByRole("button", { name: "Create transaction" }))
+    );
+    await user.type(screen.getByLabelText("Amount"), "25");
+    await selectOption(user, "Category", "Travel");
+    await user.click(
+      screen.getByRole("button", { name: "Create transaction" }),
+    );
 
     await vi.waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
@@ -342,11 +352,11 @@ describe("TransactionFormDialog", () => {
           description: "",
         }),
       ),
-    )
-  })
+    );
+  });
 
   it("resets the category when the transaction type changes", async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup();
 
     render(
       <TransactionFormDialog
@@ -359,20 +369,20 @@ describe("TransactionFormDialog", () => {
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         open
       />,
-    )
+    );
 
-    await selectOption(user, "Category", "Travel")
-    expect(screen.getByLabelText("Category")).toHaveTextContent("Travel")
-    await selectOption(user, "Type", "Investment buy")
+    await selectOption(user, "Category", "Travel");
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Travel");
+    await selectOption(user, "Type", "Investment buy");
     expect(screen.getByLabelText("Category")).toHaveTextContent(
       "Select a category",
-    )
-    await selectOption(user, "Category", "Investment")
-  })
+    );
+    await selectOption(user, "Category", "Investment");
+  });
 
   it("prevents submitting a sale above the current holding", async () => {
-    const user = userEvent.setup()
-    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
 
     render(
       <TransactionFormDialog
@@ -385,34 +395,36 @@ describe("TransactionFormDialog", () => {
         onSubmit={onSubmit}
         open
       />,
-    )
+    );
 
-    await selectOption(user, "Type", "Investment sell")
-    await selectOption(user, "Account", "Broker account (USD)")
-    await selectOption(user, "Asset", "Acme (ACME)")
-    await user.type(screen.getByLabelText("Quantity"), "2")
-    await user.type(screen.getByLabelText("Price per unit"), "10")
-    await selectOption(user, "Category", "Investment")
+    await selectOption(user, "Type", "Investment sell");
+    await selectOption(user, "Account", "Broker account (USD)");
+    await selectOption(user, "Asset", "Acme (ACME)");
+    await user.type(screen.getByLabelText("Quantity"), "2");
+    await user.type(screen.getByLabelText("Price per unit"), "10");
+    await selectOption(user, "Category", "Investment");
     await user.type(
       screen.getByLabelText("Description (optional)"),
       "Partial sale",
-    )
-    await user.click(screen.getByRole("button", { name: "Create transaction" }))
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Create transaction" }),
+    );
 
     expect(
       await screen.findByText(
         "Quantity cannot exceed the current holding (1.25).",
       ),
-    ).toBeInTheDocument()
-    expect(onSubmit).not.toHaveBeenCalled()
-  })
-})
+    ).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
 
 async function selectOption(
   user: ReturnType<typeof userEvent.setup>,
   label: string,
   optionName: string,
 ): Promise<void> {
-  await user.click(screen.getByLabelText(label))
-  await user.click(screen.getByRole("option", { name: optionName }))
+  await user.click(screen.getByLabelText(label));
+  await user.click(screen.getByRole("option", { name: optionName }));
 }

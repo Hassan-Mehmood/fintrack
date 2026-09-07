@@ -57,4 +57,8 @@ export class UpdateAssetDto {
     typeof value === 'string' ? value.trim() : undefined,
   )
   notes?: string;
+
+  @IsOptional()
+  @IsIn(['INVESTMENT', 'CASH_EQUIVALENT'])
+  liquidityClass?: 'INVESTMENT' | 'CASH_EQUIVALENT';
 }

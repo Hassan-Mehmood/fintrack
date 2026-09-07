@@ -79,6 +79,35 @@ describe('MarketDataService', () => {
     expect(eodhd.search).toHaveBeenCalledWith('LUCK.KAR');
   });
 
+  it('revalidates cryptocurrencies by exact CoinGecko id', async () => {
+    const coinGecko = providerMock('COINGECKO');
+    coinGecko.getAssetById.mockResolvedValue({
+      name: 'BNB',
+      symbol: 'BNB',
+      type: 'CRYPTO',
+      provider: 'COINGECKO',
+      providerAssetId: 'binancecoin',
+      exchange: null,
+      imageUrl: null,
+      quoteCurrency: 'USD',
+    });
+    const service = createService(
+      {},
+      {},
+      providerMock('FINNHUB'),
+      coinGecko,
+      providerMock('EODHD'),
+    );
+
+    await expect(
+      service.verifyProviderAsset('CRYPTO', 'COINGECKO', 'binancecoin'),
+    ).resolves.toEqual(
+      expect.objectContaining({ providerAssetId: 'binancecoin' }),
+    );
+    expect(coinGecko.getAssetById).toHaveBeenCalledWith('binancecoin');
+    expect(coinGecko.search).not.toHaveBeenCalled();
+  });
+
   it('returns a fresh cached EODHD quote without a provider request', async () => {
     const cache = {
       getJson: jest.fn().mockResolvedValue(eodQuote()),
@@ -252,6 +281,7 @@ function providerMock(provider: 'FINNHUB' | 'COINGECKO' | 'EODHD') {
   return {
     provider,
     search: jest.fn().mockResolvedValue([]),
+    getAssetById: jest.fn().mockResolvedValue(null),
     listSymbols: jest.fn().mockResolvedValue([]),
     getQuotes: jest.fn().mockResolvedValue(new Map()),
     getHistory: jest.fn().mockResolvedValue({ fetchedAt: '', bars: [] }),

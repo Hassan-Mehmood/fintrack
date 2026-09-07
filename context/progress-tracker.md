@@ -5,7 +5,8 @@ change.
 
 ## Current Phase
 
-- Persistent custom account ordering is implemented and deployed.
+- Investment cash/stablecoin holdings and source-aware funding are implemented
+  and deployed.
 
 ## Current Goal
 
@@ -13,6 +14,49 @@ change.
 
 ## Completed
 
+- Added derived `FIAT_CASH` holding rows for broker and cryptocurrency-wallet
+  ledgers without creating fiat assets. Account and global Investments views
+  now include cash in account value, liquidity, currency exposure, and
+  percentage-based portfolio allocations while excluding it from P&L.
+- Added account-scoped funding actions: source-aware same-currency broker cash
+  transfers, audited external/current cash adjustments, and a locked-wallet
+  stablecoin opening-balance flow. Stablecoin holdings expose deposit,
+  transfer, withdrawal, and activity actions.
+- Added atomic `INVESTMENT_TRANSFER` ledger entries for USD cash-equivalent
+  movements between owned crypto wallets. The API derives and transfers source
+  average cost, validates ownership/account compatibility and available
+  quantity, and keeps fiat cash, income, expenses, and net worth unchanged.
+- Stablecoin asset deposits now preserve an editable acquisition cost that
+  defaults to USD 1 in the UI; stablecoin positions remain restricted to crypto
+  wallets.
+- Applied `20260907120000_add_investment_transfer` to the configured Neon
+  database. Verified Prisma format/validation/generation, 171 API Jest tests,
+  5 API end-to-end tests, 45 web tests, web type-checking, scoped production
+  lint, web lint, and both production builds.
+- Documented the derived fiat-cash holding contract and atomic tracked-wallet
+  stablecoin transfer behavior before implementation.
+
+- Implemented broker Cash settlement and same-wallet USD cash-equivalent
+  settlement for new crypto buys and sells. Paired trades now derive both
+  holding movements, expose pair/settlement details through the API, preserve
+  legacy unpaired crypto history, and revalidate cleared buys atomically in
+  serializable transactions.
+- Added Pay with/Receive in selectors, pair and balance previews, paired
+  activity rendering, broker Cash labels, and a dedicated Add stablecoin
+  balance opening-position flow. Stablecoin credits use nominal USD 1 basis
+  while current provider prices retain depeg visibility.
+- Applied `20260906230000_add_investment_settlement_asset` to the configured
+  Neon database. Verified Prisma format/validation/generation, 168 API Jest
+  tests, 5 API end-to-end tests, 44 web tests, web type-checking, scoped
+  production-source lint, and both production builds.
+- Documented explicit broker-cash and same-wallet stablecoin settlement and
+  added the nullable investment settlement-asset relation plus its additive
+  migration. Existing transaction rows remain unchanged.
+- Fixed CoinGecko asset creation for canonical IDs such as BNB's
+  `binancecoin` by revalidating selected cryptocurrencies through the exact
+  coin endpoint instead of relying on ranked search results. Added provider
+  and service regressions, confirmed the live BNB response, and verified the
+  API build and 161 Jest tests.
 - Added locally staged drag-and-drop account ordering with a keyboard-accessible
   grip, explicit save/cancel controls, a single batched persistence request, an
   ownership-checked atomic reorder endpoint, persistent database positions,
@@ -302,6 +346,51 @@ change.
 - Fixed the mobile transaction card hydration error by making the full-card
   view control and overflow-menu trigger sibling buttons instead of nesting the
   menu trigger inside the card button.
+- Started the frictionless investment-tracking plan with its additive domain
+  foundation: opening-position transaction/trade types, asset liquidity class
+  and provenance, position-level portfolio membership, percentage-based
+  portfolio cash allocation, and named watchlist tables.
+- Added automatic canonical CoinGecko stablecoin classification, explicit
+  cash-equivalent category/risk seed metadata, and user-overridable liquidity
+  classification for manual and provider-backed assets.
+- Made opening positions establish quantity and cost basis with zero fees and
+  no account-cash effect, and excluded both sides of reversed investment pairs
+  from holdings, portfolio calculations, and oversell validation.
+- Added an idempotent legacy portfolio backfill command that assigns each
+  active `accountId + assetId` position to at most one existing portfolio and
+  creates no cash allocations.
+- Verified the investment foundation with Prisma validation, the API build,
+  155 API Jest tests, scoped API lint, web type-check/lint, 41 web tests, and
+  the Next.js production build.
+- Applied `20260906150000_add_investment_position_foundation` to the configured
+  Neon database and confirmed all fourteen Prisma migrations are up to date.
+- Completed the frictionless Investments experience: URL-persisted Overview,
+  Holdings, Activity, Portfolios, and Watchlists tabs; automatic asset-class
+  views; consolidated navigation; and a preserved `/portfolios` redirect.
+- Added the responsive three-step Add holding wizard for provider-backed,
+  library, and manual assets; opening positions and purchases; inline
+  investment accounts; live cost/cash/FX review; and optional inline portfolio
+  assignment without exposing ledger internals.
+- Added the atomic, idempotent `POST /api/v1/investments/positions` command and
+  applied provider resolution before its database transaction. The command can
+  create or reuse the asset, create an account, write the ledger transaction,
+  create a portfolio, and attach the account-specific position.
+- Switched portfolio reads and modern writes to position memberships and
+  percentage-based account-cash allocations, retained the legacy `accountIds`
+  compatibility payload, added position/cash editing in the Investments UI,
+  and ran the idempotent legacy backfill (no eligible memberships remained).
+- Added multiple named watchlists with create, rename, delete, add/remove item,
+  provider/library asset lookup, current-price freshness, and Add holding
+  actions. Watchlists remain calculation-neutral.
+- Added investment-account summaries for broker and crypto account pages,
+  including fiat cash, cash equivalents, invested value, total liquidity,
+  account value, basis, gains, allocation, and recent activity.
+- Added preselected holding actions for buy, sell, dividend, reinvestment,
+  split, bonus, deposit, withdrawal, and filtered activity. Closed positions
+  remain visible and attached while contributing no current allocation value.
+- Ran the updated reference-data seed and verified the implementation with the
+  API build and 158 Jest tests, web type-check/lint and 43 Vitest tests. Web
+  lint retains only two pre-existing Settings warnings.
 
 - Ready for end-to-end manual verification of the dashboard, `/accounts`, `/transactions`, `/investments`, and `/portfolios` flows once Clerk environment variables are configured.
 

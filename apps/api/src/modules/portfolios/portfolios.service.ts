@@ -21,6 +21,7 @@ import type {
 } from './portfolios.types';
 import type { CreatePortfolioDto } from './dto/create-portfolio.dto';
 import type { UpdatePortfolioDto } from './dto/update-portfolio.dto';
+import { InvestmentsService } from '../investments/investments.service';
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -66,6 +67,7 @@ export class PortfoliosService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly marketData?: MarketDataService,
+    @Optional() private readonly investments?: InvestmentsService,
   ) {}
 
   async listPortfoliosForUser(
@@ -85,6 +87,8 @@ export class PortfoliosService {
             accountId: true,
           },
         },
+        holdings: { select: { accountId: true, assetId: true } },
+        cashAllocations: { select: { accountId: true, percentage: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -113,7 +117,9 @@ export class PortfoliosService {
     user: AuthenticatedUser,
     payload: CreatePortfolioDto,
   ): Promise<PortfolioResponse> {
-    await this.assertAccountsOwnedByUser(user.id, payload.accountIds);
+    await this.assertAccountsOwnedByUser(user.id, payload.accountIds ?? []);
+    await this.assertPositionInputs(user.id, payload.holdings ?? []);
+    await this.assertCashAllocations(user.id, payload.cashAllocations ?? []);
 
     const portfolio = await this.prisma.portfolio.create({
       data: {
@@ -121,13 +127,27 @@ export class PortfoliosService {
         name: payload.name,
         description: payload.description,
         accounts: {
-          create: payload.accountIds.map((accountId) => ({
+          create: (payload.accountIds ?? []).map((accountId) => ({
             account: {
               connect: {
                 id: accountId,
               },
             },
           })),
+        },
+        holdings: {
+          create: (payload.holdings ?? []).map(({ accountId, assetId }) => ({
+            account: { connect: { id: accountId } },
+            asset: { connect: { id: assetId } },
+          })),
+        },
+        cashAllocations: {
+          create: (payload.cashAllocations ?? []).map(
+            ({ accountId, percentage }) => ({
+              account: { connect: { id: accountId } },
+              percentage,
+            }),
+          ),
         },
       },
       select: {
@@ -139,6 +159,8 @@ export class PortfoliosService {
             accountId: true,
           },
         },
+        holdings: { select: { accountId: true, assetId: true } },
+        cashAllocations: { select: { accountId: true, percentage: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -156,6 +178,16 @@ export class PortfoliosService {
 
     if (payload.accountIds !== undefined) {
       await this.assertAccountsOwnedByUser(user.id, payload.accountIds);
+    }
+    if (payload.holdings !== undefined) {
+      await this.assertPositionInputs(user.id, payload.holdings, portfolioId);
+    }
+    if (payload.cashAllocations !== undefined) {
+      await this.assertCashAllocations(
+        user.id,
+        payload.cashAllocations,
+        portfolioId,
+      );
     }
 
     const portfolio = await this.prisma.portfolio.update({
@@ -178,6 +210,28 @@ export class PortfoliosService {
                 })),
               }
             : undefined,
+        holdings:
+          payload.holdings !== undefined
+            ? {
+                deleteMany: {},
+                create: payload.holdings.map(({ accountId, assetId }) => ({
+                  account: { connect: { id: accountId } },
+                  asset: { connect: { id: assetId } },
+                })),
+              }
+            : undefined,
+        cashAllocations:
+          payload.cashAllocations !== undefined
+            ? {
+                deleteMany: {},
+                create: payload.cashAllocations.map(
+                  ({ accountId, percentage }) => ({
+                    account: { connect: { id: accountId } },
+                    percentage,
+                  }),
+                ),
+              }
+            : undefined,
       },
       select: {
         id: true,
@@ -188,6 +242,8 @@ export class PortfoliosService {
             accountId: true,
           },
         },
+        holdings: { select: { accountId: true, assetId: true } },
+        cashAllocations: { select: { accountId: true, percentage: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -219,6 +275,14 @@ export class PortfoliosService {
     readonly accounts: ReadonlyArray<{
       readonly accountId: string;
     }>;
+    readonly holdings?: ReadonlyArray<{
+      readonly accountId: string;
+      readonly assetId: string;
+    }>;
+    readonly cashAllocations?: ReadonlyArray<{
+      readonly accountId: string;
+      readonly percentage: Decimal;
+    }>;
     readonly createdAt: Date;
     readonly updatedAt: Date;
   }> {
@@ -236,6 +300,8 @@ export class PortfoliosService {
             accountId: true,
           },
         },
+        holdings: { select: { accountId: true, assetId: true } },
+        cashAllocations: { select: { accountId: true, percentage: true } },
         createdAt: true,
         updatedAt: true,
       },
@@ -277,6 +343,83 @@ export class PortfoliosService {
     }
   }
 
+  private async assertPositionInputs(
+    userId: string,
+    holdings: readonly {
+      readonly accountId: string;
+      readonly assetId: string;
+    }[],
+    portfolioId?: string,
+  ): Promise<void> {
+    for (const holding of holdings) {
+      const [account, asset, history, membership] = await Promise.all([
+        this.prisma.account.findFirst({
+          where: { id: holding.accountId, userId },
+          select: { id: true },
+        }),
+        this.prisma.asset.findFirst({
+          where: { id: holding.assetId, userId },
+          select: { id: true },
+        }),
+        this.prisma.investmentTransactionDetail.findFirst({
+          where: {
+            assetId: holding.assetId,
+            transaction: { accountId: holding.accountId, userId },
+          },
+          select: { id: true },
+        }),
+        this.prisma.portfolioHolding.findUnique({
+          where: {
+            accountId_assetId: {
+              accountId: holding.accountId,
+              assetId: holding.assetId,
+            },
+          },
+          select: { portfolioId: true },
+        }),
+      ]);
+      if (!account || !asset || !history)
+        throw createAccountNotFoundForPortfolioException(holding.accountId);
+      if (membership && membership.portfolioId !== portfolioId)
+        throw new Error('A position can belong to only one portfolio.');
+    }
+  }
+
+  private async assertCashAllocations(
+    userId: string,
+    allocations: readonly {
+      readonly accountId: string;
+      readonly percentage: string;
+    }[],
+    portfolioId?: string,
+  ): Promise<void> {
+    if (!allocations.length) return;
+    const accountIds = allocations.map((item) => item.accountId);
+    await this.assertAccountsOwnedByUser(userId, accountIds);
+    const existing = await this.prisma.portfolioCashAllocation.findMany({
+      where: {
+        accountId: { in: accountIds },
+        portfolioId: portfolioId ? { not: portfolioId } : undefined,
+        portfolio: { userId },
+      },
+      select: { accountId: true, percentage: true },
+    });
+    for (const allocation of allocations) {
+      const percentage = new Decimal(allocation.percentage);
+      const used = existing
+        .filter((item) => item.accountId === allocation.accountId)
+        .reduce((sum, item) => sum.add(item.percentage), new Decimal(0));
+      if (
+        percentage.isNegative() ||
+        percentage.greaterThan(100) ||
+        used.add(percentage).greaterThan(100)
+      )
+        throw new Error(
+          'Portfolio cash allocations for an account cannot exceed 100%.',
+        );
+    }
+  }
+
   private async buildPortfolioResponse(
     user: AuthenticatedUser,
     portfolio: {
@@ -286,10 +429,21 @@ export class PortfoliosService {
       readonly accounts: ReadonlyArray<{
         readonly accountId: string;
       }>;
+      readonly holdings?: ReadonlyArray<{
+        readonly accountId: string;
+        readonly assetId: string;
+      }>;
+      readonly cashAllocations?: ReadonlyArray<{
+        readonly accountId: string;
+        readonly percentage: Decimal;
+      }>;
       readonly createdAt: Date;
       readonly updatedAt: Date;
     },
   ): Promise<PortfolioResponse> {
+    if (portfolio.holdings !== undefined && this.investments) {
+      return this.buildPositionPortfolioResponse(user, portfolio);
+    }
     const accountIds = portfolio.accounts.map((item) => item.accountId);
 
     const [accounts, metrics, allocation] = await Promise.all([
@@ -304,11 +458,195 @@ export class PortfoliosService {
       description: portfolio.description,
       accountCount: accounts.length,
       accounts,
+      holdings: portfolio.holdings ?? [],
+      cashAllocations: (portfolio.cashAllocations ?? []).map((item) => ({
+        accountId: item.accountId,
+        percentage: item.percentage.toString(),
+      })),
       metrics,
       allocation,
       createdAt: portfolio.createdAt.toISOString(),
       updatedAt: portfolio.updatedAt.toISOString(),
     };
+  }
+
+  private async buildPositionPortfolioResponse(
+    user: AuthenticatedUser,
+    portfolio: {
+      readonly id: string;
+      readonly name: string;
+      readonly description: string | null;
+      readonly holdings?: ReadonlyArray<{
+        readonly accountId: string;
+        readonly assetId: string;
+      }>;
+      readonly cashAllocations?: ReadonlyArray<{
+        readonly accountId: string;
+        readonly percentage: Decimal;
+      }>;
+      readonly createdAt: Date;
+      readonly updatedAt: Date;
+    },
+  ): Promise<PortfolioResponse> {
+    const { holdings } = await this.investments!.getHoldingsForUser(user, {
+      portfolioId: portfolio.id,
+      reportingCurrency: user.baseCurrency === 'PKR' ? 'PKR' : 'USD',
+    });
+    const allocations = portfolio.cashAllocations ?? [];
+    const accountIds = [
+      ...new Set([
+        ...(portfolio.holdings ?? []).map((item) => item.accountId),
+        ...allocations.map((item) => item.accountId),
+      ]),
+    ];
+    const [accounts, riskProfiles] = await Promise.all([
+      this.fetchPortfolioAccounts(user, accountIds),
+      this.prisma.asset.findMany({
+        where: {
+          userId: user.id,
+          id: { in: [...new Set(holdings.map((holding) => holding.assetId))] },
+        },
+        select: { id: true, riskProfile: { select: { score: true } } },
+      }),
+    ]);
+    const converter = new CurrencyConverter(
+      user.baseCurrency,
+      user.exchangeRate,
+    );
+    const allocatedCash = await this.calculateAllocatedCash(
+      user.id,
+      allocations,
+      converter,
+    );
+    const sum = (
+      field: 'currentValue' | 'costBasis' | 'unrealizedGain' | 'realizedGain',
+    ) =>
+      holdings.reduce(
+        (total, holding) =>
+          holding[field] ? total.add(holding[field]) : total,
+        new Decimal(0),
+      );
+    const currentValue = sum('currentValue');
+    const totalValue = currentValue.add(allocatedCash);
+    const riskByAsset = new Map(
+      riskProfiles.map((asset) => [asset.id, asset.riskProfile?.score ?? null]),
+    );
+    let riskWeightedValue = allocatedCash;
+    let riskDenominator = allocatedCash;
+    const categories = new Map<string, Decimal>();
+    for (const holding of holdings) {
+      if (!holding.currentValue || holding.positionStatus === 'CLOSED')
+        continue;
+      const category =
+        holding.liquidityClass === 'CASH_EQUIVALENT'
+          ? 'Cash equivalents'
+          : holding.categoryName;
+      categories.set(
+        category,
+        (categories.get(category) ?? new Decimal(0)).add(holding.currentValue),
+      );
+      const score = riskByAsset.get(holding.assetId);
+      if (score !== null && score !== undefined) {
+        riskWeightedValue = riskWeightedValue.add(
+          new Decimal(holding.currentValue).times(score),
+        );
+        riskDenominator = riskDenominator.add(holding.currentValue);
+      }
+    }
+    if (!allocatedCash.isZero()) categories.set('Fiat cash', allocatedCash);
+
+    return {
+      id: portfolio.id,
+      name: portfolio.name,
+      description: portfolio.description,
+      accountCount: accounts.length,
+      accounts,
+      holdings: portfolio.holdings ?? [],
+      cashAllocations: allocations.map((item) => ({
+        accountId: item.accountId,
+        percentage: item.percentage.toString(),
+      })),
+      metrics: {
+        totalValue: totalValue.toFixed(2),
+        totalCostBasis: sum('costBasis').toFixed(2),
+        totalUnrealizedGain: sum('unrealizedGain').toFixed(2),
+        totalRealizedGain: sum('realizedGain').toFixed(2),
+        weightedRiskScore: riskDenominator.isZero()
+          ? null
+          : riskWeightedValue
+              .dividedBy(riskDenominator)
+              .toDecimalPlaces(1)
+              .toNumber(),
+        baseCurrency: converter.baseCurrency,
+        isPartial: holdings.some((holding) => holding.currentValue === null),
+        unpricedAssetCount: holdings.filter(
+          (holding) => holding.currentValue === null,
+        ).length,
+      },
+      allocation: [...categories.entries()].map(([category, value]) => ({
+        category,
+        value: totalValue.isZero()
+          ? 0
+          : value
+              .dividedBy(totalValue)
+              .times(100)
+              .toDecimalPlaces(1)
+              .toNumber(),
+      })),
+      createdAt: portfolio.createdAt.toISOString(),
+      updatedAt: portfolio.updatedAt.toISOString(),
+    };
+  }
+
+  private async calculateAllocatedCash(
+    userId: string,
+    allocations: readonly {
+      readonly accountId: string;
+      readonly percentage: Decimal;
+    }[],
+    converter: CurrencyConverter,
+  ): Promise<Decimal> {
+    if (!allocations.length) return new Decimal(0);
+    const accountIds = allocations.map((item) => item.accountId);
+    const [accounts, transactions] = await Promise.all([
+      this.prisma.account.findMany({
+        where: { userId, id: { in: accountIds } },
+        select: { id: true, currency: true, openingBalance: true },
+      }),
+      this.prisma.transaction.findMany({
+        where: {
+          userId,
+          status: 'CLEARED',
+          deletedAt: null,
+          OR: [
+            { accountId: { in: accountIds } },
+            { destinationAccountId: { in: accountIds } },
+          ],
+        },
+        select: {
+          type: true,
+          accountId: true,
+          destinationAccountId: true,
+          amount: true,
+        },
+      }),
+    ]);
+    const percentages = new Map(
+      allocations.map((item) => [item.accountId, item.percentage]),
+    );
+    return accounts.reduce((total, account) => {
+      const balance = calculateAccountBalance(
+        account.openingBalance,
+        account.id,
+        transactions,
+      );
+      return total.add(
+        converter
+          .convert(balance, account.currency)
+          .times(percentages.get(account.id) ?? 0)
+          .dividedBy(100),
+      );
+    }, new Decimal(0));
   }
 
   private async fetchPortfolioAccounts(
@@ -641,6 +979,8 @@ export class PortfoliosService {
         transaction: {
           status: 'CLEARED',
           deletedAt: null,
+          reversalOfId: null,
+          reversal: { is: null },
           accountId: {
             in: [...accountIds],
           },

@@ -3,9 +3,7 @@
 import Link from "next/link"
 import {
   BarChart3Icon,
-  FolderIcon,
   GaugeIcon,
-  GemIcon,
   LandmarkIcon,
   LayoutDashboardIcon,
   PiggyBankIcon,
@@ -59,22 +57,10 @@ const navigationItems = [
   },
   { label: "Budgets", icon: GaugeIcon },
   {
-    label: "Assets",
-    href: "/assets",
-    icon: GemIcon,
-    section: "assets" as const,
-  },
-  {
     label: "Investments",
     href: "/investments",
     icon: BarChart3Icon,
     section: "investments" as const,
-  },
-  {
-    label: "Portfolios",
-    href: "/portfolios",
-    icon: FolderIcon,
-    section: "portfolios" as const,
   },
   { label: "Goals", icon: TargetIcon },
   {

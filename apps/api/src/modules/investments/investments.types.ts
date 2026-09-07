@@ -3,6 +3,7 @@ export type HoldingGroupBy =
   'NONE' | 'ACCOUNT' | 'PORTFOLIO' | 'ASSET_TYPE' | 'CURRENCY';
 
 export interface HoldingResponse {
+  readonly holdingKind: 'ASSET' | 'FIAT_CASH';
   readonly assetId: string;
   readonly assetName: string;
   readonly assetSymbol: string | null;
@@ -14,6 +15,7 @@ export interface HoldingResponse {
   readonly portfolios: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
+    readonly percentage?: string;
   }>;
   readonly quantity: string;
   readonly nativeCurrency: string;
@@ -40,6 +42,9 @@ export interface HoldingResponse {
   readonly priceChange: string | null;
   readonly priceChangePercent: string | null;
   readonly hasMissingHistoricalFx: boolean;
+  readonly positionStatus: 'ACTIVE' | 'CLOSED';
+  readonly liquidityClass: 'INVESTMENT' | 'CASH_EQUIVALENT' | 'FIAT_CASH';
+  readonly liquidityClassSource: 'AUTO' | 'USER';
 }
 
 export interface CurrencyTotal {
@@ -48,12 +53,22 @@ export interface CurrencyTotal {
   readonly totalCurrentValue: string;
   readonly totalRealizedGain: string;
   readonly totalUnrealizedGain: string;
+  readonly totalAccountValue: string;
+  readonly fiatCashValue: string;
+  readonly cashEquivalentValue: string;
+  readonly investedValue: string;
+  readonly totalLiquidity: string;
 }
 
 export interface InvestmentSummaryData {
   readonly reportingCurrency: ReportingCurrency;
   readonly totalCostBasis: string | null;
   readonly totalCurrentValue: string | null;
+  readonly totalAccountValue: string | null;
+  readonly fiatCashValue: string | null;
+  readonly cashEquivalentValue: string | null;
+  readonly investedValue: string | null;
+  readonly totalLiquidity: string | null;
   readonly totalRealizedGain: string | null;
   readonly totalUnrealizedGain: string | null;
   readonly totalsByCurrency: readonly CurrencyTotal[];
@@ -85,4 +100,14 @@ export interface HoldingsListResponse {
 
 export interface InvestmentSummaryResponse {
   readonly data: InvestmentSummaryData;
+}
+
+export interface PositionCommandResponse {
+  readonly data: {
+    readonly assetId: string;
+    readonly accountId: string;
+    readonly portfolioId: string | null;
+    readonly transactionId: string;
+    readonly holding: HoldingResponse;
+  };
 }

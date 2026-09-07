@@ -54,6 +54,26 @@ describe('calculateHolding', () => {
     expect(result.unrealizedGain.toString()).toBe('10000');
   });
 
+  it('treats an opening position like a buy for quantity and basis', () => {
+    const result = calculateHolding({
+      currentPrice: new Decimal(15),
+      priceCurrency: 'USD',
+      transactions: [
+        {
+          type: 'OPENING',
+          quantity: new Decimal(100),
+          price: new Decimal(12),
+          fees: new Decimal(0),
+        },
+      ],
+    });
+
+    expect(result.quantity.toString()).toBe('100');
+    expect(result.averageCost?.toString()).toBe('12');
+    expect(result.costBasis.toString()).toBe('1200');
+    expect(result.currentValue?.toString()).toBe('1500');
+  });
+
   it('calculates realized gain from a partial sell', () => {
     const result = calculateHolding({
       currentPrice: new Decimal(70000),

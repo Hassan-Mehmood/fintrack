@@ -90,6 +90,16 @@ export class MarketDataService {
       );
     }
 
+    if (provider === 'COINGECKO') {
+      const result = await this.coinGecko.getAssetById(
+        normalizedProviderAssetId,
+      );
+      if (!result) {
+        throw providerAssetNotFoundException(normalizedProviderAssetId);
+      }
+      return result;
+    }
+
     const results = await selectedProvider.search(normalizedProviderAssetId);
     const result = results.find(
       (candidate) => candidate.providerAssetId === normalizedProviderAssetId,

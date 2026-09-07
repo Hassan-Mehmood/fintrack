@@ -32,6 +32,46 @@ describe('CoinGeckoProvider', () => {
     ]);
   });
 
+  it('resolves a selected coin by its exact provider id', async () => {
+    process.env.COINGECKO_API_KEY = 'test-key';
+    const http = {
+      getJson: jest.fn().mockResolvedValue({
+        id: 'binancecoin',
+        name: 'BNB',
+        symbol: 'bnb',
+        image: { thumb: 'https://example.test/bnb.png' },
+      }),
+    };
+    const provider = new CoinGeckoProvider(http as never);
+
+    await expect(provider.getAssetById('binancecoin')).resolves.toEqual({
+      name: 'BNB',
+      symbol: 'BNB',
+      type: 'CRYPTO',
+      provider: 'COINGECKO',
+      providerAssetId: 'binancecoin',
+      exchange: null,
+      imageUrl: 'https://example.test/bnb.png',
+      quoteCurrency: 'USD',
+    });
+    expect(http.getJson).toHaveBeenCalledWith(
+      'COINGECKO',
+      expect.objectContaining({
+        pathname: '/api/v3/coins/binancecoin',
+      }),
+      { 'x-cg-demo-api-key': 'test-key' },
+      { notFoundAsNull: true },
+    );
+  });
+
+  it('returns null when the selected CoinGecko id no longer exists', async () => {
+    process.env.COINGECKO_API_KEY = 'test-key';
+    const http = { getJson: jest.fn().mockResolvedValue(null) };
+    const provider = new CoinGeckoProvider(http as never);
+
+    await expect(provider.getAssetById('missing')).resolves.toBeNull();
+  });
+
   it('normalizes batched prices and timestamps', async () => {
     process.env.COINGECKO_API_KEY = 'test-key';
     const http = {

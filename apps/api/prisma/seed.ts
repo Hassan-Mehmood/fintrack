@@ -46,10 +46,20 @@ const assetCategories = [
     name: 'Private Equity',
     order: 11,
   },
+  {
+    id: 'a0b0c0d0-e0f0-4a0b-8c0d-0e0f0a0b0c18',
+    name: 'Cash Equivalent',
+    order: 12,
+  },
 ];
 
 const riskProfiles = [
-  { id: 'b0c0d0e0-f0a0-4b0c-9d0e-0f0a0b0c0d0e', name: 'Cash', score: 1, order: 1 },
+  {
+    id: 'b0c0d0e0-f0a0-4b0c-9d0e-0f0a0b0c0d0e',
+    name: 'Cash',
+    score: 1,
+    order: 1,
+  },
   {
     id: 'b0c0d0e0-f0a0-4b0c-9d0e-0f0a0b0c0d0f',
     name: 'Savings',
@@ -79,6 +89,12 @@ const riskProfiles = [
     name: 'Crypto',
     score: 10,
     order: 6,
+  },
+  {
+    id: 'b0c0d0e0-f0a0-4b0c-9d0e-0f0a0b0c0d14',
+    name: 'Cash Equivalents',
+    score: 1,
+    order: 7,
   },
 ];
 
