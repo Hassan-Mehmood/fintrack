@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { AccountsService } from './accounts.service';
 import {
   createAccountNotFoundException,
+  createCryptoWalletFiatNotSupportedException,
   createInvalidAccountOrderException,
 } from './accounts.errors';
 
@@ -135,6 +136,18 @@ describe('AccountsService', () => {
         data: expect.objectContaining({ displayOrder: 3 }),
       }),
     );
+  });
+
+  it('rejects a crypto wallet with a fiat opening balance', async () => {
+    await expect(
+      service.createAccountForUser(authenticatedUser, {
+        name: 'Cold wallet',
+        type: 'CRYPTO_WALLET',
+        currency: 'USD',
+        openingBalance: '1427.9',
+      }),
+    ).rejects.toEqual(createCryptoWalletFiatNotSupportedException());
+    expect(prisma.account.create).not.toHaveBeenCalled();
   });
 
   it('persists a complete custom account order', async () => {
@@ -316,6 +329,15 @@ describe('AccountsService', () => {
       expect(prisma.transaction.findMany).not.toHaveBeenCalled();
       expect(prisma.transaction.create).not.toHaveBeenCalled();
     });
+    it('rejects fiat balance adjustments for crypto wallets', async () => {
+      prisma.account.findFirst.mockResolvedValue(
+        createAccountRecord({ type: 'CRYPTO_WALLET' }),
+      );
+      await expect(
+        service.adjustBalanceForUser(authenticatedUser, 'account-1', payload),
+      ).rejects.toEqual(createCryptoWalletFiatNotSupportedException());
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
     it('does not duplicate retries after another balance change', async () => {
       prisma.transaction.findFirst.mockResolvedValue({
         accountId: 'account-1',
@@ -401,16 +423,18 @@ function createAccountRecord({
   name = 'Primary Checking',
   transactionCount = 0,
   transferCount = 0,
+  type = 'BANK',
 }: {
   readonly createdAt?: Date;
   readonly name?: string;
   readonly transactionCount?: number;
   readonly transferCount?: number;
+  readonly type?: 'BANK' | 'CRYPTO_WALLET';
 } = {}) {
   return {
     id: 'account-1',
     name,
-    type: 'BANK',
+    type,
     currency: 'USD',
     openingBalance: {
       toString: () => '1500.25',

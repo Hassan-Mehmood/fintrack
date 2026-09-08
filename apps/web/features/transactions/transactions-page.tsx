@@ -529,14 +529,16 @@ export function TransactionsPage({
                 <PencilLineIcon data-icon="inline-start" />
                 <span className="hidden sm:inline">Edit</span>
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setAccountAction("adjust")}
-              >
-                <ArrowUpDownIcon data-icon="inline-start" />
-                <span className="hidden sm:inline">Adjust balance</span>
-              </Button>
+              {account.type !== "CRYPTO_WALLET" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAccountAction("adjust")}
+                >
+                  <ArrowUpDownIcon data-icon="inline-start" />
+                  <span className="hidden sm:inline">Adjust balance</span>
+                </Button>
+              ) : null}
             </>
           ) : null}
           <Button
@@ -983,7 +985,13 @@ export function TransactionsPage({
       <TransactionFormDialog
         open={dialog !== null}
         mode={dialog?.mode ?? "create"}
-        scope={scope}
+        scope={
+          account?.type === "CRYPTO_WALLET"
+            ? "CRYPTO"
+            : account?.type === "BROKER"
+              ? "SECURITIES"
+              : scope
+        }
         transaction={dialog?.transaction ?? null}
         accounts={accounts}
         assets={assetsQuery.data ?? []}
@@ -1053,7 +1061,9 @@ export function TransactionsPage({
           }}
         />
       ) : null}
-      {account && accountAction === "adjust" ? (
+      {account &&
+      account.type !== "CRYPTO_WALLET" &&
+      accountAction === "adjust" ? (
         <AdjustBalanceDialog
           account={account}
           onClose={() => setAccountAction(null)}
@@ -2027,17 +2037,26 @@ function AccountOverview({ account }: { readonly account: Account }) {
       className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       aria-label="Account balances and details"
     >
-      <SummaryCard
-        label="Current balance"
-        value={formatAmount(account.currentBalance, account.currency)}
-        detail="Complete account balance"
-      />
-      <SummaryCard
-        label="Opening balance"
-        value={formatAmount(account.openingBalance, account.currency)}
-        detail={`Opened ${formatDate(account.openedAt)}`}
-      />
-      <Card className="md:col-span-2">
+      {account.type !== "CRYPTO_WALLET" ? (
+        <>
+          <SummaryCard
+            label="Current balance"
+            value={formatAmount(account.currentBalance, account.currency)}
+            detail="Complete account balance"
+          />
+          <SummaryCard
+            label="Opening balance"
+            value={formatAmount(account.openingBalance, account.currency)}
+            detail={`Opened ${formatDate(account.openedAt)}`}
+          />
+        </>
+      ) : null}
+      <Card
+        className={cn(
+          "md:col-span-2",
+          account.type === "CRYPTO_WALLET" && "xl:col-span-4",
+        )}
+      >
         <CardContent className="grid gap-3 p-4 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">Account type</p>

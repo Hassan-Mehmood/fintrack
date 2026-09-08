@@ -188,6 +188,61 @@ describe('InvestmentsService', () => {
     );
   });
 
+  it('counts a stablecoin once and ignores crypto-wallet fiat cash', async () => {
+    prisma.asset.findMany.mockResolvedValue([
+      createAssetRecord({
+        id: 'usdc',
+        name: 'USD Coin',
+        currentPrice: '1',
+        liquidityClass: 'CASH_EQUIVALENT',
+      }),
+    ]);
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      createDetailRecord({
+        assetId: 'usdc',
+        tradeType: 'OPENING',
+        quantity: '1427.9',
+        price: '1',
+      }),
+    ]);
+    prisma.account.findMany.mockResolvedValue([
+      {
+        id: 'account-1',
+        type: 'CRYPTO_WALLET',
+        name: 'Crypto wallet',
+        currency: 'USD',
+        openingBalance: new Decimal('1427.9'),
+        transactions: [],
+        transfersIn: [],
+        portfolioCashAllocations: [],
+      },
+    ]);
+
+    const summary = await service.getSummaryForUser(authenticatedUser, {
+      domain: 'CRYPTO',
+    });
+    const { holdings } = await service.getHoldingsForUser(authenticatedUser, {
+      domain: 'CRYPTO',
+    });
+
+    expect(holdings).toHaveLength(1);
+    expect(holdings[0]).toEqual(
+      expect.objectContaining({
+        assetId: 'usdc',
+        liquidityClass: 'CASH_EQUIVALENT',
+        currentValue: '1427.90',
+      }),
+    );
+    expect(summary.data).toEqual(
+      expect.objectContaining({
+        totalAccountValue: '1427.90',
+        fiatCashValue: '0.00',
+        cashEquivalentValue: '1427.90',
+        totalLiquidity: '1427.90',
+      }),
+    );
+  });
+
   it('uses portfolio cash percentages without double counting grouped cash', async () => {
     prisma.asset.findMany.mockResolvedValue([]);
     prisma.investmentTransactionDetail.findMany.mockResolvedValue([]);
@@ -569,12 +624,14 @@ describe('InvestmentsService', () => {
 });
 
 function createAssetRecord({
+  domain = 'CRYPTO',
   id = 'asset-1',
   name = 'Bitcoin',
   currentPrice = null,
   priceCurrency = 'USD',
   liquidityClass = 'INVESTMENT',
 }: {
+  readonly domain?: 'SECURITIES' | 'CRYPTO';
   readonly id?: string;
   readonly name?: string;
   readonly currentPrice?: string | null;
@@ -582,6 +639,7 @@ function createAssetRecord({
   readonly liquidityClass?: 'INVESTMENT' | 'CASH_EQUIVALENT';
 } = {}) {
   return {
+    domain,
     id,
     name,
     symbol: null,

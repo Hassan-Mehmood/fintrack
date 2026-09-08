@@ -363,7 +363,8 @@ export function AddHoldingDialog({
             kind: "NEW",
             name: newAccountName.trim(),
             currency: accountCurrency,
-            openingBalance: accountCash || "0",
+            openingBalance:
+              domain === "CRYPTO" ? "0" : (accountCash || "0"),
           }
         : { kind: "EXISTING", accountId: accountChoice };
     const portfolio: CreatePositionPayload["portfolio"] =
@@ -490,7 +491,7 @@ export function AddHoldingDialog({
                     </SelectContent>
                   </Select>
                 </Field>
-                {!portfolioSetup ? (
+                {!portfolioSetup && domain === "SECURITIES" ? (
                   <Field>
                     <FieldLabel>Current price (optional)</FieldLabel>
                     <Input

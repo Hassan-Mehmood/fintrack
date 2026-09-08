@@ -70,6 +70,7 @@ export async function createPosition(
 
 export interface InvestmentAccountSummary {
   readonly accountId: string;
+  readonly accountType: "BROKER" | "CRYPTO_WALLET";
   readonly accountCurrency: string;
   readonly reportingCurrency: string;
   readonly availableFiatCash: string;

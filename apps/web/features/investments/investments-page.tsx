@@ -338,7 +338,9 @@ export function InvestmentsPage({
               detail={
                 reportingCurrency === "NATIVE"
                   ? "Current value by currency"
-                  : `Cash plus current asset value in ${reportingCurrency}`
+                  : domain === "CRYPTO"
+                    ? `Stablecoins plus current crypto value in ${reportingCurrency}`
+                    : `Cash plus current asset value in ${reportingCurrency}`
               }
             />
             <SummaryCard
@@ -354,7 +356,11 @@ export function InvestmentsPage({
                   />
                 )
               }
-              detail="Fiat cash plus cash equivalents"
+              detail={
+                domain === "CRYPTO"
+                  ? "Stablecoin and cash-equivalent holdings"
+                  : "Fiat cash plus cash equivalents"
+              }
             />
             <SummaryCard
               label="Invested value"

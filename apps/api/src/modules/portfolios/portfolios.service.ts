@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MarketDataService } from '../market-data/market-data.service';
 import {
   createAccountNotFoundForPortfolioException,
+  createCryptoPortfolioCashNotSupportedException,
   createPortfolioNotFoundException,
 } from './portfolios.errors';
 import type {
@@ -448,6 +449,9 @@ export class PortfoliosService {
     domain?: 'SECURITIES' | 'CRYPTO',
   ): Promise<void> {
     if (!allocations.length) return;
+    if (domain === 'CRYPTO') {
+      throw createCryptoPortfolioCashNotSupportedException();
+    }
     const accountIds = allocations.map((item) => item.accountId);
     await this.assertAccountsOwnedByUser(userId, accountIds, domain);
     const existing = await this.prisma.portfolioCashAllocation.findMany({

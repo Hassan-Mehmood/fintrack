@@ -316,7 +316,7 @@ Store the following in PostgreSQL:
 - Budgets
 - Investment assets
 - Investment trades
-- Position-level portfolio memberships and percentage-based fiat cash allocations
+- Position-level portfolio memberships and percentage-based broker fiat cash allocations
 - Named watchlists and their asset memberships
 - Authoritative investment gross amounts, fees, and final cash impacts
 - Current manually entered asset prices
@@ -374,10 +374,11 @@ currency-grouped totals and never combines unlike currencies.
 
 An investment position is identified by `accountId + assetId`. A position may
 belong to at most one custom portfolio. Portfolio membership never changes an
-investment account's own totals, which always include the account's complete
-fiat cash balance and all of its holdings. Portfolio cash allocations are
-percentages of current account cash; allocations for an account across all
-portfolios must not exceed 100 percent.
+investment account's own totals. Broker totals include the account's complete
+fiat cash balance and all holdings; cryptocurrency-wallet totals include only
+stablecoin and other crypto holdings. Stock portfolio cash allocations are
+percentages of current broker cash, and allocations for a broker account across
+all portfolios must not exceed 100 percent.
 
 Opening positions are represented by
 `TransactionType.INVESTMENT_OPENING_POSITION` and `TradeType.OPENING`. They add
@@ -401,12 +402,21 @@ Assets carry an explicit liquidity classification of `INVESTMENT` or
 stablecoin classification or a user override. Cash equivalents remain asset
 holdings and are never folded into fiat account balances.
 
-Investment reporting also exposes each broker or cryptocurrency wallet's
-derived fiat balance as a synthetic `FIAT_CASH` holding. This row is a read
-model only: no fiat `Asset` is created, and its value always comes from the
-account opening balance plus cleared ledger activity. Fiat cash contributes to
-account value, liquidity, currency exposure, and percentage-based portfolio
-cash allocations, but never to investment cost basis or profit and loss.
+Investment reporting exposes each broker account's derived fiat balance as a
+synthetic `FIAT_CASH` holding. This row is a read model only: no fiat `Asset` is
+created, and its value always comes from the account opening balance plus
+cleared ledger activity. Broker fiat cash contributes to account value,
+liquidity, currency exposure, and percentage-based portfolio cash allocations,
+but never to investment cost basis or profit and loss.
+
+Cryptocurrency wallets are stablecoin-only for liquidity. They must have no
+separate fiat cash balance, never emit `FIAT_CASH` holdings, and cannot receive
+fiat balance adjustments, ordinary cash transfers, or fiat cash portfolio
+allocations. Stablecoins remain normal asset positions classified as
+`CASH_EQUIVALENT`, use current market prices in reporting, and contribute once
+to wallet value and liquidity. Legacy fiat-affecting wallet history remains
+auditable but immutable after an offsetting migration adjustment brings each
+wallet's fiat ledger balance to zero.
 
 Stablecoin movements between two tracked cryptocurrency wallets use one
 `INVESTMENT_TRANSFER` transaction with the source account, destination account,
@@ -777,11 +787,13 @@ cash. A cleared crypto purchase cannot exceed the selected same-wallet cash-
 equivalent quantity. Creating, editing, clearing, reversing, or deleting a
 paired crypto trade must apply or release both asset movements together.
 
-### 12. Fiat cash holdings must remain derived
+### 12. Broker fiat cash holdings must remain derived
 
-The `FIAT_CASH` holding is a reporting projection of the account ledger. It
-must never be persisted as an investment asset or independently edited. Cash
-funding must continue to use transfers or audited balance adjustments.
+The `FIAT_CASH` holding is a reporting projection of a broker account ledger.
+It must never be persisted as an investment asset or independently edited.
+Broker cash funding must continue to use transfers or audited balance
+adjustments. Cryptocurrency wallets never expose this holding; their liquidity
+comes from stablecoin asset positions.
 
 ---
 

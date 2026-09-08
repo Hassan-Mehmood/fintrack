@@ -44,7 +44,7 @@ export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: Inve
         name: values.name,
         description: values.description || undefined,
         holdings: values.holdings.map((key) => splitPositionKey(key)),
-        cashAllocations: Object.entries(values.cashAllocations)
+        cashAllocations: domain === "CRYPTO" ? [] : Object.entries(values.cashAllocations)
           .filter(([, percentage]) => Number(percentage) > 0)
           .map(([accountId, percentage]) => ({ accountId, percentage })),
       }
@@ -73,9 +73,9 @@ export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: Inve
   if (portfolios.length === 0) {
     return (
       <Empty className="border">
-        <EmptyHeader><EmptyTitle>No portfolios yet</EmptyTitle><EmptyDescription>Create a portfolio from individual holdings and optionally allocate account cash.</EmptyDescription></EmptyHeader>
+        <EmptyHeader><EmptyTitle>No portfolios yet</EmptyTitle><EmptyDescription>{domain === "CRYPTO" ? "Create a portfolio from individual crypto and stablecoin holdings." : "Create a portfolio from individual holdings and optionally allocate account cash."}</EmptyDescription></EmptyHeader>
         <EmptyContent><Button onClick={() => setEditing("new")}><PlusIcon data-icon="inline-start" />Create portfolio</Button></EmptyContent>
-        {editing !== null ? <PortfolioEditor portfolio={null} holdings={holdings} portfolios={portfolios} accounts={accountsQuery.data ?? []} pending={save.isPending} error={save.error?.message} onClose={() => setEditing(null)} onSave={(values) => save.mutate(values)} /> : null}
+        {editing !== null ? <PortfolioEditor domain={domain} portfolio={null} holdings={holdings} portfolios={portfolios} accounts={accountsQuery.data ?? []} pending={save.isPending} error={save.error?.message} onClose={() => setEditing(null)} onSave={(values) => save.mutate(values)} /> : null}
       </Empty>
     )
   }
@@ -88,7 +88,7 @@ export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: Inve
           <Card key={portfolio.id}>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
-                <div><CardTitle>{portfolio.name}</CardTitle><CardDescription>{portfolio.holdings.length} position{portfolio.holdings.length === 1 ? "" : "s"} · {portfolio.cashAllocations.length} cash allocation{portfolio.cashAllocations.length === 1 ? "" : "s"}</CardDescription></div>
+                <div><CardTitle>{portfolio.name}</CardTitle><CardDescription>{portfolio.holdings.length} position{portfolio.holdings.length === 1 ? "" : "s"}{domain === "SECURITIES" ? ` · ${portfolio.cashAllocations.length} cash allocation${portfolio.cashAllocations.length === 1 ? "" : "s"}` : ""}</CardDescription></div>
                 <div className="flex gap-1">
                   <Button size="icon-sm" variant="ghost" aria-label={`Edit ${portfolio.name}`} onClick={() => setEditing(portfolio)}><PencilLineIcon /></Button>
                   <Button size="icon-sm" variant="ghost" aria-label={`Delete ${portfolio.name}`} disabled={remove.isPending} onClick={() => { if (window.confirm(`Delete “${portfolio.name}”? Holdings, accounts, and transactions will remain intact.`)) remove.mutate(portfolio.id) }}><Trash2Icon /></Button>
@@ -102,14 +102,15 @@ export function InvestmentPortfoliosPanel({ domain, holdings, portfolios }: Inve
           </Card>
         ))}
       </div>
-      {editing !== null ? <PortfolioEditor portfolio={editing === "new" ? null : editing} holdings={holdings} portfolios={portfolios} accounts={accountsQuery.data ?? []} pending={save.isPending} error={save.error?.message} onClose={() => { setEditing(null); save.reset() }} onSave={(values) => save.mutate(values)} /> : null}
+      {editing !== null ? <PortfolioEditor domain={domain} portfolio={editing === "new" ? null : editing} holdings={holdings} portfolios={portfolios} accounts={accountsQuery.data ?? []} pending={save.isPending} error={save.error?.message} onClose={() => { setEditing(null); save.reset() }} onSave={(values) => save.mutate(values)} /> : null}
     </div>
   )
 }
 
 type PortfolioEditorValues = { name: string; description: string; holdings: string[]; cashAllocations: Record<string, string> }
 
-function PortfolioEditor({ portfolio, holdings, portfolios, accounts, pending, error, onClose, onSave }: {
+function PortfolioEditor({ domain, portfolio, holdings, portfolios, accounts, pending, error, onClose, onSave }: {
+  readonly domain: "SECURITIES" | "CRYPTO"
   readonly portfolio: Portfolio | null
   readonly holdings: readonly Holding[]
   readonly portfolios: readonly Portfolio[]
@@ -134,7 +135,7 @@ function PortfolioEditor({ portfolio, holdings, portfolios, accounts, pending, e
   return (
     <Dialog open onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader><DialogTitle>{portfolio ? "Edit portfolio" : "Create portfolio"}</DialogTitle><DialogDescription>Select account-specific positions and allocate an optional percentage of each account’s current cash.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>{portfolio ? "Edit portfolio" : "Create portfolio"}</DialogTitle><DialogDescription>{domain === "CRYPTO" ? "Select account-specific crypto and stablecoin positions." : "Select account-specific positions and allocate an optional percentage of each account’s current cash."}</DialogDescription></DialogHeader>
         <div className="grid gap-5">
           {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
           <div className="grid gap-2"><Label htmlFor="portfolio-name">Name</Label><Input id="portfolio-name" value={name} onChange={(event) => setName(event.target.value)} /></div>
@@ -146,13 +147,13 @@ function PortfolioEditor({ portfolio, holdings, portfolios, accounts, pending, e
               return <Label key={key} className="flex items-center gap-3 rounded-lg border p-3"><Checkbox checked={selected.includes(key)} disabled={belongsElsewhere} onCheckedChange={(checked) => setSelected((current) => checked ? [...current, key] : current.filter((item) => item !== key))} /><span className="flex-1"><span className="font-medium">{holding.assetSymbol ?? holding.assetName}</span><span className="block text-xs text-muted-foreground">{holding.accountName}{belongsElsewhere ? " · Already in another portfolio" : ""}</span></span></Label>
             }) : <p className="text-sm text-muted-foreground">Add an active holding before creating position membership.</p>}
           </section>
-          <section className="grid gap-3"><div><h3 className="text-sm font-medium">Fiat cash allocations</h3><p className="text-xs text-muted-foreground">Percentages are applied dynamically to each account’s current cash balance.</p></div>
+          {domain === "SECURITIES" ? <section className="grid gap-3"><div><h3 className="text-sm font-medium">Fiat cash allocations</h3><p className="text-xs text-muted-foreground">Percentages are applied dynamically to each account’s current cash balance.</p></div>
             {investmentAccounts.map((account) => {
               const used = allocatedElsewhere.get(account.id) ?? 0
               const maximum = Math.max(0, 100 - used)
               return <div key={account.id} className="grid grid-cols-[1fr_8rem] items-end gap-3"><div><p className="text-sm font-medium">{account.name}</p><p className="text-xs text-muted-foreground">Cash {formatAmount(account.currentBalance, account.currency)} · {maximum}% remaining</p></div><div className="grid gap-1"><Label htmlFor={`cash-${account.id}`}>Percent</Label><Input id={`cash-${account.id}`} type="number" min="0" max={maximum} step="0.01" value={cash[account.id] ?? ""} onChange={(event) => setCash((current) => ({ ...current, [account.id]: event.target.value }))} /></div></div>
             })}
-          </section>
+          </section> : null}
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button><Button disabled={pending || !name.trim() || Object.entries(cash).some(([accountId, value]) => Number(value) < 0 || Number(value) > Math.max(0, 100 - (allocatedElsewhere.get(accountId) ?? 0)))} onClick={() => onSave({ name: name.trim(), description: description.trim(), holdings: selected, cashAllocations: cash })}>{pending ? <Spinner data-icon="inline-start" /> : null}Save portfolio</Button></DialogFooter>
       </DialogContent>

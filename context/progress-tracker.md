@@ -15,6 +15,20 @@ change.
 
 ## Completed
 
+- Made cryptocurrency wallets stablecoin-only for liquidity. Crypto reporting
+  no longer emits or totals derived fiat-cash holdings, wallet creation and
+  editing cannot introduce fiat opening balances, and cash-affecting wallet
+  transactions, balance adjustments, and crypto portfolio cash allocations are
+  rejected. Added an auditable data migration that offsets every existing
+  crypto fiat balance to zero and removes legacy crypto cash allocations.
+- Removed crypto opening/uninvested/available fiat cash controls and routed
+  wallet funding through the existing stablecoin-balance flow. Crypto totals,
+  account details, and portfolio copy now describe stablecoins as liquidity;
+  broker fiat workflows remain unchanged.
+- Applied `20260908120000_make_crypto_wallets_stablecoin_only` to the configured
+  Neon database and confirmed all crypto fiat ledger balances are zero. Verified
+  180 API unit tests, 5 API end-to-end tests, 48 web tests, scoped API/web lint,
+  web type-checking, and both production builds.
 - Added a dedicated **Set up existing portfolio** path in Crypto. The first
   opening asset creates a same-named cryptocurrency wallet and custom portfolio
   with the selected base currency; subsequent assets retain that context so the

@@ -56,6 +56,13 @@ const investmentAccount: Account = {
   currency: "USD",
 };
 
+const cryptoAccount: Account = {
+  ...investmentAccount,
+  id: "00000000-0000-4000-8000-000000000004",
+  name: "Crypto wallet",
+  type: "CRYPTO_WALLET",
+};
+
 const asset: Asset = {
   domain: "SECURITIES",
   id: "00000000-0000-4000-8000-000000000001",
@@ -140,6 +147,29 @@ const holding: Holding = {
 afterEach(cleanup);
 
 describe("TransactionFormDialog", () => {
+  it("offers stablecoin-backed activity without ordinary fiat types for crypto", async () => {
+    const user = userEvent.setup();
+    render(
+      <TransactionFormDialog
+        accounts={[cryptoAccount]}
+        assets={[]}
+        holdings={[]}
+        mode="create"
+        scope="CRYPTO"
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        open
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Type"));
+
+    expect(screen.getByRole("option", { name: "Stablecoin transfer" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Transfer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Dividend" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Adjustment" })).not.toBeInTheDocument();
+  });
+
   it("stays open when an account is selected from its portaled menu", async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();

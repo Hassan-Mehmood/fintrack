@@ -5,6 +5,8 @@ import { ListTransactionsQueryDto } from './dto/list-transactions-query.dto';
 import {
   createAssetNotFoundForTransactionException,
   createAccountNotFoundForTransactionException,
+  createCryptoWalletFiatNotSupportedForTransactionException,
+  createCryptoWalletFiatTransactionLockedException,
   createInvalidBulkTransactionException,
   createInvalidInvestmentAmountException,
   createInvalidInvestmentTradeTypeException,
@@ -328,6 +330,46 @@ describe('TransactionsService', () => {
         description: 'Grocery shopping',
       },
     });
+  });
+
+  it('rejects ordinary fiat transactions for a crypto wallet', async () => {
+    prisma.account.findFirst.mockResolvedValue({
+      id: 'crypto-wallet',
+      currency: 'USD',
+      type: 'CRYPTO_WALLET',
+    });
+
+    await expect(
+      service.createTransactionForUser(authenticatedUser, {
+        type: 'ADJUSTMENT',
+        accountId: 'crypto-wallet',
+        amount: '100',
+        currency: 'USD',
+        occurredAt: '2026-07-01T00:00:00.000Z',
+        category: 'Balance adjustment',
+      }),
+    ).rejects.toEqual(
+      createCryptoWalletFiatNotSupportedForTransactionException(),
+    );
+    expect(prisma.transaction.create).not.toHaveBeenCalled();
+  });
+
+  it('locks legacy fiat-affecting crypto transactions', async () => {
+    prisma.transaction.findFirst.mockResolvedValue(
+      createTransactionRecord({
+        id: 'legacy-crypto-cash',
+        type: 'ADJUSTMENT',
+        amount: '-1427.9',
+        accountType: 'CRYPTO_WALLET',
+      }),
+    );
+
+    await expect(
+      service.deleteTransactionForUser(authenticatedUser, 'legacy-crypto-cash'),
+    ).rejects.toEqual(
+      createCryptoWalletFiatTransactionLockedException('legacy-crypto-cash'),
+    );
+    expect(prisma.transaction.update).not.toHaveBeenCalled();
   });
 
   it('stores an omitted description as an empty string', async () => {
@@ -1582,12 +1624,14 @@ describe('TransactionsService', () => {
 
 function createTransactionRecord({
   accountId = 'account-1',
+  accountType = 'BANK',
   amount = '100.50',
   category = 'General',
   createdAt = new Date('2026-07-01T10:00:00.000Z'),
   description = 'Test transaction',
   destinationAccountId = null,
   destinationAccountName = null,
+  destinationAccountType = 'BANK',
   id = 'transaction-1',
   investmentDetail = null,
   reversalOfId = null,
@@ -1596,12 +1640,14 @@ function createTransactionRecord({
   type = 'EXPENSE',
 }: {
   readonly accountId?: string;
+  readonly accountType?: string;
   readonly amount?: string;
   readonly category?: string;
   readonly createdAt?: Date;
   readonly description?: string;
   readonly destinationAccountId?: string | null;
   readonly destinationAccountName?: string | null;
+  readonly destinationAccountType?: string;
   readonly id?: string;
   readonly investmentDetail?: ReturnType<
     typeof createInvestmentDetailRecord
@@ -1618,10 +1664,11 @@ function createTransactionRecord({
     account: {
       name: 'Primary Checking',
       currency: 'USD',
+      type: accountType,
     },
     destinationAccountId,
     destinationAccount: destinationAccountName
-      ? { name: destinationAccountName }
+      ? { name: destinationAccountName, type: destinationAccountType }
       : null,
     reversalOfId,
     reversal: reversedById ? { id: reversedById } : null,

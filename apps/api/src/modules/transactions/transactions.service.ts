@@ -17,6 +17,8 @@ import { CategoriesService } from '../categories/categories.service';
 import {
   createAccountNotFoundForTransactionException,
   createAssetNotFoundForTransactionException,
+  createCryptoWalletFiatNotSupportedForTransactionException,
+  createCryptoWalletFiatTransactionLockedException,
   createInsufficientHoldingException,
   createInvalidInvestmentAccountException,
   createInvalidInvestmentAmountException,
@@ -86,12 +88,14 @@ const transactionSelect = {
     select: {
       name: true,
       currency: true,
+      type: true,
     },
   },
   destinationAccountId: true,
   destinationAccount: {
     select: {
       name: true,
+      type: true,
     },
   },
   reversalOfId: true,
@@ -129,6 +133,17 @@ const investmentTypes = new Set<string>([
   'INVESTMENT_SPLIT',
   'INVESTMENT_BONUS',
   'INVESTMENT_REINVESTMENT',
+  'INVESTMENT_DEPOSIT',
+  'INVESTMENT_WITHDRAWAL',
+  'INVESTMENT_TRANSFER',
+  'INVESTMENT_OPENING_POSITION',
+]);
+
+const cryptoWalletTransactionTypes = new Set<string>([
+  'INVESTMENT_BUY',
+  'INVESTMENT_SELL',
+  'INVESTMENT_SPLIT',
+  'INVESTMENT_BONUS',
   'INVESTMENT_DEPOSIT',
   'INVESTMENT_WITHDRAWAL',
   'INVESTMENT_TRANSFER',
@@ -391,9 +406,12 @@ export class TransactionsService {
         select: {
           id: true,
           type: true,
+          amount: true,
           labels: true,
           reversalOfId: true,
           reversal: { select: { id: true } },
+          account: { select: { type: true } },
+          destinationAccount: { select: { type: true } },
         },
       });
 
@@ -446,6 +464,9 @@ export class TransactionsService {
           throw createInvalidBulkTransactionException(
             'Reversed transactions and reversal entries cannot be changed in bulk.',
           );
+        }
+        if (payload.delete || payload.status) {
+          this.assertCryptoFiatTransactionIsMutable(transaction);
         }
 
         const labels = new Set(transaction.labels);
@@ -701,6 +722,7 @@ export class TransactionsService {
     );
 
     this.assertTransactionIsMutable(existingTransaction);
+    this.assertCryptoFiatTransactionIsMutable(existingTransaction);
 
     const effectiveType = payload.type ?? existingTransaction.type;
     const effectiveAccountId =
@@ -961,6 +983,7 @@ export class TransactionsService {
     }
 
     this.assertTransactionIsMutable(originalTransaction);
+    this.assertCryptoFiatTransactionIsMutable(originalTransaction);
 
     const reversalAmount = negateAmount(originalTransaction.amount.toString());
 
@@ -1025,6 +1048,7 @@ export class TransactionsService {
     );
 
     this.assertTransactionIsMutable(transaction);
+    this.assertCryptoFiatTransactionIsMutable(transaction);
 
     await this.prisma.transaction.update({
       where: {
@@ -1356,6 +1380,25 @@ export class TransactionsService {
     }
   }
 
+  private assertCryptoFiatTransactionIsMutable(transaction: {
+    readonly id: string;
+    readonly type: TransactionType;
+    readonly amount: Prisma.Decimal;
+    readonly account: { readonly type: string };
+    readonly destinationAccount: { readonly type: string } | null;
+  }): void {
+    const amount = new Prisma.Decimal(transaction.amount.toString());
+    const changesCryptoFiat =
+      (transaction.account.type === 'CRYPTO_WALLET' &&
+        !getSourceAccountEffect(transaction.type, amount).isZero()) ||
+      (transaction.destinationAccount?.type === 'CRYPTO_WALLET' &&
+        hasDestinationBalanceEffect(transaction.type) &&
+        !amount.isZero());
+    if (changesCryptoFiat) {
+      throw createCryptoWalletFiatTransactionLockedException(transaction.id);
+    }
+  }
+
   private async findOwnedTransactionOrThrow(
     userId: string,
     transactionId: string,
@@ -1423,6 +1466,13 @@ export class TransactionsService {
       throw createInvalidInvestmentAccountException();
     }
 
+    if (
+      account.type === 'CRYPTO_WALLET' &&
+      !cryptoWalletTransactionTypes.has(payload.type)
+    ) {
+      throw createCryptoWalletFiatNotSupportedForTransactionException();
+    }
+
     if (payload.type === 'TRANSFER' || payload.type === 'INVESTMENT_TRANSFER') {
       if (!payload.destinationAccountId) {
         throw createInvalidTransferException(
@@ -1448,6 +1498,14 @@ export class TransactionsService {
         throw createAccountNotFoundForTransactionException(
           payload.destinationAccountId,
         );
+      }
+
+      if (
+        payload.type === 'TRANSFER' &&
+        (account.type === 'CRYPTO_WALLET' ||
+          destinationAccount.type === 'CRYPTO_WALLET')
+      ) {
+        throw createCryptoWalletFiatNotSupportedForTransactionException();
       }
 
       if (

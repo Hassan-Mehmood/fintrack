@@ -52,3 +52,12 @@ export function createInvalidAccountOrderException(): UnprocessableEntityExcepti
     ),
   );
 }
+
+export function createCryptoWalletFiatNotSupportedException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'CRYPTO_WALLET_FIAT_NOT_SUPPORTED',
+      'Cryptocurrency wallets use stablecoin holdings instead of a fiat cash balance.',
+    ),
+  );
+}

@@ -68,6 +68,16 @@ import {
   type TransactionType,
 } from "./transaction-types";
 
+const cryptoTransactionTypes = new Set<TransactionType>([
+  "INVESTMENT_BUY",
+  "INVESTMENT_SELL",
+  "INVESTMENT_SPLIT",
+  "INVESTMENT_BONUS",
+  "INVESTMENT_DEPOSIT",
+  "INVESTMENT_WITHDRAWAL",
+  "INVESTMENT_TRANSFER",
+]);
+
 interface TransactionFormDialogProps {
   readonly accounts: readonly Account[];
   readonly assets: readonly Asset[];
@@ -502,9 +512,11 @@ export function TransactionFormDialog({
                         {transactionTypeOptions.filter((option) =>
                           scope === "MONEY"
                             ? !option.value.startsWith("INVESTMENT_") && option.value !== "DIVIDEND" && option.value !== "INTEREST"
-                            : scope
-                              ? option.value === "TRANSFER" || option.value.startsWith("INVESTMENT_") || option.value === "DIVIDEND" || option.value === "INTEREST"
-                              : true,
+                            : scope === "CRYPTO"
+                              ? cryptoTransactionTypes.has(option.value)
+                              : scope === "SECURITIES"
+                                ? option.value === "TRANSFER" || option.value.startsWith("INVESTMENT_") || option.value === "DIVIDEND" || option.value === "INTEREST"
+                                : true,
                         ).map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}

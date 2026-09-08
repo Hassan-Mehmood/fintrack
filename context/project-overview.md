@@ -35,7 +35,9 @@ the two investment summaries visually separate.
    The user creates an account, selects a base currency, and completes a short onboarding process.
 
 2. **Add Financial Accounts**
-   The user adds bank accounts, cash wallets, digital wallets, broker accounts, or cryptocurrency wallets and enters the opening balance for each account.
+   The user adds bank accounts, cash wallets, digital wallets, broker accounts,
+   or cryptocurrency wallets. Fiat accounts receive an opening balance, while
+   cryptocurrency wallets receive stablecoin and crypto opening positions.
 
 3. **View Initial Dashboard**
    The application calculates and displays the user’s total assets, liquid cash, investments, and estimated net worth.
@@ -134,10 +136,12 @@ the two investment summaries visually separate.
 - The application calculates quantity held, cost basis, current value, realized profit or loss, and unrealized profit or loss.
 - Users can view their investment allocation by asset and asset type.
 - Users can organize account-specific positions into one custom portfolio and
-  dynamically allocate a percentage of an account's fiat cash to portfolios.
-- Broker and cryptocurrency-wallet fiat balances appear as derived Cash
-  holdings in account and global investment reporting without duplicating the
-  account ledger.
+  dynamically allocate a percentage of a broker account's fiat cash to stock
+  portfolios.
+- Broker fiat balances appear as derived Cash holdings in account and global
+  investment reporting without duplicating the account ledger. Cryptocurrency
+  wallets use stablecoin holdings as their only liquid cash equivalents and do
+  not carry a separate fiat cash balance.
 - Users can maintain multiple named watchlists without changing balances,
   holdings, net worth, or portfolio calculations.
 - Stablecoin holdings remain investments while contributing to explicit cash-

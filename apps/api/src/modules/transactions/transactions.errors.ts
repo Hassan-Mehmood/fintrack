@@ -185,3 +185,24 @@ export function createInvalidBulkTransactionException(
     buildApiError('INVALID_BULK_TRANSACTION_UPDATE', reason, {}),
   );
 }
+
+export function createCryptoWalletFiatNotSupportedForTransactionException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'CRYPTO_WALLET_FIAT_NOT_SUPPORTED',
+      'Cryptocurrency wallets use stablecoin holdings instead of fiat cash transactions.',
+    ),
+  );
+}
+
+export function createCryptoWalletFiatTransactionLockedException(
+  transactionId: string,
+): ConflictException {
+  return new ConflictException(
+    buildApiError(
+      'CRYPTO_WALLET_FIAT_TRANSACTION_LOCKED',
+      'This legacy fiat transaction is locked because cryptocurrency wallets now use stablecoin holdings.',
+      { transactionId },
+    ),
+  );
+}

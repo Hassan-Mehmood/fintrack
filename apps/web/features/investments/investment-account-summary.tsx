@@ -34,10 +34,14 @@ export function InvestmentAccountSummaryPanel({
         ? formatAmount(data.totalAccountValue, data.reportingCurrency)
         : "Unavailable",
     ],
-    [
-      "Available fiat cash",
-      formatAmount(data.availableFiatCash, data.accountCurrency),
-    ],
+    ...(data.accountType === "BROKER"
+      ? ([
+          [
+            "Available fiat cash",
+            formatAmount(data.availableFiatCash, data.accountCurrency),
+          ],
+        ] as const)
+      : []),
     [
       "Cash equivalents",
       formatAmount(data.cashEquivalentValue, data.reportingCurrency),
@@ -95,8 +99,9 @@ export function InvestmentAccountSummaryPanel({
         <CardHeader>
           <CardTitle>Holdings</CardTitle>
           <CardDescription>
-            Cash is derived from the account ledger; stablecoins and investments
-            remain asset positions.
+            {data.accountType === "CRYPTO_WALLET"
+              ? "Stablecoins provide wallet liquidity and remain asset positions."
+              : "Cash is derived from the account ledger; investments remain asset positions."}
           </CardDescription>
         </CardHeader>
         <CardContent>

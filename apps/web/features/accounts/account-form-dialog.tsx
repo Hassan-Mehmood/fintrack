@@ -64,6 +64,10 @@ export function AccountFormDialog({
   open,
 }: AccountFormDialogProps) {
   const defaultAccountType = allowedAccountTypes?.[0] ?? "BANK"
+  const isCryptoWallet =
+    account?.type === "CRYPTO_WALLET" ||
+    (allowedAccountTypes?.length === 1 &&
+      allowedAccountTypes[0] === "CRYPTO_WALLET")
   const form = useForm<AccountFormValues>({
     defaultValues: getDefaultValues(account, defaultCurrency, defaultAccountType),
   })
@@ -93,9 +97,13 @@ export function AccountFormDialog({
             {mode === "create" ? "Add account" : "Edit account"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "create"
-              ? "Create a new financial account with its starting balance."
-              : "Update the stored account details and opening balance."}
+            {isCryptoWallet
+              ? mode === "create"
+                ? "Create a crypto wallet, then add its stablecoin and crypto holdings."
+                : "Update the stored crypto wallet details."
+              : mode === "create"
+                ? "Create a new financial account with its starting balance."
+                : "Update the stored account details and opening balance."}
           </DialogDescription>
         </DialogHeader>
 
@@ -127,7 +135,11 @@ export function AccountFormDialog({
               return
             }
 
-            await onSubmit(parsedValues.data)
+            await onSubmit(
+              isCryptoWallet
+                ? { ...parsedValues.data, openingBalance: "0" }
+                : parsedValues.data,
+            )
           })}
           className="flex flex-col gap-4"
         >
@@ -157,7 +169,11 @@ export function AccountFormDialog({
                 control={control}
                 name="type"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    disabled={account?.type === "CRYPTO_WALLET"}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger
                       id="account-type"
                       aria-invalid={Boolean(errors.type) || undefined}
@@ -208,22 +224,32 @@ export function AccountFormDialog({
               <FieldError errors={[errors.currency]} />
             </Field>
 
-            <Field data-invalid={Boolean(errors.openingBalance) || undefined}>
-              <FieldLabel htmlFor="account-opening-balance">
-                Opening balance
-              </FieldLabel>
-              <Input
-                id="account-opening-balance"
-                aria-invalid={Boolean(errors.openingBalance) || undefined}
-                inputMode="decimal"
-                placeholder="0.00"
-                {...register("openingBalance")}
-              />
-              <FieldDescription>
-                Starting balance before any recorded transactions.
-              </FieldDescription>
-              <FieldError errors={[errors.openingBalance]} />
-            </Field>
+            {isCryptoWallet ? (
+              <Field>
+                <FieldLabel>Liquid balance</FieldLabel>
+                <FieldDescription>
+                  Add USDC, USDT, DAI, or another supported stablecoin after
+                  creating the wallet.
+                </FieldDescription>
+              </Field>
+            ) : (
+              <Field data-invalid={Boolean(errors.openingBalance) || undefined}>
+                <FieldLabel htmlFor="account-opening-balance">
+                  Opening balance
+                </FieldLabel>
+                <Input
+                  id="account-opening-balance"
+                  aria-invalid={Boolean(errors.openingBalance) || undefined}
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  {...register("openingBalance")}
+                />
+                <FieldDescription>
+                  Starting balance before any recorded transactions.
+                </FieldDescription>
+                <FieldError errors={[errors.openingBalance]} />
+              </Field>
+            )}
           </FieldGroup>
 
           <Field data-invalid={Boolean(errors.openedAt) || undefined}>

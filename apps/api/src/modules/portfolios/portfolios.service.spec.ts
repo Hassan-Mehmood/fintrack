@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PortfoliosService } from './portfolios.service';
 import {
   createAccountNotFoundForPortfolioException,
+  createCryptoPortfolioCashNotSupportedException,
   createPortfolioNotFoundException,
 } from './portfolios.errors';
 
@@ -130,6 +131,16 @@ describe('PortfoliosService', () => {
         accountIds: ['account-1'],
       }),
     ).rejects.toEqual(createAccountNotFoundForPortfolioException('account-1'));
+  });
+
+  it('rejects fiat cash allocations for crypto portfolios', async () => {
+    await expect(
+      service.createPortfolioForUser(authenticatedUser, {
+        domain: 'CRYPTO',
+        name: 'Crypto',
+        cashAllocations: [{ accountId: 'account-1', percentage: '100' }],
+      }),
+    ).rejects.toEqual(createCryptoPortfolioCashNotSupportedException());
   });
 
   it('gets a portfolio with metrics and allocation', async () => {

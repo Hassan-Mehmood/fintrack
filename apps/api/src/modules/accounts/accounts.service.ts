@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { calculateAccountBalance } from '../../common/financial/transaction-effects';
 import {
   createAccountNotFoundException,
+  createCryptoWalletFiatNotSupportedException,
   createInvalidAccountOrderException,
 } from './accounts.errors';
 import type { CreateAccountDto } from './dto/create-account.dto';
@@ -110,6 +111,12 @@ export class AccountsService {
     user: AuthenticatedUser,
     payload: CreateAccountDto,
   ): Promise<AccountResponse> {
+    if (
+      payload.type === 'CRYPTO_WALLET' &&
+      !new BalanceDecimal(payload.openingBalance).isZero()
+    ) {
+      throw createCryptoWalletFiatNotSupportedException();
+    }
     const lastAccount = await this.prisma.account.findFirst({
       where: { userId: user.id },
       orderBy: { displayOrder: 'desc' },
@@ -182,7 +189,25 @@ export class AccountsService {
     accountId: string,
     payload: UpdateAccountDto,
   ): Promise<AccountResponse> {
-    await this.assertOwnedAccountExists(user.id, accountId);
+    const existingAccount = await this.findOwnedAccountOrThrow(
+      user.id,
+      accountId,
+    );
+    const resultingType = payload.type ?? existingAccount.type;
+    if (
+      (existingAccount.type === 'CRYPTO_WALLET' ||
+        resultingType === 'CRYPTO_WALLET') &&
+      resultingType !== existingAccount.type
+    ) {
+      throw createCryptoWalletFiatNotSupportedException();
+    }
+    if (
+      resultingType === 'CRYPTO_WALLET' &&
+      payload.openingBalance !== undefined &&
+      !new BalanceDecimal(payload.openingBalance).isZero()
+    ) {
+      throw createCryptoWalletFiatNotSupportedException();
+    }
 
     const account = await this.prisma.account.update({
       where: {
@@ -192,7 +217,10 @@ export class AccountsService {
         name: payload.name,
         type: payload.type,
         currency: payload.currency,
-        openingBalance: payload.openingBalance,
+        openingBalance:
+          resultingType === 'CRYPTO_WALLET'
+            ? undefined
+            : payload.openingBalance,
         openedAt: payload.openedAt ? new Date(payload.openedAt) : undefined,
       },
       select: accountSelect,
@@ -238,6 +266,9 @@ export class AccountsService {
             select: accountSelect,
           });
           if (!account) throw createAccountNotFoundException(accountId);
+          if (account.type === 'CRYPTO_WALLET') {
+            throw createCryptoWalletFiatNotSupportedException();
+          }
 
           const transactions = await tx.transaction.findMany({
             where: {

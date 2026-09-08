@@ -44,3 +44,12 @@ export function createAccountNotFoundForPortfolioException(
     ),
   );
 }
+
+export function createCryptoPortfolioCashNotSupportedException(): UnprocessableEntityException {
+  return new UnprocessableEntityException(
+    buildApiError(
+      'CRYPTO_PORTFOLIO_CASH_NOT_SUPPORTED',
+      'Crypto portfolios use stablecoin positions instead of fiat cash allocations.',
+    ),
+  );
+}

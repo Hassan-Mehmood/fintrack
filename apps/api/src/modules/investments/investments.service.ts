@@ -37,6 +37,7 @@ import {
   settlementAssetNotFoundException,
   settlementAssetRequiredException,
 } from './investment-settlement.errors';
+import { createCryptoWalletFiatNotSupportedException } from '../accounts/accounts.errors';
 
 const Decimal = Prisma.Decimal;
 type Decimal = Prisma.Decimal;
@@ -151,6 +152,7 @@ export class InvestmentsService {
       select: {
         id: true,
         name: true,
+        type: true,
         currency: true,
         openingBalance: true,
         transactions: {
@@ -174,10 +176,13 @@ export class InvestmentsService {
       },
     });
     if (!account) throw new NotFoundException('Investment account not found.');
-    const cash = calculateAccountBalance(account.openingBalance, account.id, [
-      ...account.transactions,
-      ...account.transfersIn,
-    ]);
+    const cash =
+      account.type === 'CRYPTO_WALLET'
+        ? new Decimal(0)
+        : calculateAccountBalance(account.openingBalance, account.id, [
+            ...account.transactions,
+            ...account.transfersIn,
+          ]);
     const reportingCurrency = this.toReportingCurrency(user.baseCurrency);
     const { holdings } = await this.getHoldingsForUser(user, {
       accountId,
@@ -218,6 +223,7 @@ export class InvestmentsService {
     return {
       accountId: account.id,
       accountName: account.name,
+      accountType: account.type,
       accountCurrency: account.currency,
       reportingCurrency,
       availableFiatCash: cash.toFixed(2),
@@ -717,13 +723,21 @@ export class InvestmentsService {
     }
     if (!payload.account.name || !payload.account.currency)
       throw new BadRequestException('New account details are incomplete.');
+    if (
+      domain === 'CRYPTO' &&
+      payload.account.openingBalance !== undefined &&
+      !new Decimal(payload.account.openingBalance).isZero()
+    ) {
+      throw createCryptoWalletFiatNotSupportedException();
+    }
     return tx.account.create({
       data: {
         userId,
         name: payload.account.name,
         type: expectedType,
         currency: payload.account.currency,
-        openingBalance: payload.account.openingBalance ?? '0',
+        openingBalance:
+          domain === 'CRYPTO' ? '0' : (payload.account.openingBalance ?? '0'),
       },
       select: { id: true, currency: true, type: true },
     });
@@ -1152,7 +1166,10 @@ export class InvestmentsService {
               holding.currentValue ? total.add(holding.currentValue) : total,
             new Decimal(0),
           );
-    const fiatCashValue = sumCurrent(fiatCashHoldings);
+    const fiatCashValue =
+      options.domain === 'CRYPTO'
+        ? new Decimal(0)
+        : sumCurrent(fiatCashHoldings);
     const cashEquivalentValue = sumCurrent(cashEquivalentHoldings);
     const investedValue = sumCurrent(investedHoldings);
     const unpricedAssetCount = holdings.filter(
@@ -1598,6 +1615,7 @@ export class InvestmentsService {
     const rows: HoldingResponse[] = [];
     for (const account of accounts) {
       if (
+        account.type === 'CRYPTO_WALLET' ||
         (options.accountId && account.id !== options.accountId) ||
         (options.currency && account.currency !== options.currency)
       ) {
