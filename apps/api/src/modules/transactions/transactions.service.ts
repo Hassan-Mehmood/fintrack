@@ -1112,15 +1112,27 @@ export class TransactionsService {
         type: { notIn: [...investmentTypes] as TransactionType[] },
       });
       conditions.push({
-        account: { type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] } },
-      });
-      conditions.push({
         OR: [
-          { destinationAccountId: null },
           {
-            destinationAccount: {
+            type: { not: 'TRANSFER' },
+            account: {
               type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
             },
+          },
+          {
+            type: 'TRANSFER',
+            OR: [
+              {
+                account: {
+                  type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
+                },
+              },
+              {
+                destinationAccount: {
+                  type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
+                },
+              },
+            ],
           },
         ],
       });
@@ -1913,7 +1925,13 @@ export class TransactionsService {
       if (!input.assetId) throw settlementAssetNotFoundException();
       asset = await this.prisma.asset.findFirst({
         where: { id: input.assetId, userId: user.id },
-        select: { id: true, priceCurrency: true, liquidityClass: true, domain: true, marketType: true },
+        select: {
+          id: true,
+          priceCurrency: true,
+          liquidityClass: true,
+          domain: true,
+          marketType: true,
+        },
       });
     } else {
       if (!input.providerAssetId || !this.assetsService) {
@@ -1925,7 +1943,13 @@ export class TransactionsService {
           provider: 'COINGECKO',
           providerAssetId: input.providerAssetId,
         },
-        select: { id: true, priceCurrency: true, liquidityClass: true, domain: true, marketType: true },
+        select: {
+          id: true,
+          priceCurrency: true,
+          liquidityClass: true,
+          domain: true,
+          marketType: true,
+        },
       });
       if (!asset) {
         const created = await this.assetsService.createProviderAssetForUser(
@@ -1964,7 +1988,12 @@ export class TransactionsService {
     investment: InvestmentPayload | null | undefined,
     settlementAssetId: string | null,
   ): void {
-    if (!settlementAssetId || accountType !== 'CRYPTO_WALLET' || (type !== 'INVESTMENT_BUY' && type !== 'INVESTMENT_SELL')) return;
+    if (
+      !settlementAssetId ||
+      accountType !== 'CRYPTO_WALLET' ||
+      (type !== 'INVESTMENT_BUY' && type !== 'INVESTMENT_SELL')
+    )
+      return;
     if (!investment?.settlementRate) return;
     const rate = new Prisma.Decimal(investment.settlementRate);
     if (!rate.isPositive()) {
@@ -1974,13 +2003,19 @@ export class TransactionsService {
     }
     if (type === 'INVESTMENT_SELL') {
       const gross = new Prisma.Decimal(investment?.quantity ?? '0').times(rate);
-      if (new Prisma.Decimal(investment?.fees ?? '0').greaterThanOrEqualTo(gross)) {
-        throw createInvalidInvestmentAmountException('Fees must be less than the counter quantity received.');
+      if (
+        new Prisma.Decimal(investment?.fees ?? '0').greaterThanOrEqualTo(gross)
+      ) {
+        throw createInvalidInvestmentAmountException(
+          'Fees must be less than the counter quantity received.',
+        );
       }
     }
   }
 
-  private settlementDebitQuantity(investment: InvestmentPayload): Prisma.Decimal {
+  private settlementDebitQuantity(
+    investment: InvestmentPayload,
+  ): Prisma.Decimal {
     if (!investment.settlementRate) {
       return new Prisma.Decimal(investment.quantity ?? '0')
         .times(investment.price ?? '0')
@@ -2429,7 +2464,9 @@ export class TransactionsService {
         : null,
       settlementRate: detail.settlementRate?.toString() ?? null,
       settlementGrossQuantity: detail.settlementQuantity?.toString() ?? null,
-      settlementFeeQuantity: detail.settlementAssetId ? detail.fees.toString() : null,
+      settlementFeeQuantity: detail.settlementAssetId
+        ? detail.fees.toString()
+        : null,
       settlementNetQuantity: detail.settlementAssetId
         ? (detail.tradeType === 'BUY'
             ? (detail.settlementQuantity ?? detail.grossAmount).add(detail.fees)

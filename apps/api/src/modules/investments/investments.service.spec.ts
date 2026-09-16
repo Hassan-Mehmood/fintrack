@@ -93,6 +93,60 @@ describe('InvestmentsService', () => {
     });
   });
 
+  it('returns compact broker and crypto account valuations', async () => {
+    prisma.account.findMany.mockResolvedValue([
+      createInvestmentAccountRecord({
+        id: 'broker-1',
+        type: 'BROKER',
+        openingBalance: '100',
+      }),
+      createInvestmentAccountRecord({
+        id: 'wallet-1',
+        type: 'CRYPTO_WALLET',
+      }),
+    ]);
+    prisma.asset.findMany.mockResolvedValue([
+      createAssetRecord({
+        id: 'stock-1',
+        domain: 'SECURITIES',
+        currentPrice: '120',
+      }),
+      createAssetRecord({
+        id: 'usdc-1',
+        currentPrice: '1',
+        liquidityClass: 'CASH_EQUIVALENT',
+      }),
+    ]);
+    prisma.investmentTransactionDetail.findMany.mockResolvedValue([
+      createDetailRecord({ assetId: 'stock-1', accountId: 'broker-1' }),
+      createDetailRecord({
+        assetId: 'usdc-1',
+        accountId: 'wallet-1',
+        quantity: '50',
+      }),
+    ]);
+
+    await expect(
+      service.listAccountSummariesForUser(authenticatedUser),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        accountId: 'broker-1',
+        availableFiatCash: '100.00',
+        totalAccountValue: '220.00',
+        totalLiquidity: '100.00',
+        isPartial: false,
+      }),
+      expect.objectContaining({
+        accountId: 'wallet-1',
+        availableFiatCash: '0.00',
+        cashEquivalentValue: '50.00',
+        totalAccountValue: '50.00',
+        totalLiquidity: '50.00',
+        isPartial: false,
+      }),
+    ]);
+  });
+
   it('excludes assets without investment transactions', async () => {
     prisma.asset.findMany.mockResolvedValue([
       createAssetRecord({ id: 'asset-1', name: 'Bitcoin' }),
@@ -664,6 +718,7 @@ function createDetailRecord({
   fxRateUsdToPkr = null,
   settlementAssetId = null,
   grossAmount,
+  accountId = 'account-1',
 }: {
   readonly assetId?: string;
   readonly tradeType?: string;
@@ -674,6 +729,7 @@ function createDetailRecord({
   readonly fxRateUsdToPkr?: string | null;
   readonly settlementAssetId?: string | null;
   readonly grossAmount?: string;
+  readonly accountId?: string;
 } = {}) {
   return {
     id: `detail-${assetId}`,
@@ -690,12 +746,33 @@ function createDetailRecord({
       currency,
       occurredAt: new Date('2026-01-01T00:00:00.000Z'),
       account: {
-        id: 'account-1',
+        id: accountId,
         name: 'Brokerage',
         currency,
         portfolioHoldings: [],
       },
       destinationAccount: null,
     },
+  };
+}
+
+function createInvestmentAccountRecord({
+  id,
+  type,
+  openingBalance = '0',
+}: {
+  readonly id: string;
+  readonly type: 'BROKER' | 'CRYPTO_WALLET';
+  readonly openingBalance?: string;
+}) {
+  return {
+    id,
+    type,
+    name: id,
+    currency: 'USD',
+    openingBalance: new Decimal(openingBalance),
+    transactions: [],
+    transfersIn: [],
+    portfolioCashAllocations: [],
   };
 }

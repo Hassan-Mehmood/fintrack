@@ -1,21 +1,21 @@
-import type { Account, AccountPayload } from "./account-types"
+import type { Account, AccountPayload } from "./account-types";
 
 interface GetToken {
-  (): Promise<string | null>
+  (): Promise<string | null>;
 }
 
 interface ApiErrorPayload {
   readonly error?: {
-    readonly code?: string
-    readonly details?: Record<string, unknown>
-    readonly message?: string
-  }
+    readonly code?: string;
+    readonly details?: Record<string, unknown>;
+    readonly message?: string;
+  };
 }
 
 export class ApiClientError extends Error {
-  readonly code: string | null
-  readonly details: Record<string, unknown> | null
-  readonly status: number
+  readonly code: string | null;
+  readonly details: Record<string, unknown> | null;
+  readonly status: number;
 
   constructor({
     code,
@@ -23,45 +23,48 @@ export class ApiClientError extends Error {
     message,
     status,
   }: {
-    readonly code: string | null
-    readonly details: Record<string, unknown> | null
-    readonly message: string
-    readonly status: number
+    readonly code: string | null;
+    readonly details: Record<string, unknown> | null;
+    readonly message: string;
+    readonly status: number;
   }) {
-    super(message)
-    this.code = code
-    this.details = details
-    this.name = "ApiClientError"
-    this.status = status
+    super(message);
+    this.code = code;
+    this.details = details;
+    this.name = "ApiClientError";
+    this.status = status;
   }
 }
 
 interface AccountItemResponse {
-  readonly data: Account
+  readonly data: Account;
 }
 
 interface AccountsListResponse {
-  readonly data: readonly Account[]
+  readonly data: readonly Account[];
   readonly meta: {
-    readonly total: number
-  }
+    readonly total: number;
+  };
 }
 
-export const accountsQueryKey = ["accounts"] as const
+export const accountsQueryKey = ["accounts"] as const;
+export const accountListQueryKey = (
+  scope?: "MONEY" | "SECURITIES" | "CRYPTO",
+) => [...accountsQueryKey, scope ?? "ALL"] as const;
 export const accountQueryKey = (accountId: string) =>
-  [...accountsQueryKey, accountId] as const
+  [...accountsQueryKey, accountId] as const;
 
 export async function listAccounts(
   getToken: GetToken,
   scope?: "MONEY" | "SECURITIES" | "CRYPTO",
 ): Promise<readonly Account[]> {
-  const query = scope ? `?scope=${scope}` : ""
+  const query = scope ? `?scope=${scope}` : "";
   const response = await apiRequest<AccountsListResponse>(
     getToken,
     `/api/v1/accounts${query}`,
-  )
+  );
 
-  return response.data
+  return response.data;
 }
 
 export async function getAccount(
@@ -71,8 +74,8 @@ export async function getAccount(
   const response = await apiRequest<AccountItemResponse>(
     getToken,
     `/api/v1/accounts/${accountId}`,
-  )
-  return response.data
+  );
+  return response.data;
 }
 
 export async function createAccount(
@@ -86,9 +89,9 @@ export async function createAccount(
       body: JSON.stringify(payload),
       method: "POST",
     },
-  )
+  );
 
-  return response.data
+  return response.data;
 }
 
 export async function updateAccount(
@@ -103,9 +106,9 @@ export async function updateAccount(
       body: JSON.stringify(payload),
       method: "PATCH",
     },
-  )
+  );
 
-  return response.data
+  return response.data;
 }
 
 export async function reorderAccounts(
@@ -113,30 +116,30 @@ export async function reorderAccounts(
   accountIds: readonly string[],
 ): Promise<readonly string[]> {
   const response = await apiRequest<{
-    readonly data: { readonly accountIds: readonly string[] }
+    readonly data: { readonly accountIds: readonly string[] };
   }>(getToken, "/api/v1/accounts/order", {
     body: JSON.stringify({ accountIds }),
     method: "PUT",
-  })
-  return response.data.accountIds
+  });
+  return response.data.accountIds;
 }
 
 export async function adjustAccountBalance(
   getToken: GetToken,
   accountId: string,
   payload: {
-    readonly currentBalance: string
-    readonly expectedBalance: string
-    readonly currency: string
-    readonly idempotencyKey: string
+    readonly currentBalance: string;
+    readonly expectedBalance: string;
+    readonly currency: string;
+    readonly idempotencyKey: string;
   },
 ): Promise<Account> {
   const response = await apiRequest<AccountItemResponse>(
     getToken,
     `/api/v1/accounts/${accountId}/balance-adjustments`,
     { body: JSON.stringify(payload), method: "POST" },
-  )
-  return response.data
+  );
+  return response.data;
 }
 
 export async function deleteAccount(
@@ -145,7 +148,7 @@ export async function deleteAccount(
 ): Promise<void> {
   await apiRequest(getToken, `/api/v1/accounts/${accountId}`, {
     method: "DELETE",
-  })
+  });
 }
 
 async function apiRequest<T>(
@@ -153,10 +156,10 @@ async function apiRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const token = await getToken()
+  const token = await getToken();
 
   if (!token) {
-    throw new Error("Unable to read the active Clerk session token.")
+    throw new Error("Unable to read the active Clerk session token.");
   }
 
   const response = await fetch(`${getPublicApiBaseUrl()}${path}`, {
@@ -166,34 +169,34 @@ async function apiRequest<T>(
       "Content-Type": "application/json",
       ...init.headers,
     },
-  })
+  });
 
   if (!response.ok) {
-    throw await toApiClientError(response)
+    throw await toApiClientError(response);
   }
 
-  return (await response.json()) as T
+  return (await response.json()) as T;
 }
 
 function getPublicApiBaseUrl(): string {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   if (!apiBaseUrl) {
     throw new Error(
       "NEXT_PUBLIC_API_BASE_URL is required for authenticated account requests.",
-    )
+    );
   }
 
-  return apiBaseUrl.replace(/\/$/, "")
+  return apiBaseUrl.replace(/\/$/, "");
 }
 
 async function toApiClientError(response: Response): Promise<ApiClientError> {
-  let payload: ApiErrorPayload | null = null
+  let payload: ApiErrorPayload | null = null;
 
   try {
-    payload = (await response.json()) as ApiErrorPayload
+    payload = (await response.json()) as ApiErrorPayload;
   } catch {
-    payload = null
+    payload = null;
   }
 
   return new ApiClientError({
@@ -203,5 +206,5 @@ async function toApiClientError(response: Response): Promise<ApiClientError> {
       payload?.error?.message ??
       `Request failed with status ${response.status}.`,
     status: response.status,
-  })
+  });
 }

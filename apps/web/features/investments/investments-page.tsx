@@ -12,6 +12,7 @@ import { AccountFormDialog } from "@/features/accounts/account-form-dialog";
 import type { AccountFormPayload } from "@/features/accounts/account-form-schema";
 import {
   accountsQueryKey,
+  accountListQueryKey,
   createAccount,
   listAccounts,
 } from "@/features/accounts/accounts-api";
@@ -148,7 +149,7 @@ export function InvestmentsPage({
     queryFn: () => listPortfolios(getToken, domain),
   });
   const accountsQuery = useQuery({
-    queryKey: [...accountsQueryKey, domain],
+    queryKey: accountListQueryKey(domain),
     queryFn: () => listAccounts(getToken, domain),
   });
   const createAccountMutation = useMutation({
@@ -583,7 +584,9 @@ export function InvestmentsPage({
           ) : null}
         </div>
 
-        {tab === "activity" ? <TransactionsPage embeddedScope={domain} /> : null}
+        {tab === "activity" ? (
+          <TransactionsPage embeddedScope={domain} />
+        ) : null}
 
         {tab === "portfolios" ? (
           <InvestmentPortfoliosPanel

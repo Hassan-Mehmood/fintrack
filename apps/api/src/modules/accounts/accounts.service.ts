@@ -160,7 +160,6 @@ export class AccountsService {
     const ownedAccounts = await this.prisma.account.findMany({
       where: {
         userId: user.id,
-        type: { in: ['BANK', 'CASH_WALLET', 'DIGITAL_WALLET'] },
       },
       select: { id: true },
     });

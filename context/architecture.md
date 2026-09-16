@@ -603,10 +603,13 @@ A user must only be able to access:
 ## API Model
 
 Collection APIs accept explicit scopes where a cross-domain result would be
-ambiguous: accounts use `MONEY`, `SECURITIES`, or `CRYPTO`; transaction lists use
+ambiguous: accounts use `MONEY`, `SECURITIES`, or `CRYPTO` when requested, while
+an unscoped account query returns the unified directory; transaction lists use
 the same scopes; investment reports, portfolios, watchlists, and asset-library
-queries use an investment domain. Account-detail history remains complete for
-that account, including a bank-side funding transfer into an investment account.
+queries use an investment domain. The Money transaction scope includes ordinary
+same-currency transfers when either side is a Money account, including a
+bank-side funding transfer into a broker account, but excludes investment
+activity. Account-detail history remains complete for that account.
 
 The dashboard response keeps combined net worth, returns everyday-money
 analytics separately, and exposes compact `stocksSummary` and `cryptoSummary`

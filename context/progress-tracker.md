@@ -16,6 +16,21 @@ change.
 
 ## Completed
 
+- Unified the Accounts directory across bank, cash, digital-wallet, broker,
+  and crypto-wallet accounts with persistent global ordering and standalone
+  creation for all five account types. Investment rows use a new authenticated
+  batch account-summary API for reporting-currency value, liquidity, broker
+  cash, and partial/unpriced valuation state; Crypto remains asset-only.
+- Kept investment events out of standalone Transactions while exposing ordinary
+  same-currency Money↔broker funding transfers. The Money transaction form now
+  limits non-transfer activity to Money accounts, allows broker accounts only
+  for a boundary transfer, and excludes crypto wallets. Scoped account-query
+  cache keys prevent Money, investment-domain, and unified directory results
+  from colliding.
+- Verified the change with 183 API Jest tests, 49 web Vitest tests, scoped API
+  and web lint, API and web type checks, and both production builds. The API
+  test suite emitted its existing stale-EODHD fallback warning.
+
 - Added nullable pair-rate and derived counter-quantity fields to investment
   transaction details for additive crypto pair settlement. New crypto buys and
   sells can exchange any distinct, positive same-wallet USD-priced crypto

@@ -100,6 +100,7 @@ import {
 } from "@/components/ui/table";
 import {
   ApiClientError,
+  accountListQueryKey,
   accountQueryKey,
   accountsQueryKey,
   getAccount,
@@ -192,9 +193,8 @@ export function TransactionsPage({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const scope: "MONEY" | "SECURITIES" | "CRYPTO" | undefined = embeddedScope ?? (accountId
-    ? undefined
-    : "MONEY");
+  const scope: "MONEY" | "SECURITIES" | "CRYPTO" | undefined =
+    embeddedScope ?? (accountId ? undefined : "MONEY");
   const filters = useMemo(() => {
     const parsed = readTransactionFilters(searchParams);
     return accountId ? { ...parsed, accountIds: [], currencies: [] } : parsed;
@@ -244,8 +244,9 @@ export function TransactionsPage({
   }, [accountId, filters, debouncedSearch, scope]);
   const listKey = useMemo(() => JSON.stringify(listParams), [listParams]);
   const accountsQuery = useQuery({
-    queryKey: accountsQueryKey,
-    queryFn: () => listAccounts(getToken, scope),
+    queryKey: accountListQueryKey(scope === "MONEY" ? undefined : scope),
+    queryFn: () =>
+      listAccounts(getToken, scope === "MONEY" ? undefined : scope),
   });
   const accountQuery = useQuery({
     queryKey: accountQueryKey(accountId ?? "inactive"),
@@ -264,7 +265,11 @@ export function TransactionsPage({
     queryFn: () =>
       listAssets(
         getToken,
-        scope === "CRYPTO" ? "CRYPTO" : scope === "SECURITIES" ? "SECURITIES" : undefined,
+        scope === "CRYPTO"
+          ? "CRYPTO"
+          : scope === "SECURITIES"
+            ? "SECURITIES"
+            : undefined,
       ),
   });
   const holdingsQuery = useQuery({
@@ -485,9 +490,13 @@ export function TransactionsPage({
     await invalidateAll();
   }
 
+  const filterAccounts =
+    scope === "MONEY"
+      ? accounts.filter((account) => account.type !== "CRYPTO_WALLET")
+      : accounts;
   const filterProps = {
     filters,
-    accounts,
+    accounts: filterAccounts,
     categories: meta?.filterOptions.categories ?? [],
     labels: meta?.filterOptions.labels ?? [],
     currencies: meta?.filterOptions.currencies ?? [],
@@ -504,12 +513,30 @@ export function TransactionsPage({
   return (
     <AppShell
       embedded={Boolean(embeddedScope)}
-      currentSection={accountId ? "accounts" : scope === "CRYPTO" ? "crypto" : scope === "SECURITIES" ? "stocks" : "transactions"}
-      title={accountId ? (account?.name ?? "Account") : scope === "CRYPTO" ? "Crypto activity" : scope === "SECURITIES" ? "Stock activity" : "Transactions"}
+      currentSection={
+        accountId
+          ? "accounts"
+          : scope === "CRYPTO"
+            ? "crypto"
+            : scope === "SECURITIES"
+              ? "stocks"
+              : "transactions"
+      }
+      title={
+        accountId
+          ? (account?.name ?? "Account")
+          : scope === "CRYPTO"
+            ? "Crypto activity"
+            : scope === "SECURITIES"
+              ? "Stock activity"
+              : "Transactions"
+      }
       description={
         accountId
           ? "Review balances and activity for this account."
-          : scope === "MONEY" ? "View and manage everyday money activity." : `View and manage ${scope === "CRYPTO" ? "crypto" : "securities"} activity.`
+          : scope === "MONEY"
+            ? "View and manage everyday money activity."
+            : `View and manage ${scope === "CRYPTO" ? "crypto" : "securities"} activity.`
       }
       primaryAction={
         <div className="flex items-center gap-2">
@@ -1049,9 +1076,9 @@ export function TransactionsPage({
         />
       ) : null}
       {account?.type === "CRYPTO_WALLET" ? (
-      <AddHoldingDialog
-        domain="CRYPTO"
-        cashEquivalentOnly
+        <AddHoldingDialog
+          domain="CRYPTO"
+          cashEquivalentOnly
           getToken={getToken}
           initialAccountId={account.id}
           lockAccount

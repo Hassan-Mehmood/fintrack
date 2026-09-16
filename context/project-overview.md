@@ -83,9 +83,9 @@ the two investment summaries visually separate.
 ### Financial Accounts
 
 - Users can add bank accounts, cash wallets, digital wallets, broker accounts, and cryptocurrency wallets.
-- The Accounts workspace displays only bank accounts, cash wallets, and digital
-  wallets. Broker accounts are managed from Stocks and cryptocurrency wallets
-  are managed from Crypto.
+- The Accounts workspace displays every account type in one persistent custom
+  order. Broker and cryptocurrency-wallet rows show investment account value
+  while Stocks and Crypto remain the dedicated holdings and activity workspaces.
 - Users can enter an opening balance for each account.
 - Users can view the current balance of each account.
 - Users can edit financial accounts.
@@ -102,6 +102,9 @@ the two investment summaries visually separate.
 - Users can view, filter, search, edit, and reverse recorded transactions.
 - Reversals are recorded as linked corrective transactions so confirmed financial history remains traceable.
 - Transfers between accounts do not count as income or expenses.
+- Everyday Transactions includes ordinary same-currency transfers that touch a
+  bank, cash, or digital-wallet account, including broker funding transfers;
+  investment activity remains in Stocks and Crypto.
 
 ### Expense Tracking and Budgets
 

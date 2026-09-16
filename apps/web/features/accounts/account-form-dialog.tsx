@@ -1,11 +1,11 @@
-"use client"
+"use client";
 
-import { Controller, useForm } from "react-hook-form"
-import { useEffect } from "react"
-import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react"
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { useEffect } from "react";
+import { CircleAlertIcon, PlusIcon, SaveIcon } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,15 +13,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -29,27 +29,31 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Spinner } from "@/components/ui/spinner"
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 
 import {
   accountFormSchema,
   currencyValues,
   type AccountFormPayload,
   type AccountFormValues,
-} from "./account-form-schema"
-import { accountTypeOptions, type Account, type AccountType } from "./account-types"
+} from "./account-form-schema";
+import {
+  accountTypeOptions,
+  type Account,
+  type AccountType,
+} from "./account-types";
 
 interface AccountFormDialogProps {
-  readonly allowedAccountTypes?: readonly AccountType[]
-  readonly account?: Account | null
-  readonly defaultCurrency?: (typeof currencyValues)[number]
-  readonly errorMessage?: string | null
-  readonly isPending?: boolean
-  readonly mode: "create" | "edit"
-  readonly onOpenChange: (open: boolean) => void
-  readonly onSubmit: (payload: AccountFormPayload) => Promise<void>
-  readonly open: boolean
+  readonly allowedAccountTypes?: readonly AccountType[];
+  readonly account?: Account | null;
+  readonly defaultCurrency?: (typeof currencyValues)[number];
+  readonly errorMessage?: string | null;
+  readonly isPending?: boolean;
+  readonly mode: "create" | "edit";
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onSubmit: (payload: AccountFormPayload) => Promise<void>;
+  readonly open: boolean;
 }
 
 export function AccountFormDialog({
@@ -63,22 +67,24 @@ export function AccountFormDialog({
   onSubmit,
   open,
 }: AccountFormDialogProps) {
-  const defaultAccountType = allowedAccountTypes?.[0] ?? "BANK"
-  const isCryptoWallet =
-    account?.type === "CRYPTO_WALLET" ||
-    (allowedAccountTypes?.length === 1 &&
-      allowedAccountTypes[0] === "CRYPTO_WALLET")
+  const defaultAccountType = allowedAccountTypes?.[0] ?? "BANK";
   const form = useForm<AccountFormValues>({
-    defaultValues: getDefaultValues(account, defaultCurrency, defaultAccountType),
-  })
+    defaultValues: getDefaultValues(
+      account,
+      defaultCurrency,
+      defaultAccountType,
+    ),
+  });
+  const selectedType = useWatch({ control: form.control, name: "type" });
+  const isCryptoWallet = selectedType === "CRYPTO_WALLET";
 
   useEffect(() => {
     if (open) {
       form.reset(
         getDefaultValues(account, defaultCurrency, defaultAccountType),
-      )
+      );
     }
-  }, [account, defaultAccountType, defaultCurrency, form, open])
+  }, [account, defaultAccountType, defaultCurrency, form, open]);
 
   const {
     control,
@@ -87,7 +93,7 @@ export function AccountFormDialog({
     handleSubmit,
     register,
     setError,
-  } = form
+  } = form;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,37 +115,39 @@ export function AccountFormDialog({
 
         <form
           onSubmit={handleSubmit(async (values) => {
-            clearErrors()
+            clearErrors();
 
-            const parsedValues = accountFormSchema.safeParse(values)
+            const parsedValues = accountFormSchema.safeParse(values);
 
             if (!parsedValues.success) {
               parsedValues.error.issues.forEach((issue) => {
-                const fieldName = issue.path[0]
+                const fieldName = issue.path[0];
 
                 if (typeof fieldName === "string") {
                   setError(fieldName as keyof AccountFormValues, {
                     message: issue.message,
-                  })
+                  });
                 }
-              })
+              });
 
-              return
+              return;
             }
 
             if (
               allowedAccountTypes?.length &&
               !allowedAccountTypes.includes(parsedValues.data.type)
             ) {
-              setError("type", { message: "Select an available account type." })
-              return
+              setError("type", {
+                message: "Select an available account type.",
+              });
+              return;
             }
 
             await onSubmit(
               isCryptoWallet
                 ? { ...parsedValues.data, openingBalance: "0" }
                 : parsedValues.data,
-            )
+            );
           })}
           className="flex flex-col gap-4"
         >
@@ -183,15 +191,17 @@ export function AccountFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {accountTypeOptions.filter((option) =>
-                          allowedAccountTypes?.length
-                            ? allowedAccountTypes.includes(option.value)
-                            : true,
-                        ).map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
+                        {accountTypeOptions
+                          .filter((option) =>
+                            allowedAccountTypes?.length
+                              ? allowedAccountTypes.includes(option.value)
+                              : true,
+                          )
+                          .map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -264,7 +274,11 @@ export function AccountFormDialog({
           </Field>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -281,7 +295,7 @@ export function AccountFormDialog({
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 function getDefaultValues(
@@ -296,7 +310,7 @@ function getDefaultValues(
       currency: defaultCurrency,
       openingBalance: "0",
       openedAt: "",
-    }
+    };
   }
 
   return {
@@ -305,5 +319,5 @@ function getDefaultValues(
     currency: account.currency as (typeof currencyValues)[number],
     openingBalance: account.openingBalance,
     openedAt: account.openedAt.slice(0, 10),
-  }
+  };
 }

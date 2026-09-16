@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import { useAuth } from "@clerk/nextjs"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
-import Link from "next/link"
+import { useAuth } from "@clerk/nextjs";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import Link from "next/link";
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -14,10 +14,10 @@ import {
   Trash2Icon,
   WalletCardsIcon,
   XIcon,
-} from "lucide-react"
+} from "lucide-react";
 
-import { AppShell } from "@/components/app-shell"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AppShell } from "@/components/app-shell";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,9 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogMedia,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -38,7 +38,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Empty,
   EmptyContent,
@@ -46,9 +46,9 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -56,52 +56,64 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/components/ui/table";
 
-import { formatAmount, formatDate } from "@/lib/formatting"
+import { formatAmount, formatDate } from "@/lib/formatting";
 
-import { AdjustBalanceDialog } from "./adjust-balance-dialog"
-import { moveAccountId } from "./account-order"
-import { AccountFormDialog } from "./account-form-dialog"
-import { type AccountFormPayload } from "./account-form-schema"
-import { dashboardQueryKey } from "@/features/dashboard/dashboard-api"
-import { getSettings, settingsQueryKey } from "@/features/settings/settings-api"
+import { AdjustBalanceDialog } from "./adjust-balance-dialog";
+import { moveAccountId } from "./account-order";
+import { AccountFormDialog } from "./account-form-dialog";
+import { type AccountFormPayload } from "./account-form-schema";
+import { dashboardQueryKey } from "@/features/dashboard/dashboard-api";
+import {
+  getSettings,
+  settingsQueryKey,
+} from "@/features/settings/settings-api";
 
 import {
+  accountListQueryKey,
   accountsQueryKey,
   createAccount,
   deleteAccount,
   listAccounts,
   reorderAccounts,
   updateAccount,
-} from "./accounts-api"
-import { getAccountTypeLabel, type Account } from "./account-types"
+} from "./accounts-api";
+import { getAccountTypeLabel, type Account } from "./account-types";
+import {
+  investmentAccountSummariesQueryKey,
+  listInvestmentAccountSummaries,
+} from "@/features/investments/investments-api";
 
 type AccountDialogState =
   | { readonly mode: "create" }
   | { readonly account: Account; readonly mode: "edit" }
-  | null
+  | null;
 
 export function AccountsPage() {
-  const { getToken } = useAuth()
-  const queryClient = useQueryClient()
-  const [dialogState, setDialogState] = useState<AccountDialogState>(null)
-  const [accountToAdjust, setAccountToAdjust] = useState<Account | null>(null)
-  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null)
-  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null)
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
+  const [dialogState, setDialogState] = useState<AccountDialogState>(null);
+  const [accountToAdjust, setAccountToAdjust] = useState<Account | null>(null);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
+  const [draggedAccountId, setDraggedAccountId] = useState<string | null>(null);
   const [draftAccountIds, setDraftAccountIds] = useState<
     readonly string[] | null
-  >(null)
+  >(null);
 
   const accountsQuery = useQuery({
-    queryKey: accountsQueryKey,
-    queryFn: () => listAccounts(getToken, "MONEY"),
-  })
+    queryKey: accountListQueryKey(),
+    queryFn: () => listAccounts(getToken),
+  });
+  const investmentSummariesQuery = useQuery({
+    queryKey: investmentAccountSummariesQueryKey,
+    queryFn: () => listInvestmentAccountSummaries(getToken),
+  });
 
   const settingsQuery = useQuery({
     queryKey: settingsQueryKey,
     queryFn: () => getSettings(getToken),
-  })
+  });
 
   const saveAccountMutation = useMutation({
     mutationFn: async ({
@@ -109,32 +121,38 @@ export function AccountsPage() {
       mode,
       payload,
     }: {
-      readonly accountId?: string
-      readonly mode: "create" | "edit"
-      readonly payload: AccountFormPayload
+      readonly accountId?: string;
+      readonly mode: "create" | "edit";
+      readonly payload: AccountFormPayload;
     }) => {
       if (mode === "create") {
-        return createAccount(getToken, payload)
+        return createAccount(getToken, payload);
       }
 
       if (!accountId) {
-        throw new Error("Account id is required to update an account.")
+        throw new Error("Account id is required to update an account.");
       }
 
-      return updateAccount(getToken, accountId, payload)
+      return updateAccount(getToken, accountId, payload);
     },
-  })
+  });
 
   const deleteAccountMutation = useMutation({
     mutationFn: async (accountId: string) => deleteAccount(getToken, accountId),
-  })
+  });
   const reorderAccountsMutation = useMutation({
     mutationFn: (accountIds: readonly string[]) =>
       reorderAccounts(getToken, accountIds),
-  })
+  });
 
-  const savedAccounts = accountsQuery.data ?? []
-  const savedAccountIds = savedAccounts.map((account) => account.id)
+  const savedAccounts = accountsQuery.data ?? [];
+  const investmentSummaries = new Map(
+    (investmentSummariesQuery.data ?? []).map((summary) => [
+      summary.accountId,
+      summary,
+    ]),
+  );
+  const savedAccountIds = savedAccounts.map((account) => account.id);
   const accounts = draftAccountIds
     ? [
         ...draftAccountIds
@@ -146,15 +164,15 @@ export function AccountsPage() {
           (account) => !draftAccountIds.includes(account.id),
         ),
       ]
-    : savedAccounts
-  const hasDraftAccountOrder = draftAccountIds !== null
-  const totalAccounts = accounts.length
+    : savedAccounts;
+  const hasDraftAccountOrder = draftAccountIds !== null;
+  const totalAccounts = accounts.length;
   const currenciesCount = new Set(accounts.map((account) => account.currency))
-    .size
+    .size;
 
   async function handleSaveAccount(payload: AccountFormPayload): Promise<void> {
     if (!dialogState) {
-      return
+      return;
     }
 
     await saveAccountMutation.mutateAsync({
@@ -162,69 +180,72 @@ export function AccountsPage() {
         dialogState.mode === "edit" ? dialogState.account.id : undefined,
       mode: dialogState.mode,
       payload,
-    })
+    });
 
-    setDialogState(null)
-    setDraftAccountIds(null)
-    await invalidateAccountData()
+    setDialogState(null);
+    setDraftAccountIds(null);
+    await invalidateAccountData();
   }
 
   async function invalidateAccountData(): Promise<void> {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: accountsQueryKey }),
+      queryClient.invalidateQueries({
+        queryKey: investmentAccountSummariesQueryKey,
+      }),
       queryClient.invalidateQueries({ queryKey: dashboardQueryKey }),
-    ])
+    ]);
   }
 
   async function handleDeleteAccount(): Promise<void> {
     if (!accountToDelete) {
-      return
+      return;
     }
 
-    await deleteAccountMutation.mutateAsync(accountToDelete.id)
-    setAccountToDelete(null)
-    setDraftAccountIds(null)
-    await invalidateAccountData()
+    await deleteAccountMutation.mutateAsync(accountToDelete.id);
+    setAccountToDelete(null);
+    setDraftAccountIds(null);
+    await invalidateAccountData();
   }
 
   async function persistAccountOrder() {
-    if (!draftAccountIds) return
+    if (!draftAccountIds) return;
 
-    const accountIds = accounts.map((account) => account.id)
+    const accountIds = accounts.map((account) => account.id);
     const persistedAccountIds =
-      await reorderAccountsMutation.mutateAsync(accountIds)
+      await reorderAccountsMutation.mutateAsync(accountIds);
     queryClient.setQueryData(
-      accountsQueryKey,
+      accountListQueryKey(),
       persistedAccountIds
         .map((accountId) =>
           accounts.find((account) => account.id === accountId),
         )
         .filter((account): account is Account => Boolean(account)),
-    )
-    setDraftAccountIds(null)
-    await queryClient.invalidateQueries({ queryKey: accountsQueryKey })
+    );
+    setDraftAccountIds(null);
+    await queryClient.invalidateQueries({ queryKey: accountsQueryKey });
   }
 
   function moveAccount(accountId: string, targetIndex: number) {
-    if (reorderAccountsMutation.isPending) return
-    const currentAccountIds = accounts.map((account) => account.id)
-    const accountIds = moveAccountId(currentAccountIds, accountId, targetIndex)
-    if (accountIds === currentAccountIds) return
+    if (reorderAccountsMutation.isPending) return;
+    const currentAccountIds = accounts.map((account) => account.id);
+    const accountIds = moveAccountId(currentAccountIds, accountId, targetIndex);
+    if (accountIds === currentAccountIds) return;
     setDraftAccountIds(
       accountIds.every(
         (accountId, index) => accountId === savedAccountIds[index],
       )
         ? null
         : accountIds,
-    )
-    reorderAccountsMutation.reset()
+    );
+    reorderAccountsMutation.reset();
   }
 
   return (
     <AppShell
       currentSection="accounts"
       title="Accounts"
-      description="Manage bank accounts, cash wallets, and digital wallets."
+      description="Manage everyday money, broker accounts, and crypto wallets."
       primaryAction={
         <Button size="sm" onClick={() => setDialogState({ mode: "create" })}>
           <PlusIcon data-icon="inline-start" />
@@ -254,7 +275,7 @@ export function AccountsPage() {
           <SummaryCard
             label="Total accounts"
             value={accountsQuery.isLoading ? "..." : String(totalAccounts)}
-            detail="Everyday money accounts"
+            detail="All tracked accounts"
           />
           <SummaryCard
             label="Currencies"
@@ -267,8 +288,7 @@ export function AccountsPage() {
           <CardHeader>
             <CardTitle>Managed accounts</CardTitle>
             <CardDescription>
-              Bank accounts, physical cash, and digital wallets stay separate
-              from Stocks and Crypto.
+              Everyday and investment accounts in one ordered directory.
             </CardDescription>
             {hasDraftAccountOrder ? (
               <CardAction className="flex items-center gap-1">
@@ -279,8 +299,8 @@ export function AccountsPage() {
                   aria-label="Cancel account order changes"
                   title="Cancel order changes"
                   onClick={() => {
-                    setDraftAccountIds(null)
-                    reorderAccountsMutation.reset()
+                    setDraftAccountIds(null);
+                    reorderAccountsMutation.reset();
                   }}
                 >
                   <XIcon />
@@ -312,8 +332,8 @@ export function AccountsPage() {
                   </EmptyMedia>
                   <EmptyTitle>No accounts yet</EmptyTitle>
                   <EmptyDescription>
-                    Add your first bank account, cash wallet, or digital wallet
-                    to start tracking everyday balances.
+                    Add a bank, wallet, broker, or crypto account to start
+                    tracking your finances.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -334,7 +354,7 @@ export function AccountsPage() {
                     <TableHead>Type</TableHead>
                     <TableHead>Currency</TableHead>
                     <TableHead className="text-right">
-                      Current balance
+                      Balance / value
                     </TableHead>
                     <TableHead>Opened</TableHead>
                     <TableHead>Activity</TableHead>
@@ -350,16 +370,16 @@ export function AccountsPage() {
                       }
                       className="data-[dragging=true]:opacity-50"
                       onDragOver={(event) => {
-                        if (draggedAccountId) event.preventDefault()
+                        if (draggedAccountId) event.preventDefault();
                       }}
                       onDrop={(event) => {
-                        event.preventDefault()
-                        if (!draggedAccountId) return
+                        event.preventDefault();
+                        if (!draggedAccountId) return;
                         moveAccount(
                           draggedAccountId,
                           accounts.findIndex((item) => item.id === account.id),
-                        )
-                        setDraggedAccountId(null)
+                        );
+                        setDraggedAccountId(null);
                       }}
                     >
                       <TableCell>
@@ -370,21 +390,24 @@ export function AccountsPage() {
                           aria-label={`Drag ${account.name} to reorder. Use the up and down arrow keys to move it.`}
                           className="cursor-grab active:cursor-grabbing"
                           onDragStart={(event) => {
-                            setDraggedAccountId(account.id)
-                            event.dataTransfer.effectAllowed = "move"
-                            event.dataTransfer.setData("text/plain", account.id)
+                            setDraggedAccountId(account.id);
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData(
+                              "text/plain",
+                              account.id,
+                            );
                           }}
                           onDragEnd={() => setDraggedAccountId(null)}
                           onKeyDown={(event) => {
                             const currentIndex = accounts.findIndex(
                               (item) => item.id === account.id,
-                            )
+                            );
                             if (event.key === "ArrowUp") {
-                              event.preventDefault()
-                              moveAccount(account.id, currentIndex - 1)
+                              event.preventDefault();
+                              moveAccount(account.id, currentIndex - 1);
                             } else if (event.key === "ArrowDown") {
-                              event.preventDefault()
-                              moveAccount(account.id, currentIndex + 1)
+                              event.preventDefault();
+                              moveAccount(account.id, currentIndex + 1);
                             }
                           }}
                         >
@@ -412,8 +435,12 @@ export function AccountsPage() {
                       <TableCell className="font-mono">
                         {account.currency}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-medium">
-                        {formatAmount(account.currentBalance, account.currency)}
+                      <TableCell className="text-right">
+                        <AccountValue
+                          account={account}
+                          summary={investmentSummaries.get(account.id)}
+                          summariesLoading={investmentSummariesQuery.isLoading}
+                        />
                       </TableCell>
                       <TableCell>{formatDate(account.openedAt)}</TableCell>
                       <TableCell>
@@ -434,13 +461,15 @@ export function AccountsPage() {
                               View
                             </Link>
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAccountToAdjust(account)}
-                          >
-                            Adjust balance
-                          </Button>
+                          {account.type !== "CRYPTO_WALLET" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setAccountToAdjust(account)}
+                            >
+                              Adjust balance
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="outline"
@@ -478,7 +507,6 @@ export function AccountsPage() {
       ) : null}
 
       <AccountFormDialog
-        allowedAccountTypes={["BANK", "CASH_WALLET", "DIGITAL_WALLET"]}
         open={dialogState !== null}
         mode={dialogState?.mode ?? "create"}
         account={dialogState?.mode === "edit" ? dialogState.account : null}
@@ -492,8 +520,8 @@ export function AccountsPage() {
         }
         onOpenChange={(open) => {
           if (!open) {
-            setDialogState(null)
-            saveAccountMutation.reset()
+            setDialogState(null);
+            saveAccountMutation.reset();
           }
         }}
         onSubmit={handleSaveAccount}
@@ -503,8 +531,8 @@ export function AccountsPage() {
         open={accountToDelete !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setAccountToDelete(null)
-            deleteAccountMutation.reset()
+            setAccountToDelete(null);
+            deleteAccountMutation.reset();
           }
         }}
       >
@@ -539,8 +567,8 @@ export function AccountsPage() {
               variant="destructive"
               disabled={deleteAccountMutation.isPending}
               onClick={async (event) => {
-                event.preventDefault()
-                await handleDeleteAccount()
+                event.preventDefault();
+                await handleDeleteAccount();
               }}
             >
               {deleteAccountMutation.isPending ? (
@@ -554,7 +582,58 @@ export function AccountsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </AppShell>
-  )
+  );
+}
+
+function AccountValue({
+  account,
+  summary,
+  summariesLoading,
+}: {
+  readonly account: Account;
+  readonly summary:
+    | {
+        readonly accountType: "BROKER" | "CRYPTO_WALLET";
+        readonly availableFiatCash: string;
+        readonly cashEquivalentValue: string;
+        readonly isPartial: boolean;
+        readonly reportingCurrency: string;
+        readonly totalAccountValue: string | null;
+        readonly unpricedAssetCount: number;
+      }
+    | undefined;
+  readonly summariesLoading: boolean;
+}) {
+  if (account.type !== "BROKER" && account.type !== "CRYPTO_WALLET") {
+    return (
+      <p className="font-mono font-medium">
+        {formatAmount(account.currentBalance, account.currency)}
+      </p>
+    );
+  }
+
+  if (summariesLoading) return <Skeleton className="ml-auto h-5 w-24" />;
+  if (!summary || summary.totalAccountValue === null) {
+    return <p className="text-muted-foreground">Unavailable</p>;
+  }
+
+  const liquidity =
+    account.type === "BROKER"
+      ? `Cash ${formatAmount(summary.availableFiatCash, account.currency)}`
+      : `Liquidity ${formatAmount(summary.cashEquivalentValue, summary.reportingCurrency)}`;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <p className="font-mono font-medium">
+        {formatAmount(summary.totalAccountValue, summary.reportingCurrency)}
+      </p>
+      <span className="text-xs text-muted-foreground">{liquidity}</span>
+      {summary.isPartial ? (
+        <Badge variant="secondary">
+          Partial: {summary.unpricedAssetCount} unpriced
+        </Badge>
+      ) : null}
+    </div>
+  );
 }
 
 function SummaryCard({
@@ -562,9 +641,9 @@ function SummaryCard({
   label,
   value,
 }: {
-  readonly detail: string
-  readonly label: string
-  readonly value: string
+  readonly detail: string;
+  readonly label: string;
+  readonly value: string;
 }) {
   return (
     <Card>
@@ -578,7 +657,7 @@ function SummaryCard({
         </p>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function AccountsTableSkeleton() {
@@ -599,5 +678,5 @@ function AccountsTableSkeleton() {
         </div>
       ))}
     </div>
-  )
+  );
 }

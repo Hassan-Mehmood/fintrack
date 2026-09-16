@@ -303,8 +303,7 @@ export function TransactionFormDialog({
   const selectedSettlementAsset = settlementAssets.find(
     (asset) => asset.id === watchedSettlementAssetId,
   );
-  const selectedSettlementSymbol =
-    selectedSettlementAsset?.symbol;
+  const selectedSettlementSymbol = selectedSettlementAsset?.symbol;
   const resultingSplitQuantity = useMemo(
     () =>
       watchedType === "INVESTMENT_SPLIT"
@@ -344,20 +343,26 @@ export function TransactionFormDialog({
               ? account.type === "CRYPTO_WALLET"
               : account.type === "BROKER" || account.type === "CRYPTO_WALLET",
           )
-        : accounts,
-    [accounts, showInvestment, watchedType],
+        : scope === "MONEY"
+          ? accounts.filter((account) =>
+              watchedType === "TRANSFER"
+                ? account.type !== "CRYPTO_WALLET"
+                : account.type === "BANK" ||
+                  account.type === "CASH_WALLET" ||
+                  account.type === "DIGITAL_WALLET",
+            )
+          : accounts,
+    [accounts, scope, showInvestment, watchedType],
   );
 
   useEffect(() => {
     if (
-      (showInvestment || watchedType === "INTEREST") &&
       selectedAccount &&
-      selectedAccount.type !== "BROKER" &&
-      selectedAccount.type !== "CRYPTO_WALLET"
+      !availableAccounts.some((account) => account.id === selectedAccount.id)
     ) {
       setValue("accountId", "");
     }
-  }, [selectedAccount, setValue, showInvestment, watchedType]);
+  }, [availableAccounts, selectedAccount, setValue]);
 
   const otherAccounts = useMemo(
     () =>
@@ -366,10 +371,38 @@ export function TransactionFormDialog({
           account.id !== watchedAccountId &&
           (watchedType === "INVESTMENT_TRANSFER"
             ? account.type === "CRYPTO_WALLET"
-            : account.currency === selectedAccount?.currency),
+            : account.currency === selectedAccount?.currency &&
+              (scope !== "MONEY" ||
+                (account.type !== "CRYPTO_WALLET" &&
+                  (selectedAccount?.type !== "BROKER" ||
+                    account.type === "BANK" ||
+                    account.type === "CASH_WALLET" ||
+                    account.type === "DIGITAL_WALLET")))),
       ),
-    [accounts, selectedAccount?.currency, watchedAccountId, watchedType],
+    [
+      accounts,
+      scope,
+      selectedAccount?.currency,
+      selectedAccount?.type,
+      watchedAccountId,
+      watchedType,
+    ],
   );
+  const watchedDestinationAccountId = useWatch({
+    control,
+    name: "destinationAccountId",
+  });
+
+  useEffect(() => {
+    if (
+      watchedDestinationAccountId &&
+      !otherAccounts.some(
+        (account) => account.id === watchedDestinationAccountId,
+      )
+    ) {
+      setValue("destinationAccountId", "");
+    }
+  }, [otherAccounts, setValue, watchedDestinationAccountId]);
   const availableAssets = useMemo(
     () =>
       watchedType === "INVESTMENT_TRANSFER"
@@ -503,19 +536,26 @@ export function TransactionFormDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {transactionTypeOptions.filter((option) =>
-                          scope === "MONEY"
-                            ? !option.value.startsWith("INVESTMENT_") && option.value !== "DIVIDEND" && option.value !== "INTEREST"
-                            : scope === "CRYPTO"
-                              ? cryptoTransactionTypes.has(option.value)
-                              : scope === "SECURITIES"
-                                ? option.value === "TRANSFER" || option.value.startsWith("INVESTMENT_") || option.value === "DIVIDEND" || option.value === "INTEREST"
-                                : true,
-                        ).map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
+                        {transactionTypeOptions
+                          .filter((option) =>
+                            scope === "MONEY"
+                              ? !option.value.startsWith("INVESTMENT_") &&
+                                option.value !== "DIVIDEND" &&
+                                option.value !== "INTEREST"
+                              : scope === "CRYPTO"
+                                ? cryptoTransactionTypes.has(option.value)
+                                : scope === "SECURITIES"
+                                  ? option.value === "TRANSFER" ||
+                                    option.value.startsWith("INVESTMENT_") ||
+                                    option.value === "DIVIDEND" ||
+                                    option.value === "INTEREST"
+                                  : true,
+                          )
+                          .map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -880,70 +920,84 @@ export function TransactionFormDialog({
 
                 {usesStablecoinSettlement ? (
                   <>
-                  <Field
-                    data-invalid={
-                      Boolean(errors.investment?.settlementAssetId) || undefined
-                    }
-                  >
-                    <FieldLabel htmlFor="transaction-settlement-asset">
-                      {watchedType === "INVESTMENT_BUY"
-                        ? "Pay with"
-                        : "Receive in"}
-                    </FieldLabel>
-                    <Controller
-                      control={control}
-                      name="investment.settlementAssetId"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ?? ""}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger id="transaction-settlement-asset">
-                            <SelectValue placeholder="Select a held coin" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {settlementAssets.map((asset) => {
-                                const holding = holdings.find(
-                                  (item) =>
-                                    item.accountId === watchedAccountId &&
-                                    item.assetId === asset.id,
-                                );
-                                return (
-                                  <SelectItem key={asset.id} value={asset.id}>
-                                    {asset.symbol ?? asset.name}
-                                    {holding
-                                      ? ` · ${holding.quantity} available`
-                                      : " · new balance"}
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    <FieldDescription>
-                      {selectedAsset && selectedSettlementSymbol
-                        ? `Pair: ${selectedAsset.symbol ?? selectedAsset.name}/${selectedSettlementSymbol}`
-                        : watchedType === "INVESTMENT_BUY"
-                          ? "Only positive same-wallet holdings are available."
-                          : "Select the coin exchanged against this trade."}
-                    </FieldDescription>
-                    <FieldError
-                      errors={[errors.investment?.settlementAssetId]}
-                    />
-                  </Field>
-                  <Field data-invalid={Boolean(errors.investment?.settlementRate) || undefined}>
-                    <FieldLabel htmlFor="transaction-settlement-rate">Pair rate</FieldLabel>
-                    <Input id="transaction-settlement-rate" inputMode="decimal" placeholder="0" {...register("investment.settlementRate")} />
-                    <FieldDescription>
-                      {selectedAsset && selectedSettlementSymbol
-                        ? `1 ${selectedAsset.symbol ?? selectedAsset.name} = X ${selectedSettlementSymbol}`
-                        : "Counter-coin units per one traded coin."}
-                    </FieldDescription>
-                    <FieldError errors={[errors.investment?.settlementRate]} />
-                  </Field>
+                    <Field
+                      data-invalid={
+                        Boolean(errors.investment?.settlementAssetId) ||
+                        undefined
+                      }
+                    >
+                      <FieldLabel htmlFor="transaction-settlement-asset">
+                        {watchedType === "INVESTMENT_BUY"
+                          ? "Pay with"
+                          : "Receive in"}
+                      </FieldLabel>
+                      <Controller
+                        control={control}
+                        name="investment.settlementAssetId"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value ?? ""}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger id="transaction-settlement-asset">
+                              <SelectValue placeholder="Select a held coin" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {settlementAssets.map((asset) => {
+                                  const holding = holdings.find(
+                                    (item) =>
+                                      item.accountId === watchedAccountId &&
+                                      item.assetId === asset.id,
+                                  );
+                                  return (
+                                    <SelectItem key={asset.id} value={asset.id}>
+                                      {asset.symbol ?? asset.name}
+                                      {holding
+                                        ? ` · ${holding.quantity} available`
+                                        : " · new balance"}
+                                    </SelectItem>
+                                  );
+                                })}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <FieldDescription>
+                        {selectedAsset && selectedSettlementSymbol
+                          ? `Pair: ${selectedAsset.symbol ?? selectedAsset.name}/${selectedSettlementSymbol}`
+                          : watchedType === "INVESTMENT_BUY"
+                            ? "Only positive same-wallet holdings are available."
+                            : "Select the coin exchanged against this trade."}
+                      </FieldDescription>
+                      <FieldError
+                        errors={[errors.investment?.settlementAssetId]}
+                      />
+                    </Field>
+                    <Field
+                      data-invalid={
+                        Boolean(errors.investment?.settlementRate) || undefined
+                      }
+                    >
+                      <FieldLabel htmlFor="transaction-settlement-rate">
+                        Pair rate
+                      </FieldLabel>
+                      <Input
+                        id="transaction-settlement-rate"
+                        inputMode="decimal"
+                        placeholder="0"
+                        {...register("investment.settlementRate")}
+                      />
+                      <FieldDescription>
+                        {selectedAsset && selectedSettlementSymbol
+                          ? `1 ${selectedAsset.symbol ?? selectedAsset.name} = X ${selectedSettlementSymbol}`
+                          : "Counter-coin units per one traded coin."}
+                      </FieldDescription>
+                      <FieldError
+                        errors={[errors.investment?.settlementRate]}
+                      />
+                    </Field>
                   </>
                 ) : watchedType === "INVESTMENT_BUY" ||
                   watchedType === "INVESTMENT_SELL" ? (
@@ -1281,7 +1335,6 @@ function sanitizePayload(
     investment,
   };
 }
-
 
 function CalculatedAmountField({
   currency,

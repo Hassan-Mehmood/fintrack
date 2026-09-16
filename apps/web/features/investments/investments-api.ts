@@ -54,6 +54,10 @@ interface InvestmentSummaryResponse {
 
 export const holdingsQueryKey = ["investments", "holdings"] as const;
 export const investmentSummaryQueryKey = ["investments", "summary"] as const;
+export const investmentAccountSummariesQueryKey = [
+  "investments",
+  "account-summaries",
+] as const;
 
 export async function createPosition(
   getToken: GetToken,
@@ -82,6 +86,24 @@ export interface InvestmentAccountSummary {
   readonly realizedGain: string | null;
   readonly unrealizedGain: string | null;
   readonly holdings: readonly Holding[];
+}
+
+export interface InvestmentAccountListSummary extends Omit<
+  InvestmentAccountSummary,
+  "holdings" | "costBasis" | "realizedGain" | "unrealizedGain"
+> {
+  readonly accountName: string;
+  readonly isPartial: boolean;
+  readonly unpricedAssetCount: number;
+}
+
+export async function listInvestmentAccountSummaries(
+  getToken: GetToken,
+): Promise<readonly InvestmentAccountListSummary[]> {
+  const response = await apiRequest<{
+    readonly data: readonly InvestmentAccountListSummary[];
+  }>(getToken, "/api/v1/investments/account-summaries");
+  return response.data;
 }
 
 export async function getInvestmentAccountSummary(

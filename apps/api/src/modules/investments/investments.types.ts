@@ -2,6 +2,28 @@ export type ReportingCurrency = 'USD' | 'PKR' | 'NATIVE';
 export type HoldingGroupBy =
   'NONE' | 'ACCOUNT' | 'PORTFOLIO' | 'ASSET_TYPE' | 'CURRENCY';
 
+export interface InvestmentAccountSummary {
+  readonly accountId: string;
+  readonly accountName: string;
+  readonly accountType: 'BROKER' | 'CRYPTO_WALLET';
+  readonly accountCurrency: string;
+  readonly reportingCurrency: 'USD' | 'PKR';
+  readonly availableFiatCash: string;
+  readonly cashEquivalentValue: string;
+  readonly investedValue: string;
+  readonly totalLiquidity: string | null;
+  readonly totalAccountValue: string | null;
+  readonly isPartial: boolean;
+  readonly unpricedAssetCount: number;
+}
+
+export interface InvestmentAccountSummariesResponse {
+  readonly data: readonly InvestmentAccountSummary[];
+  readonly meta: {
+    readonly reportingCurrency: 'USD' | 'PKR';
+  };
+}
+
 export interface HoldingResponse {
   readonly domain: 'SECURITIES' | 'CRYPTO';
   readonly holdingKind: 'ASSET' | 'FIAT_CASH';

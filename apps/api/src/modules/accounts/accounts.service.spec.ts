@@ -164,6 +164,11 @@ describe('AccountsService', () => {
         'account-2',
       ]),
     ).resolves.toEqual(['account-3', 'account-1', 'account-2']);
+    expect(prisma.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: authenticatedUser.id },
+      }),
+    );
     expect(prisma.account.update).toHaveBeenNthCalledWith(1, {
       where: { id: 'account-3' },
       data: { displayOrder: 0 },

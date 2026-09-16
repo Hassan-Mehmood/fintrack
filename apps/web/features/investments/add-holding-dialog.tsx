@@ -24,7 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { listAccounts } from "@/features/accounts/accounts-api";
+import {
+  accountListQueryKey,
+  listAccounts,
+} from "@/features/accounts/accounts-api";
 import type { Account } from "@/features/accounts/account-types";
 import {
   getAssetMetadata,
@@ -119,7 +122,7 @@ export function AddHoldingDialog({
   }, [query]);
 
   const accountsQuery = useQuery({
-    queryKey: ["accounts"],
+    queryKey: accountListQueryKey(domain),
     queryFn: () => listAccounts(getToken, domain),
     enabled: open,
   });
@@ -230,7 +233,9 @@ export function AddHoldingDialog({
       : nativeCost;
   const cashImpact = isCryptoPurchase
     ? number(quantity) * number(settlementRate) + number(fees)
-    : mode === "BUY" ? convertedGross + number(fees) : 0;
+    : mode === "BUY"
+      ? convertedGross + number(fees)
+      : 0;
   const startingCash =
     accountChoice === "NEW"
       ? number(accountCash)
@@ -366,8 +371,7 @@ export function AddHoldingDialog({
             kind: "NEW",
             name: newAccountName.trim(),
             currency: accountCurrency,
-            openingBalance:
-              domain === "CRYPTO" ? "0" : (accountCash || "0"),
+            openingBalance: domain === "CRYPTO" ? "0" : accountCash || "0",
           }
         : { kind: "EXISTING", accountId: accountChoice };
     const portfolio: CreatePositionPayload["portfolio"] =
@@ -797,36 +801,49 @@ export function AddHoldingDialog({
             )}
             {isCryptoPurchase ? (
               <>
-              <Field>
-                <FieldLabel>Pay with</FieldLabel>
-                <Select
-                  value={settlementAssetId}
-                  onValueChange={setSettlementAssetId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a held coin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {settlementHoldings.map((holding) => (
-                      <SelectItem key={holding.assetId} value={holding.assetId}>
-                        {holding.assetSymbol ?? holding.assetName} ·{" "}
-                        {holding.quantity} available
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {settlementHoldings.length === 0 ? (
-                  <p className="text-sm text-destructive">
-                    Add a positive crypto holding
-                    to this wallet before recording a purchase.
+                <Field>
+                  <FieldLabel>Pay with</FieldLabel>
+                  <Select
+                    value={settlementAssetId}
+                    onValueChange={setSettlementAssetId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a held coin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {settlementHoldings.map((holding) => (
+                        <SelectItem
+                          key={holding.assetId}
+                          value={holding.assetId}
+                        >
+                          {holding.assetSymbol ?? holding.assetName} ·{" "}
+                          {holding.quantity} available
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {settlementHoldings.length === 0 ? (
+                    <p className="text-sm text-destructive">
+                      Add a positive crypto holding to this wallet before
+                      recording a purchase.
+                    </p>
+                  ) : null}
+                </Field>
+                <Field>
+                  <FieldLabel>Pair rate</FieldLabel>
+                  <Input
+                    inputMode="decimal"
+                    value={settlementRate}
+                    onChange={(e) => setSettlementRate(e.target.value)}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    1 {selected.symbol ?? selected.label} = X{" "}
+                    {settlementHoldings.find(
+                      (holding) => holding.assetId === settlementAssetId,
+                    )?.assetSymbol ?? "counter coin"}
                   </p>
-                ) : null}
-              </Field>
-              <Field>
-                <FieldLabel>Pair rate</FieldLabel>
-                <Input inputMode="decimal" value={settlementRate} onChange={(e) => setSettlementRate(e.target.value)} placeholder="0" />
-                <p className="text-xs text-muted-foreground">1 {selected.symbol ?? selected.label} = X {settlementHoldings.find((holding) => holding.assetId === settlementAssetId)?.assetSymbol ?? "counter coin"}</p>
-              </Field>
+                </Field>
               </>
             ) : mode === "BUY" ? (
               <p className="text-sm text-muted-foreground">

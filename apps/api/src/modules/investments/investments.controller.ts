@@ -12,6 +12,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { InvestmentsService } from './investments.service';
 import type {
   HoldingsListResponse,
+  InvestmentAccountSummariesResponse,
   InvestmentSummaryResponse,
 } from './investments.types';
 import { InvestmentReportQueryDto } from './dto/investment-report-query.dto';
@@ -46,6 +47,22 @@ export class InvestmentsController {
     @Query() query: InvestmentReportQueryDto,
   ): Promise<InvestmentSummaryResponse> {
     return this.investmentsService.getSummaryForUser(user, query);
+  }
+
+  @Get('account-summaries')
+  async listAccountSummaries(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<InvestmentAccountSummariesResponse> {
+    const data =
+      await this.investmentsService.listAccountSummariesForUser(user);
+    return {
+      data,
+      meta: {
+        reportingCurrency:
+          data[0]?.reportingCurrency ??
+          (user.baseCurrency === 'PKR' ? 'PKR' : 'USD'),
+      },
+    };
   }
 
   @Post('positions')

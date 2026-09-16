@@ -21,6 +21,7 @@ import type {
   CurrencyTotal,
   HoldingGroupBy,
   HoldingResponse,
+  InvestmentAccountSummary,
   InvestmentSummaryResponse,
   ReportingCurrency,
   PositionCommandResponse,
@@ -250,6 +251,93 @@ export class InvestmentsService {
     };
   }
 
+  async listAccountSummariesForUser(
+    user: AuthenticatedUser,
+  ): Promise<readonly InvestmentAccountSummary[]> {
+    const reportingCurrency = this.toReportingCurrency(user.baseCurrency);
+    const [accounts, holdingsResult] = await Promise.all([
+      this.fetchInvestmentAccounts(user.id),
+      this.getHoldingsForUser(user, {
+        reportingCurrency,
+        includeZeroCash: true,
+      }),
+    ]);
+
+    return accounts.map((account) => {
+      const holdings = holdingsResult.holdings.filter(
+        (holding) => holding.accountId === account.id,
+      );
+      const sumCurrentValue = (items: readonly HoldingResponse[]) =>
+        items.reduce(
+          (total, holding) =>
+            holding.currentValue === null
+              ? total
+              : total.add(holding.currentValue),
+          new Decimal(0),
+        );
+      const fiatCash =
+        account.type === 'CRYPTO_WALLET'
+          ? new Decimal(0)
+          : calculateAccountBalance(account.openingBalance, account.id, [
+              ...account.transactions,
+              ...account.transfersIn,
+            ]);
+      const fiatCashReporting =
+        account.type === 'CRYPTO_WALLET'
+          ? new Decimal(0)
+          : convertUsdPkr(
+              fiatCash,
+              account.currency,
+              reportingCurrency,
+              user.exchangeRate ? new Decimal(user.exchangeRate) : null,
+            );
+      const cashEquivalents = holdings.filter(
+        (holding) =>
+          holding.holdingKind === 'ASSET' &&
+          holding.positionStatus === 'ACTIVE' &&
+          holding.liquidityClass === 'CASH_EQUIVALENT',
+      );
+      const investments = holdings.filter(
+        (holding) =>
+          holding.holdingKind === 'ASSET' &&
+          holding.positionStatus === 'ACTIVE' &&
+          holding.liquidityClass === 'INVESTMENT',
+      );
+      const cashEquivalentValue = sumCurrentValue(cashEquivalents);
+      const investedValue = sumCurrentValue(investments);
+      const isPartial = holdings.some(
+        (holding) =>
+          holding.holdingKind === 'ASSET' && holding.currentValue === null,
+      );
+      const unpricedAssetCount = holdings.filter(
+        (holding) =>
+          holding.holdingKind === 'ASSET' && holding.currentValue === null,
+      ).length;
+
+      return {
+        accountId: account.id,
+        accountName: account.name,
+        accountType: account.type as 'BROKER' | 'CRYPTO_WALLET',
+        accountCurrency: account.currency,
+        reportingCurrency,
+        availableFiatCash: fiatCash.toFixed(2),
+        cashEquivalentValue: cashEquivalentValue.toFixed(2),
+        investedValue: investedValue.toFixed(2),
+        totalLiquidity: fiatCashReporting
+          ? fiatCashReporting.add(cashEquivalentValue).toFixed(2)
+          : null,
+        totalAccountValue: fiatCashReporting
+          ? fiatCashReporting
+              .add(cashEquivalentValue)
+              .add(investedValue)
+              .toFixed(2)
+          : null,
+        isPartial,
+        unpricedAssetCount,
+      };
+    });
+  }
+
   async createPositionForUser(
     user: AuthenticatedUser,
     payload: CreatePositionDto,
@@ -366,7 +454,9 @@ export class InvestmentsService {
             ? new Decimal(payload.settlementRate ?? '0')
             : null;
           if (settlementAsset && !settlementRate?.isPositive()) {
-            throw new BadRequestException('A positive counter-asset rate is required for crypto pair purchases.');
+            throw new BadRequestException(
+              'A positive counter-asset rate is required for crypto pair purchases.',
+            );
           }
           const fxRate = payload.historicalFxRate
             ? new Decimal(payload.historicalFxRate)
@@ -865,7 +955,9 @@ export class InvestmentsService {
       );
     }
     if (
-      asset.priceCurrency !== 'USD' || asset.domain !== 'CRYPTO' || asset.marketType !== 'CRYPTO'
+      asset.priceCurrency !== 'USD' ||
+      asset.domain !== 'CRYPTO' ||
+      asset.marketType !== 'CRYPTO'
     ) {
       throw invalidSettlementAssetException(
         'Counter assets must be USD-priced cryptocurrencies.',
@@ -1372,7 +1464,10 @@ export class InvestmentsService {
 
     for (const detail of details) {
       if (detail.settlementAssetId === assetId) {
-        if (detail.settlementRate?.isPositive() && detail.settlementQuantity?.isPositive()) {
+        if (
+          detail.settlementRate?.isPositive() &&
+          detail.settlementQuantity?.isPositive()
+        ) {
           const counterPrice = convertUsdPkr(
             detail.price.dividedBy(detail.settlementRate),
             detail.priceCurrency,
@@ -1381,15 +1476,38 @@ export class InvestmentsService {
           );
           if (!counterPrice) return null;
           if (detail.tradeType === 'BUY') {
-            transactions.push({ type: 'SELL', quantity: detail.settlementQuantity, price: counterPrice, fees: new Decimal(0) });
-            if (detail.fees.isPositive()) transactions.push({ type: 'WITHDRAWAL', quantity: detail.fees, price: new Decimal(0), fees: new Decimal(0) });
+            transactions.push({
+              type: 'SELL',
+              quantity: detail.settlementQuantity,
+              price: counterPrice,
+              fees: new Decimal(0),
+            });
+            if (detail.fees.isPositive())
+              transactions.push({
+                type: 'WITHDRAWAL',
+                quantity: detail.fees,
+                price: new Decimal(0),
+                fees: new Decimal(0),
+              });
           } else if (detail.tradeType === 'SELL') {
             const netQuantity = detail.settlementQuantity.sub(detail.fees);
             const grossValue = detail.quantity.times(
-              convertUsdPkr(detail.price, detail.priceCurrency, currency, detail.fxRateUsdToPkr) ?? new Decimal(0),
+              convertUsdPkr(
+                detail.price,
+                detail.priceCurrency,
+                currency,
+                detail.fxRateUsdToPkr,
+              ) ?? new Decimal(0),
             );
             const netValue = grossValue.sub(detail.fees.times(counterPrice));
-            transactions.push({ type: 'DEPOSIT', quantity: netQuantity, price: netQuantity.isZero() ? new Decimal(0) : netValue.dividedBy(netQuantity), fees: new Decimal(0) });
+            transactions.push({
+              type: 'DEPOSIT',
+              quantity: netQuantity,
+              price: netQuantity.isZero()
+                ? new Decimal(0)
+                : netValue.dividedBy(netQuantity),
+              fees: new Decimal(0),
+            });
           }
           continue;
         }
