@@ -86,6 +86,8 @@ export class CreatePositionDto {
   @Type(() => SettlementAssetDto)
   settlementAsset?: SettlementAssetDto;
 
+  @IsOptional() @IsString() @Matches(DECIMAL_PATTERN) settlementRate?: string;
+
   @IsDateString()
   occurredAt!: string;
 

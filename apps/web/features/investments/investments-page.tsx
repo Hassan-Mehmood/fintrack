@@ -56,6 +56,7 @@ import { AddHoldingDialog } from "./add-holding-dialog";
 import { AddToWatchlistDialog } from "./add-to-watchlist-dialog";
 import { WatchlistsPanel } from "./watchlists-panel";
 import { InvestmentPortfoliosPanel } from "./investment-portfolios-panel";
+import { TransactionsPage } from "@/features/transactions/transactions-page";
 import { listPortfolios } from "@/features/portfolios/portfolios-api";
 import {
   getInvestmentSummary,
@@ -582,23 +583,7 @@ export function InvestmentsPage({
           ) : null}
         </div>
 
-        {tab === "activity" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Investment activity</CardTitle>
-              <CardDescription>
-                Review and audit every investment ledger entry.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link href={`/transactions?scope=${domain}`}>
-                  View {domain === "CRYPTO" ? "crypto" : "stock"} activity
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
+        {tab === "activity" ? <TransactionsPage embeddedScope={domain} /> : null}
 
         {tab === "portfolios" ? (
           <InvestmentPortfoliosPanel

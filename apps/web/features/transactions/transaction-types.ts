@@ -51,6 +51,10 @@ export interface InvestmentTransactionDetail {
   readonly settlementAssetName: string | null;
   readonly settlementAssetSymbol: string | null;
   readonly settlementQuantity: string | null;
+  readonly settlementRate: string | null;
+  readonly settlementGrossQuantity: string | null;
+  readonly settlementFeeQuantity: string | null;
+  readonly settlementNetQuantity: string | null;
   readonly pairLabel: string | null;
   readonly tradeType:
     | "BUY"
@@ -146,6 +150,7 @@ export interface TransactionPayload {
           readonly provider: "COINGECKO";
           readonly providerAssetId: string;
         };
+    readonly settlementRate?: string;
   } | null;
 }
 

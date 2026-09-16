@@ -40,6 +40,7 @@ const investmentSchema = z.object({
   fees: decimalField,
   notes: z.string().trim().max(1000).optional().or(z.literal("")),
   settlementAssetId: z.string().trim().max(255).optional().or(z.literal("")),
+  settlementRate: decimalField,
 });
 
 export const transactionFormSchema = z
@@ -160,6 +161,14 @@ export const transactionFormSchema = z
         ["investment", "fees"],
         "Fees must be zero or greater.",
       );
+    }
+
+    if (
+      (data.type === "INVESTMENT_BUY" || data.type === "INVESTMENT_SELL") &&
+      data.investment?.settlementAssetId &&
+      !isPositiveDecimal(data.investment.settlementRate)
+    ) {
+      addIssue(context, ["investment", "settlementRate"], "Pair rate must be greater than zero.");
     }
 
     if (

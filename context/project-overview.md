@@ -149,9 +149,9 @@ the two investment summaries visually separate.
 - Users can record starting stablecoin balances, external stablecoin deposits,
   and atomic stablecoin transfers between their tracked crypto wallets.
 - Stock purchases and sales settle against the broker account's fiat cash.
-- Cryptocurrency purchases and sales settle against a USD-priced cash-
-  equivalent holding in the same crypto wallet, such as USDT, USDC, or DAI;
-  both sides of the pair update atomically.
+- Cryptocurrency purchases and sales settle against a positively held,
+  USD-priced crypto asset in the same wallet, such as BTC or USDT. Users
+  record an execution USD price and pair rate; both sides update atomically.
 
 ### Financial Goals
 

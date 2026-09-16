@@ -64,6 +64,8 @@ const investmentDetailSelect = {
     },
   },
   settlementAssetId: true,
+  settlementRate: true,
+  settlementQuantity: true,
   settlementAsset: {
     select: { name: true, symbol: true },
   },
@@ -233,6 +235,7 @@ interface InvestmentPayload {
   readonly fees?: string;
   readonly notes?: string;
   readonly settlementAsset?: SettlementAssetDto;
+  readonly settlementRate?: string;
 }
 
 @Injectable()
@@ -568,6 +571,21 @@ export class TransactionsService {
         )
       : null;
 
+    this.validateCryptoPairRate(
+      transactionAccount.type,
+      payload.type,
+      payload.investment,
+      settlementAssetId,
+    );
+
+    if (settlementAssetId && payload.investment?.settlementRate) {
+      await this.assertPositiveSettlementHolding(
+        user.id,
+        payload.accountId,
+        settlementAssetId,
+      );
+    }
+
     if (createInvestment) {
       await this.assertSufficientHolding(
         user.id,
@@ -584,9 +602,7 @@ export class TransactionsService {
         payload.type === 'INVESTMENT_BUY' &&
         (payload.status ?? 'CLEARED') === 'CLEARED'
       ) {
-        const required = new Prisma.Decimal(createInvestment.quantity ?? '0')
-          .times(createInvestment.price ?? '0')
-          .add(createInvestment.fees ?? '0');
+        const required = this.settlementDebitQuantity(createInvestment);
         await this.assertSufficientSettlement(
           user.id,
           payload.accountId,
@@ -680,11 +696,7 @@ export class TransactionsService {
                 tx,
               );
             } else if (settlementAssetId && payload.investment) {
-              const required = new Prisma.Decimal(
-                payload.investment.quantity ?? '0',
-              )
-                .times(payload.investment.price ?? '0')
-                .add(payload.investment.fees ?? '0');
+              const required = this.settlementDebitQuantity(payload.investment);
               await this.assertSufficientSettlement(
                 user.id,
                 payload.accountId,
@@ -807,6 +819,31 @@ export class TransactionsService {
         'Legacy crypto trades cannot be retrofitted with a settlement asset.',
       );
     }
+
+    if (
+      existingTransaction.investmentDetail?.settlementRate ||
+      payload.investment?.settlementRate
+    ) {
+      this.validateCryptoPairRate(
+        transactionAccount.type,
+        effectiveType,
+        effectiveInvestment,
+        effectiveSettlementAssetId,
+      );
+    }
+
+    if (
+      effectiveSettlementAssetId &&
+      (existingTransaction.investmentDetail?.settlementRate ||
+        payload.investment?.settlementRate)
+    ) {
+      await this.assertPositiveSettlementHolding(
+        user.id,
+        effectiveAccountId,
+        effectiveSettlementAssetId,
+        transactionId,
+      );
+    }
     if (
       payload.investment?.settlementAsset &&
       existingTransaction.investmentDetail?.settlementAssetId &&
@@ -835,9 +872,7 @@ export class TransactionsService {
         effectiveType === 'INVESTMENT_BUY' &&
         (payload.status ?? existingTransaction.status) === 'CLEARED'
       ) {
-        const required = new Prisma.Decimal(effectiveInvestment.quantity ?? '0')
-          .times(effectiveInvestment.price ?? '0')
-          .add(effectiveInvestment.fees ?? '0');
+        const required = this.settlementDebitQuantity(effectiveInvestment);
         await this.assertSufficientSettlement(
           user.id,
           effectiveAccountId,
@@ -1011,6 +1046,10 @@ export class TransactionsService {
                   assetId: originalTransaction.investmentDetail.assetId,
                   settlementAssetId:
                     originalTransaction.investmentDetail.settlementAssetId,
+                  settlementRate:
+                    originalTransaction.investmentDetail.settlementRate,
+                  settlementQuantity:
+                    originalTransaction.investmentDetail.settlementQuantity,
                   tradeType: originalTransaction.investmentDetail.tradeType,
                   quantity:
                     originalTransaction.investmentDetail.quantity.toString(),
@@ -1734,6 +1773,8 @@ export class TransactionsService {
   ): {
     readonly assetId: string;
     readonly settlementAssetId: string | undefined;
+    readonly settlementRate: string | undefined;
+    readonly settlementQuantity: Prisma.Decimal | undefined;
     readonly tradeType: TradeType;
     readonly quantity: string;
     readonly price: string;
@@ -1758,6 +1799,12 @@ export class TransactionsService {
     return {
       assetId: investment.assetId,
       settlementAssetId: settlementAssetId ?? undefined,
+      settlementRate: settlementAssetId ? investment.settlementRate : undefined,
+      settlementQuantity: settlementAssetId
+        ? new Prisma.Decimal(quantity)
+            .times(investment.settlementRate ?? '0')
+            .toDecimalPlaces(8, Prisma.Decimal.ROUND_HALF_UP)
+        : undefined,
       tradeType: this.getExpectedTradeType(type),
       quantity,
       price,
@@ -1858,13 +1905,15 @@ export class TransactionsService {
       id: string;
       priceCurrency: string | null;
       liquidityClass: string;
+      domain: string;
+      marketType: string | null;
     } | null = null;
 
     if (input.kind === 'EXISTING') {
       if (!input.assetId) throw settlementAssetNotFoundException();
       asset = await this.prisma.asset.findFirst({
         where: { id: input.assetId, userId: user.id },
-        select: { id: true, priceCurrency: true, liquidityClass: true },
+        select: { id: true, priceCurrency: true, liquidityClass: true, domain: true, marketType: true },
       });
     } else {
       if (!input.providerAssetId || !this.assetsService) {
@@ -1876,7 +1925,7 @@ export class TransactionsService {
           provider: 'COINGECKO',
           providerAssetId: input.providerAssetId,
         },
-        select: { id: true, priceCurrency: true, liquidityClass: true },
+        select: { id: true, priceCurrency: true, liquidityClass: true, domain: true, marketType: true },
       });
       if (!asset) {
         const created = await this.assetsService.createProviderAssetForUser(
@@ -1899,13 +1948,48 @@ export class TransactionsService {
     }
     if (
       asset.priceCurrency !== 'USD' ||
-      asset.liquidityClass !== 'CASH_EQUIVALENT'
+      ((asset.domain !== 'CRYPTO' || asset.marketType !== 'CRYPTO') &&
+        asset.liquidityClass !== 'CASH_EQUIVALENT')
     ) {
       throw invalidSettlementAssetException(
-        'Settlement assets must be USD-priced cash equivalents.',
+        'Counter assets must be USD-priced cryptocurrencies.',
       );
     }
     return asset.id;
+  }
+
+  private validateCryptoPairRate(
+    accountType: string | undefined,
+    type: TransactionType,
+    investment: InvestmentPayload | null | undefined,
+    settlementAssetId: string | null,
+  ): void {
+    if (!settlementAssetId || accountType !== 'CRYPTO_WALLET' || (type !== 'INVESTMENT_BUY' && type !== 'INVESTMENT_SELL')) return;
+    if (!investment?.settlementRate) return;
+    const rate = new Prisma.Decimal(investment.settlementRate);
+    if (!rate.isPositive()) {
+      throw createInvalidInvestmentAmountException(
+        'A positive counter-asset rate is required for crypto pair trades.',
+      );
+    }
+    if (type === 'INVESTMENT_SELL') {
+      const gross = new Prisma.Decimal(investment?.quantity ?? '0').times(rate);
+      if (new Prisma.Decimal(investment?.fees ?? '0').greaterThanOrEqualTo(gross)) {
+        throw createInvalidInvestmentAmountException('Fees must be less than the counter quantity received.');
+      }
+    }
+  }
+
+  private settlementDebitQuantity(investment: InvestmentPayload): Prisma.Decimal {
+    if (!investment.settlementRate) {
+      return new Prisma.Decimal(investment.quantity ?? '0')
+        .times(investment.price ?? '0')
+        .add(investment.fees ?? '0');
+    }
+    const exchangeQuantity = new Prisma.Decimal(investment.quantity ?? '0')
+      .times(investment.settlementRate ?? '0')
+      .toDecimalPlaces(8, Prisma.Decimal.ROUND_HALF_UP);
+    return exchangeQuantity.add(investment.fees ?? '0');
   }
 
   private async assertSufficientSettlement(
@@ -1934,6 +2018,8 @@ export class TransactionsService {
       select: {
         assetId: true,
         settlementAssetId: true,
+        settlementRate: true,
+        settlementQuantity: true,
         tradeType: true,
         quantity: true,
         price: true,
@@ -1953,6 +2039,21 @@ export class TransactionsService {
         required.toString(),
       );
     }
+  }
+
+  private async assertPositiveSettlementHolding(
+    userId: string,
+    accountId: string,
+    assetId: string,
+    excludedTransactionId?: string,
+  ): Promise<void> {
+    await this.assertSufficientSettlement(
+      userId,
+      accountId,
+      assetId,
+      new Prisma.Decimal('0.00000001'),
+      excludedTransactionId,
+    );
   }
 
   private async assertSufficientAccountCash(
@@ -2052,6 +2153,8 @@ export class TransactionsService {
       select: {
         assetId: true,
         settlementAssetId: true,
+        settlementRate: true,
+        settlementQuantity: true,
         tradeType: true,
         quantity: true,
         price: true,
@@ -2131,6 +2234,7 @@ export class TransactionsService {
           readonly fees?: string;
           readonly notes?: string;
           readonly settlementAsset?: SettlementAssetDto;
+          readonly settlementRate?: string;
         }
       | null
       | undefined,
@@ -2179,6 +2283,8 @@ export class TransactionsService {
       priceCurrency: calculatedDetail.priceCurrency,
       grossAmount: calculatedDetail.grossAmount,
       fees: calculatedDetail.fees,
+      settlementRate: calculatedDetail.settlementRate,
+      settlementQuantity: calculatedDetail.settlementQuantity,
       fxRateUsdToPkr: calculatedDetail.fxRateUsdToPkr,
       fxRateSource: calculatedDetail.fxRateSource,
       fxRateUpdatedAt: calculatedDetail.fxRateUpdatedAt,
@@ -2215,6 +2321,7 @@ export class TransactionsService {
         readonly quantity?: string;
         readonly price?: string;
         readonly fees?: string;
+        readonly settlementRate?: string;
         readonly notes?: string;
       }
     | undefined {
@@ -2228,6 +2335,7 @@ export class TransactionsService {
       quantity: detail.quantity.toString(),
       price: detail.price.toString(),
       fees: detail.fees.toString(),
+      settlementRate: detail.settlementRate?.toString(),
       notes: detail.notes ?? undefined,
     };
   }
@@ -2315,8 +2423,17 @@ export class TransactionsService {
       settlementAssetSymbol: detail.settlementAsset?.symbol ?? null,
       settlementQuantity: detail.settlementAssetId
         ? (detail.tradeType === 'BUY'
-            ? detail.grossAmount.add(detail.fees)
-            : detail.grossAmount.sub(detail.fees)
+            ? (detail.settlementQuantity ?? detail.grossAmount).add(detail.fees)
+            : (detail.settlementQuantity ?? detail.grossAmount).sub(detail.fees)
+          ).toString()
+        : null,
+      settlementRate: detail.settlementRate?.toString() ?? null,
+      settlementGrossQuantity: detail.settlementQuantity?.toString() ?? null,
+      settlementFeeQuantity: detail.settlementAssetId ? detail.fees.toString() : null,
+      settlementNetQuantity: detail.settlementAssetId
+        ? (detail.tradeType === 'BUY'
+            ? (detail.settlementQuantity ?? detail.grossAmount).add(detail.fees)
+            : (detail.settlementQuantity ?? detail.grossAmount).sub(detail.fees)
           ).toString()
         : null,
       pairLabel:

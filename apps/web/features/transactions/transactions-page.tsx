@@ -182,20 +182,19 @@ type Confirmation =
 
 export function TransactionsPage({
   accountId,
+  embeddedScope,
 }: {
   readonly accountId?: string;
+  readonly embeddedScope?: "SECURITIES" | "CRYPTO";
 }) {
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const requestedScope = searchParams.get("scope");
-  const scope: "MONEY" | "SECURITIES" | "CRYPTO" | undefined = accountId
+  const scope: "MONEY" | "SECURITIES" | "CRYPTO" | undefined = embeddedScope ?? (accountId
     ? undefined
-    : requestedScope === "SECURITIES" || requestedScope === "CRYPTO"
-      ? requestedScope
-      : "MONEY";
+    : "MONEY");
   const filters = useMemo(() => {
     const parsed = readTransactionFilters(searchParams);
     return accountId ? { ...parsed, accountIds: [], currencies: [] } : parsed;
@@ -504,6 +503,7 @@ export function TransactionsPage({
 
   return (
     <AppShell
+      embedded={Boolean(embeddedScope)}
       currentSection={accountId ? "accounts" : scope === "CRYPTO" ? "crypto" : scope === "SECURITIES" ? "stocks" : "transactions"}
       title={accountId ? (account?.name ?? "Account") : scope === "CRYPTO" ? "Crypto activity" : scope === "SECURITIES" ? "Stock activity" : "Transactions"}
       description={

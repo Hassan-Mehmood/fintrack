@@ -105,6 +105,7 @@ export function AddHoldingDialog({
   const [currentValue, setCurrentValue] = useState("");
   const [fees, setFees] = useState("0");
   const [settlementAssetId, setSettlementAssetId] = useState("");
+  const [settlementRate, setSettlementRate] = useState("");
   const [date, setDate] = useState(today());
   const [fxRate, setFxRate] = useState("");
   const [portfolioChoice, setPortfolioChoice] = useState(
@@ -173,7 +174,7 @@ export function AddHoldingDialog({
       (holdingsQuery.data ?? []).filter(
         (holding) =>
           holding.accountId === accountChoice &&
-          holding.liquidityClass === "CASH_EQUIVALENT" &&
+          holding.holdingKind === "ASSET" &&
           holding.nativeCurrency === "USD" &&
           number(holding.quantity) > 0 &&
           holding.assetId !==
@@ -227,7 +228,9 @@ export function AddHoldingDialog({
         ? nativeCost * number(effectiveFxRate)
         : nativeCost / number(effectiveFxRate)
       : nativeCost;
-  const cashImpact = mode === "BUY" ? convertedGross + number(fees) : 0;
+  const cashImpact = isCryptoPurchase
+    ? number(quantity) * number(settlementRate) + number(fees)
+    : mode === "BUY" ? convertedGross + number(fees) : 0;
   const startingCash =
     accountChoice === "NEW"
       ? number(accountCash)
@@ -392,6 +395,7 @@ export function AddHoldingDialog({
       settlementAsset: isCryptoPurchase
         ? { kind: "EXISTING", assetId: settlementAssetId }
         : undefined,
+      settlementRate: isCryptoPurchase ? settlementRate : undefined,
       occurredAt: new Date(`${date}T12:00:00`).toISOString(),
       portfolio:
         portfolioSetup && portfolioChoice === "NEW"
@@ -780,7 +784,7 @@ export function AddHoldingDialog({
                   {isCryptoPurchase
                     ? (settlementHoldings.find(
                         (holding) => holding.assetId === settlementAssetId,
-                      )?.assetSymbol ?? "stablecoin")
+                      )?.assetSymbol ?? "counter coin")
                     : effectiveAccountCurrency}
                   )
                 </FieldLabel>
@@ -792,6 +796,7 @@ export function AddHoldingDialog({
               </Field>
             )}
             {isCryptoPurchase ? (
+              <>
               <Field>
                 <FieldLabel>Pay with</FieldLabel>
                 <Select
@@ -799,7 +804,7 @@ export function AddHoldingDialog({
                   onValueChange={setSettlementAssetId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a stablecoin" />
+                    <SelectValue placeholder="Select a held coin" />
                   </SelectTrigger>
                   <SelectContent>
                     {settlementHoldings.map((holding) => (
@@ -812,11 +817,17 @@ export function AddHoldingDialog({
                 </Select>
                 {settlementHoldings.length === 0 ? (
                   <p className="text-sm text-destructive">
-                    Add a USDT, USDC, or other cash-equivalent opening balance
+                    Add a positive crypto holding
                     to this wallet before recording a purchase.
                   </p>
                 ) : null}
               </Field>
+              <Field>
+                <FieldLabel>Pair rate</FieldLabel>
+                <Input inputMode="decimal" value={settlementRate} onChange={(e) => setSettlementRate(e.target.value)} placeholder="0" />
+                <p className="text-xs text-muted-foreground">1 {selected.symbol ?? selected.label} = X {settlementHoldings.find((holding) => holding.assetId === settlementAssetId)?.assetSymbol ?? "counter coin"}</p>
+              </Field>
+              </>
             ) : mode === "BUY" ? (
               <p className="text-sm text-muted-foreground">
                 Paid with Cash ·{" "}
@@ -1001,7 +1012,7 @@ export function AddHoldingDialog({
                         Boolean(price),
                       fxRate: effectiveFxRate,
                       settlementRequired: isCryptoPurchase,
-                      settlementAssetId,
+                      settlementAssetId: settlementAssetId && settlementRate,
                     })
                   }
                   onClick={() => setStep(3)}

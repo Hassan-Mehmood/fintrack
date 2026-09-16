@@ -149,6 +149,7 @@ export interface CreatePositionPayload {
         readonly provider: "COINGECKO";
         readonly providerAssetId: string;
       };
+  readonly settlementRate?: string;
   readonly occurredAt: string;
   readonly portfolio?:
     | { readonly kind: "EXISTING"; readonly portfolioId: string }

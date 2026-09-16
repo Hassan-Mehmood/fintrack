@@ -87,6 +87,7 @@ interface AppShellProps {
   readonly description: string
   readonly primaryAction?: React.ReactNode
   readonly title: string
+  readonly embedded?: boolean
 }
 
 export function AppShell({
@@ -95,7 +96,11 @@ export function AppShell({
   description,
   primaryAction,
   title,
+  embedded = false,
 }: AppShellProps) {
+  if (embedded) {
+    return <div className="flex flex-col gap-4">{primaryAction ? <div className="flex justify-end">{primaryAction}</div> : null}{children}</div>
+  }
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">

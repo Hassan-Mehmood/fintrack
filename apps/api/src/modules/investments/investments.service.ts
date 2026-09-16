@@ -61,6 +61,8 @@ interface DetailRecord {
   readonly id: string;
   readonly assetId: string;
   readonly settlementAssetId: string | null;
+  readonly settlementRate: Decimal | null;
+  readonly settlementQuantity: Decimal | null;
   readonly tradeType: string;
   readonly quantity: Decimal;
   readonly price: Decimal;
@@ -360,6 +362,12 @@ export class InvestmentsService {
                   asset.id,
                 )
               : null;
+          const settlementRate = settlementAsset
+            ? new Decimal(payload.settlementRate ?? '0')
+            : null;
+          if (settlementAsset && !settlementRate?.isPositive()) {
+            throw new BadRequestException('A positive counter-asset rate is required for crypto pair purchases.');
+          }
           const fxRate = payload.historicalFxRate
             ? new Decimal(payload.historicalFxRate)
             : user.exchangeRate
@@ -376,6 +384,9 @@ export class InvestmentsService {
             );
           }
           const grossAmount = quantity.times(price).toDecimalPlaces(8);
+          const settlementQuantity = settlementRate
+            ? quantity.times(settlementRate).toDecimalPlaces(8)
+            : null;
           const convertedGross =
             payload.mode === 'OPENING'
               ? new Decimal(0)
@@ -401,7 +412,7 @@ export class InvestmentsService {
                 user.id,
                 account.id,
                 settlementAsset.id,
-                grossAmount.add(fees),
+                settlementQuantity!.add(fees),
               );
             } else {
               await this.assertAccountCashBalance(
@@ -433,6 +444,8 @@ export class InvestmentsService {
                 create: {
                   assetId: asset.id,
                   settlementAssetId: settlementAsset?.id,
+                  settlementRate: settlementRate ?? undefined,
+                  settlementQuantity: settlementQuantity ?? undefined,
                   tradeType: payload.mode === 'OPENING' ? 'OPENING' : 'BUY',
                   quantity,
                   price,
@@ -774,17 +787,23 @@ export class InvestmentsService {
     readonly id: string;
     readonly priceCurrency: string | null;
     readonly liquidityClass: string;
+    readonly domain: string;
+    readonly marketType: string | null;
   }> {
     if (!input) throw settlementAssetRequiredException();
     const select = {
       id: true,
       priceCurrency: true,
       liquidityClass: true,
+      domain: true,
+      marketType: true,
     } satisfies Prisma.AssetSelect;
     let asset: {
       id: string;
       priceCurrency: string | null;
       liquidityClass: string;
+      domain: string;
+      marketType: string | null;
     } | null;
     if (input.kind === 'EXISTING') {
       if (!input.assetId) throw settlementAssetNotFoundException();
@@ -846,11 +865,10 @@ export class InvestmentsService {
       );
     }
     if (
-      asset.priceCurrency !== 'USD' ||
-      asset.liquidityClass !== 'CASH_EQUIVALENT'
+      asset.priceCurrency !== 'USD' || asset.domain !== 'CRYPTO' || asset.marketType !== 'CRYPTO'
     ) {
       throw invalidSettlementAssetException(
-        'Settlement assets must be USD-priced cash equivalents.',
+        'Counter assets must be USD-priced cryptocurrencies.',
       );
     }
     return asset;
@@ -878,6 +896,8 @@ export class InvestmentsService {
       select: {
         assetId: true,
         settlementAssetId: true,
+        settlementRate: true,
+        settlementQuantity: true,
         tradeType: true,
         quantity: true,
         price: true,
@@ -1352,6 +1372,27 @@ export class InvestmentsService {
 
     for (const detail of details) {
       if (detail.settlementAssetId === assetId) {
+        if (detail.settlementRate?.isPositive() && detail.settlementQuantity?.isPositive()) {
+          const counterPrice = convertUsdPkr(
+            detail.price.dividedBy(detail.settlementRate),
+            detail.priceCurrency,
+            currency,
+            detail.fxRateUsdToPkr,
+          );
+          if (!counterPrice) return null;
+          if (detail.tradeType === 'BUY') {
+            transactions.push({ type: 'SELL', quantity: detail.settlementQuantity, price: counterPrice, fees: new Decimal(0) });
+            if (detail.fees.isPositive()) transactions.push({ type: 'WITHDRAWAL', quantity: detail.fees, price: new Decimal(0), fees: new Decimal(0) });
+          } else if (detail.tradeType === 'SELL') {
+            const netQuantity = detail.settlementQuantity.sub(detail.fees);
+            const grossValue = detail.quantity.times(
+              convertUsdPkr(detail.price, detail.priceCurrency, currency, detail.fxRateUsdToPkr) ?? new Decimal(0),
+            );
+            const netValue = grossValue.sub(detail.fees.times(counterPrice));
+            transactions.push({ type: 'DEPOSIT', quantity: netQuantity, price: netQuantity.isZero() ? new Decimal(0) : netValue.dividedBy(netQuantity), fees: new Decimal(0) });
+          }
+          continue;
+        }
         const price = convertUsdPkr(
           new Decimal(1),
           'USD',
@@ -1396,12 +1437,19 @@ export class InvestmentsService {
         : convertUsdPkr(detail.price, detail.priceCurrency, currency, rate);
       const fees = detail.fees.isZero()
         ? new Decimal(0)
-        : convertUsdPkr(
-            detail.fees,
-            detail.transaction.currency,
-            currency,
-            rate,
-          );
+        : detail.settlementRate?.isPositive()
+          ? convertUsdPkr(
+              detail.fees.times(detail.price.dividedBy(detail.settlementRate)),
+              detail.priceCurrency,
+              currency,
+              rate,
+            )
+          : convertUsdPkr(
+              detail.fees,
+              detail.transaction.currency,
+              currency,
+              rate,
+            );
 
       if (!price || !fees) {
         return null;
@@ -1854,6 +1902,8 @@ export class InvestmentsService {
         id: true,
         assetId: true,
         settlementAssetId: true,
+        settlementRate: true,
+        settlementQuantity: true,
         tradeType: true,
         quantity: true,
         price: true,

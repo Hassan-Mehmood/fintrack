@@ -6,6 +6,8 @@ const Decimal = Prisma.Decimal;
 export interface SettlementHoldingDetail {
   readonly assetId: string;
   readonly settlementAssetId: string | null;
+  readonly settlementRate?: Prisma.Decimal | null;
+  readonly settlementQuantity?: Prisma.Decimal | null;
   readonly tradeType: string;
   readonly quantity: Prisma.Decimal;
   readonly price: Prisma.Decimal;
@@ -22,6 +24,9 @@ export function holdingTransactionsForAsset(
 
   for (const detail of details) {
     if (detail.assetId === assetId) {
+      const pairFeeValue = isPairTrade(detail)
+        ? detail.fees.times(counterPrice(detail))
+        : detail.fees;
       transactions.push({
         type:
           detail.tradeType === 'TRANSFER'
@@ -31,13 +36,39 @@ export function holdingTransactionsForAsset(
             : (detail.tradeType as InvestmentTransactionInput['type']),
         quantity: detail.quantity,
         price: detail.price,
-        fees: detail.fees,
+        fees: pairFeeValue,
       });
     }
 
     if (detail.settlementAssetId !== assetId) continue;
 
-    if (detail.tradeType === 'BUY') {
+    if (isPairTrade(detail) && detail.tradeType === 'BUY') {
+      transactions.push({
+        type: 'SELL',
+        quantity: detail.settlementQuantity!,
+        price: counterPrice(detail),
+        fees: new Decimal(0),
+      });
+      if (detail.fees.isPositive()) {
+        transactions.push({
+          type: 'WITHDRAWAL',
+          quantity: detail.fees,
+          price: new Decimal(0),
+          fees: new Decimal(0),
+        });
+      }
+    } else if (isPairTrade(detail) && detail.tradeType === 'SELL') {
+      const netQuantity = detail.settlementQuantity!.sub(detail.fees);
+      const netValue = detail.grossAmount.sub(
+        detail.fees.times(counterPrice(detail)),
+      );
+      transactions.push({
+        type: 'DEPOSIT',
+        quantity: netQuantity,
+        price: netQuantity.isZero() ? new Decimal(0) : netValue.dividedBy(netQuantity),
+        fees: new Decimal(0),
+      });
+    } else if (detail.tradeType === 'BUY') {
       transactions.push({
         type: 'WITHDRAWAL',
         quantity: detail.grossAmount.add(detail.fees),
@@ -55,4 +86,14 @@ export function holdingTransactionsForAsset(
   }
 
   return transactions;
+}
+
+function isPairTrade(detail: SettlementHoldingDetail): boolean {
+  return Boolean(
+    detail.settlementRate?.isPositive() && detail.settlementQuantity?.isPositive(),
+  );
+}
+
+function counterPrice(detail: SettlementHoldingDetail): Prisma.Decimal {
+  return detail.price.dividedBy(detail.settlementRate!);
 }

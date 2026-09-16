@@ -10,10 +10,24 @@ change.
 
 ## Current Goal
 
-- Manually verify existing-portfolio onboarding with authenticated provider and
-  manual assets after the required local environment variables are configured.
+- Verify same-wallet crypto pair trades and embedded investment activity with
+  authenticated provider and manual assets after the required local environment
+  variables are configured.
 
 ## Completed
+
+- Added nullable pair-rate and derived counter-quantity fields to investment
+  transaction details for additive crypto pair settlement. New crypto buys and
+  sells can exchange any distinct, positive same-wallet USD-priced crypto
+  holding; legacy stablecoin rows retain their prior settlement behavior.
+- Updated pair holding calculations so a counter-asset debit is a realized
+  disposal, counter-asset credits receive their derived basis, and fees remain
+  denominated in the counter asset. Crypto pair transactions retain zero fiat
+  account impact.
+- Updated crypto buy forms to capture `1 traded coin = X counter coin`, show
+  positive same-wallet pair choices and previews, and added embedded
+  domain-scoped transaction history to Stocks and Crypto Activity tabs. The
+  standalone Transactions workspace is locked to everyday Money.
 
 - Made cryptocurrency wallets stablecoin-only for liquidity. Crypto reporting
   no longer emits or totals derived fiat-cash holdings, wallet creation and

@@ -46,6 +46,11 @@ export class InvestmentTransactionDetailDto {
   @ValidateNested()
   @Type(() => SettlementAssetDto)
   settlementAsset?: SettlementAssetDto;
+
+  @IsOptional()
+  @IsString()
+  @Matches(DECIMAL_PATTERN)
+  settlementRate?: string;
 }
 
 export class OptionalInvestmentTransactionDetailDto {

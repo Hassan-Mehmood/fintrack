@@ -358,10 +358,12 @@ no external FX provider is introduced by the investment reporting feature.
 
 New stock buys and sells settle against the broker account's derived fiat cash.
 New crypto buys and sells instead reference an optional settlement asset on the
-investment detail. For crypto trades this reference is required and must point
-to a USD-priced cash-equivalent asset in the same crypto wallet. A buy deducts
-gross amount plus fees from the settlement holding; a sell credits gross amount
-minus fees. Paired crypto trades have zero fiat-account effect. A null
+investment detail. For new crypto trades this reference is required and must
+point to a distinct, positively held, USD-priced crypto asset in the same
+crypto wallet. `settlementRate` stores counter units per one traded unit and
+the API stores its derived `settlementQuantity`. A buy disposes of the gross
+counter quantity plus its counter-asset fee; a sell adds the net counter
+quantity. Paired crypto trades have zero fiat-account effect. A null
 settlement reference is retained for opening positions, non-trade investment
 events, stock cash settlement, and legacy crypto trades created before this
 feature.

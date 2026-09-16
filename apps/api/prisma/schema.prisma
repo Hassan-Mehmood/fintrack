@@ -325,6 +325,8 @@ model InvestmentTransactionDetail {
   asset             Asset       @relation("InvestmentAsset", fields: [assetId], references: [id], onDelete: Restrict)
   settlementAssetId String?     @map("settlement_asset_id") @db.Uuid
   settlementAsset   Asset?      @relation("SettlementAsset", fields: [settlementAssetId], references: [id], onDelete: Restrict)
+  settlementRate    Decimal?    @map("settlement_rate") @db.Decimal(24, 8)
+  settlementQuantity Decimal?   @map("settlement_quantity") @db.Decimal(24, 8)
   tradeType         TradeType   @map("trade_type")
   quantity          Decimal     @db.Decimal(24, 8)
   price             Decimal     @db.Decimal(24, 8)

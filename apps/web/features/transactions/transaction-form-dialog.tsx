@@ -287,30 +287,24 @@ export function TransactionFormDialog({
         .filter(
           (holding) =>
             holding.accountId === watchedAccountId &&
-            holding.liquidityClass === "CASH_EQUIVALENT" &&
+            holding.holdingKind === "ASSET" &&
             holding.nativeCurrency === "USD" &&
-            (watchedType === "INVESTMENT_SELL" ||
-              compareDecimals(holding.quantity, "0") === 1),
+            compareDecimals(holding.quantity, "0") === 1,
         )
         .map((holding) => holding.assetId),
     );
     return assets.filter(
       (asset) =>
         asset.id !== watchedAssetId &&
-        asset.liquidityClass === "CASH_EQUIVALENT" &&
         asset.priceCurrency === "USD" &&
-        (watchedType === "INVESTMENT_SELL" || heldIds.has(asset.id)),
+        heldIds.has(asset.id),
     );
-  }, [assets, holdings, watchedAccountId, watchedAssetId, watchedType]);
+  }, [assets, holdings, watchedAccountId, watchedAssetId]);
   const selectedSettlementAsset = settlementAssets.find(
     (asset) => asset.id === watchedSettlementAssetId,
   );
   const selectedSettlementSymbol =
-    selectedSettlementAsset?.symbol ??
-    CANONICAL_STABLECOINS.find(
-      (asset) =>
-        `provider:${asset.providerAssetId}` === watchedSettlementAssetId,
-    )?.symbol;
+    selectedSettlementAsset?.symbol;
   const resultingSplitQuantity = useMemo(
     () =>
       watchedType === "INVESTMENT_SPLIT"
@@ -885,6 +879,7 @@ export function TransactionFormDialog({
                 ) : null}
 
                 {usesStablecoinSettlement ? (
+                  <>
                   <Field
                     data-invalid={
                       Boolean(errors.investment?.settlementAssetId) || undefined
@@ -904,7 +899,7 @@ export function TransactionFormDialog({
                           onValueChange={field.onChange}
                         >
                           <SelectTrigger id="transaction-settlement-asset">
-                            <SelectValue placeholder="Select a stablecoin" />
+                            <SelectValue placeholder="Select a held coin" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
@@ -923,24 +918,6 @@ export function TransactionFormDialog({
                                   </SelectItem>
                                 );
                               })}
-                              {watchedType === "INVESTMENT_SELL"
-                                ? CANONICAL_STABLECOINS.filter(
-                                    (candidate) =>
-                                      !assets.some(
-                                        (asset) =>
-                                          asset.provider === "COINGECKO" &&
-                                          asset.providerAssetId ===
-                                            candidate.providerAssetId,
-                                      ),
-                                  ).map((candidate) => (
-                                    <SelectItem
-                                      key={candidate.providerAssetId}
-                                      value={`provider:${candidate.providerAssetId}`}
-                                    >
-                                      {candidate.symbol} · create new balance
-                                    </SelectItem>
-                                  ))
-                                : null}
                             </SelectGroup>
                           </SelectContent>
                         </Select>
@@ -950,13 +927,24 @@ export function TransactionFormDialog({
                       {selectedAsset && selectedSettlementSymbol
                         ? `Pair: ${selectedAsset.symbol ?? selectedAsset.name}/${selectedSettlementSymbol}`
                         : watchedType === "INVESTMENT_BUY"
-                          ? "Only positive cash-equivalent balances in this wallet are available."
-                          : "Sale proceeds create or increase this cash-equivalent holding."}
+                          ? "Only positive same-wallet holdings are available."
+                          : "Select the coin exchanged against this trade."}
                     </FieldDescription>
                     <FieldError
                       errors={[errors.investment?.settlementAssetId]}
                     />
                   </Field>
+                  <Field data-invalid={Boolean(errors.investment?.settlementRate) || undefined}>
+                    <FieldLabel htmlFor="transaction-settlement-rate">Pair rate</FieldLabel>
+                    <Input id="transaction-settlement-rate" inputMode="decimal" placeholder="0" {...register("investment.settlementRate")} />
+                    <FieldDescription>
+                      {selectedAsset && selectedSettlementSymbol
+                        ? `1 ${selectedAsset.symbol ?? selectedAsset.name} = X ${selectedSettlementSymbol}`
+                        : "Counter-coin units per one traded coin."}
+                    </FieldDescription>
+                    <FieldError errors={[errors.investment?.settlementRate]} />
+                  </Field>
+                  </>
                 ) : watchedType === "INVESTMENT_BUY" ||
                   watchedType === "INVESTMENT_SELL" ? (
                   <Field>
@@ -1198,6 +1186,7 @@ function getDefaultValues(
             notes: "",
             settlementAssetId:
               transaction.investmentDetail.settlementAssetId ?? "",
+            settlementRate: transaction.investmentDetail.settlementRate ?? "",
           }
         : getEmptyInvestmentValues(transaction.type),
   };
@@ -1220,6 +1209,7 @@ function getEmptyInvestmentValues(
     fees: "",
     notes: "",
     settlementAssetId: "",
+    settlementRate: "",
   };
 }
 
@@ -1263,6 +1253,9 @@ function sanitizePayload(
                   assetId: values.investment.settlementAssetId,
                 }
             : undefined,
+          settlementRate: values.investment.settlementAssetId
+            ? values.investment.settlementRate
+            : undefined,
         }
       : values.type === "DIVIDEND"
         ? null
@@ -1289,11 +1282,6 @@ function sanitizePayload(
   };
 }
 
-const CANONICAL_STABLECOINS = [
-  { providerAssetId: "tether", symbol: "USDT" },
-  { providerAssetId: "usd-coin", symbol: "USDC" },
-  { providerAssetId: "dai", symbol: "DAI" },
-] as const;
 
 function CalculatedAmountField({
   currency,
