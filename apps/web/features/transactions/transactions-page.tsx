@@ -20,6 +20,7 @@ import {
   CopyIcon,
   EyeIcon,
   FilterIcon,
+  FileUpIcon,
   MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
@@ -568,6 +569,12 @@ export function TransactionsPage({
               ) : null}
             </>
           ) : null}
+          <Button asChild size="sm" variant="outline">
+            <Link href="/transactions/import">
+              <FileUpIcon data-icon="inline-start" />
+              <span className="hidden sm:inline">Import CSV</span>
+            </Link>
+          </Button>
           <Button
             size="sm"
             disabled={

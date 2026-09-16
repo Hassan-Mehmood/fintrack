@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { WatchlistsModule } from './modules/watchlists/watchlists.module';
+import { TransactionImportsModule } from './modules/transaction-imports/transaction-imports.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { WatchlistsModule } from './modules/watchlists/watchlists.module';
     AnalyticsModule,
     PortfoliosModule,
     WatchlistsModule,
+    TransactionImportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

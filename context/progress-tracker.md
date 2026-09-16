@@ -16,6 +16,11 @@ change.
 
 ## Completed
 
+- Increased the wallet-import serializable transaction allowance to 30 seconds
+  and deduplicated per-wallet alias upserts so normal imports do not hit
+  Prisma's five-second interactive-transaction default.
+- Added a repeatable authenticated wallet CSV import foundation: strict versioned parsing, transfer pairing/review, saved source-wallet aliases, import-batch audit records, stable duplicate fingerprints, atomic commit, and an import review route from Money Transactions. The flow never replaces existing ledger data and supports optional explicitly approved balance adjustments.
+
 - Unified the Accounts directory across bank, cash, digital-wallet, broker,
   and crypto-wallet accounts with persistent global ordering and standalone
   creation for all five account types. Investment rows use a new authenticated

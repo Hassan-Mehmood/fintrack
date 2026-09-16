@@ -323,6 +323,7 @@ Store the following in PostgreSQL:
 - Stable provider identifiers and metadata for provider-backed assets
 - Financial goals
 - Goal contributions
+- User-initiated transaction-import batches and source-account alias mappings
 
 Financial values must use PostgreSQL `NUMERIC` fields.
 
@@ -625,6 +626,7 @@ The NestJS backend exposes REST endpoints.
 /api/v1/investments
 /api/v1/goals
 /api/v1/analytics
+/api/v1/transaction-imports
 ```
 
 Example operations:
@@ -665,6 +667,7 @@ All initial functionality should run through normal API requests, including:
 - Updating manual investment prices and retrieving provider-backed prices on demand
 - Creating financial goals
 - Calculating dashboard analytics
+- Previewing and committing user-selected wallet CSV imports
 
 A background-task system may be added later for:
 
@@ -836,6 +839,6 @@ The first version does not require:
 4. Transactions are the source of account balances.
 5. Financial calculations use decimal arithmetic.
 6. Every user-owned operation is scoped to the authenticated user.
-7. The initial version does not include AI, background workers, streaming prices, or automatic transaction imports.
+7. The initial version does not include AI, background workers, streaming prices, or automatic transaction imports. It supports authenticated, user-initiated wallet CSV imports only; CSV content is processed in memory and is not retained.
 8. Finnhub, EODHD, and CoinGecko credentials remain in the API environment; provider responses are normalized before reaching the web application.
 9. Provider-backed assets use immutable provider identifiers, while historical transaction prices remain independent of current quotes.

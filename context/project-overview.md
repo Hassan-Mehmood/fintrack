@@ -179,6 +179,7 @@ the two investment summaries visually separate.
 - User authentication and personal finance profiles.
 - Manual creation and management of financial accounts.
 - Manual entry of income, expenses, transfers, refunds, fees, investment transactions, and balance adjustments.
+- User-initiated imports of the supported wallet CSV export, with account alias mapping, review, duplicate skipping, and optional reconciliation adjustments.
 - Automatic account-balance calculations based on recorded transactions.
 - Expense categories and monthly budgets.
 - A centralized financial dashboard.
@@ -216,7 +217,7 @@ the two investment summaries visually separate.
 - AI-generated financial recommendations.
 - Receipt file uploads.
 - Receipt scanning and OCR.
-- Automatic bank-statement or broker-statement imports.
+- Automatic or scheduled bank-statement or broker-statement imports. User-initiated imports remain limited to supported export formats.
 - Support for advanced investment events such as stock splits, rights issues, and bonus shares.
 
 ## Success Criteria
